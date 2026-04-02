@@ -30,7 +30,7 @@ namespace XJ
     }
     XJMesh::~XJMesh()
     {
-        
+         
     }   
     void XJMesh::Draw(VkCommandBuffer commandBuffer)
     {

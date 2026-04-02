@@ -16,7 +16,8 @@
 
 struct PushConstants
 {
-     glm::mat4 matrix{1.0f}; // 4x4 矩阵，默认初始化为单位矩阵
+    glm::mat4 matrix{1.0f}; // 4x4 矩阵，默认初始化为单位矩阵
+    uint32_t colorType = 0;
 };// 推送常量结构体
    
     
@@ -88,64 +89,6 @@ protected:
         mRenderTarget->AddMaterialSystem<XJ::XJBaseMaterialSystem>();
 
         mRender = std::make_shared<XJ::XJRenderer>();
-
-        //descriptor set   绑定shader
-/*
-        std::vector<VkDescriptorSetLayoutBinding> kDesctLayoutBindings
-        {
-            
-            {
-                .binding = 0,
-                .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-                .descriptorCount = 1,
-                .stageFlags = VK_SHADER_STAGE_VERTEX_BIT
-            },
-            {
-                .binding = 1,
-                .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-                .descriptorCount = 1,
-                .stageFlags = VK_SHADER_STAGE_VERTEX_BIT
-            },
-            {
-                .binding = 2,
-                .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-                .descriptorCount = 1,
-                .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT
-            },
-            {
-                .binding = 3,
-                .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-                .descriptorCount = 1,
-                .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT
-            }
-        };
-
-        mDescriptorSetLayout = std::make_shared<XJ::XJVulkanDescriptorSetLayout>(kDevice, kDesctLayoutBindings);
-
-    
-
-        std::vector<VkDescriptorPoolSize> poolSizes = 
-        {
-            {
-                .type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC,
-                .descriptorCount = 2
-            },
-            {
-                .type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-                .descriptorCount = 2
-            },
-        };
-
-        mDescriptorPool = std::make_shared<XJ::XJVulkanDescriptorPool>(kDevice, 1, poolSizes);
-        mDescriptorSets = mDescriptorPool->AllocateDescriptorSet(mDescriptorSetLayout.get(), 1);
-        //buffer的资源准备
-        mGlobalBuffer = std::make_shared<XJ::XJVulkanBuffer>(kDevice, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT, sizeof(mGlobalUbo),nullptr,true);
-        mInstanceBuffer = std::make_shared<XJ::XJVulkanBuffer>(kDevice, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT, sizeof(mInstanceUbo),nullptr,true);
-        //贴图
-        mTextureA = std::make_shared<XJ::XJTexture>(XJ_RES_TEXTURE_DIR"R.png");
-        mTextureB = std::make_shared<XJ::XJTexture>(XJ_RES_TEXTURE_DIR"R-C.jpeg");
-
-*/
          // 创建命令池
         mCommandBuffers = kDevice->XJGetDefaultCmdPool()->AllocateCommandBuffer(static_cast<uint32_t>(kSwapchain->XJGetSwapchainImages().size()));//分配命令缓冲区
         spdlog::info("分配了 {} 个命令缓冲区", mCommandBuffers.size());
@@ -213,20 +156,7 @@ protected:
 
     void OnUpdate(float deltaTime) override
     {
-        /*
-        XJ::XJRenderContext *kRenderContext = XJApplication::XJGetAppContext()->renderContext;
-        XJ::XJVulkanSwapchain* kSwapchain = kRenderContext->XJGetSwapchain();
-          //更新推送常量  旋转矩阵
-        float kTime = std::chrono::duration<float>(std::chrono::steady_clock::now() - mStartTimePoint).count();
-        mInstanceUbo.modelMat = glm::rotate(glm::mat4(1.0f), glm::radians(17.0f), glm::vec3(1.0f, 0.0f, 0.0f));
-        mInstanceUbo.modelMat = glm::rotate(mInstanceUbo.modelMat, glm::radians(45.0f * kTime), glm::vec3(0.0f, 1.0f, 0.0f));
-
-        //透视投影矩阵
-        //mGlobalUbo.projMat = glm::perspectiveRH_ZO(glm::radians(65.0f), static_cast<float>(kSwapchain->XJGetWidth()) * 1.0f / static_cast<float>(kSwapchain->XJGetHeight()), 0.1f, 100.0f);
-        mGlobalUbo.projMat = glm::perspective(glm::radians(65.0f), static_cast<float>(kSwapchain->XJGetWidth()) * 1.0f / static_cast<float>(kSwapchain->XJGetHeight()), 0.1f, 100.0f);
-        mGlobalUbo.projMat[1][1] *= -1;  // 取消注释，启用 Y 轴翻转
-        mGlobalUbo.viewMat = glm::lookAt(glm::vec3(0.0f, 0.0f, 2.0f), glm::vec3(0.0f, 0.0f, -1.0f), glm::vec3(0.0f, 1.0f, 0.0f));
-        */
+       
 
     }
     
@@ -254,43 +184,11 @@ protected:
 
         //正视图 RT
         mRenderTarget->BeginRenderTarget(kCommandBuffer);//开始渲染通道
-/*
-        mPipeline->BindPipeline(kCommandBuffer);//绑定管线
-        XJ::XJVulkanFrameBuffer *kFrameBuffer = mRenderTarget->XJGetCurrentFrameBuffer();
-        //设置视口和裁剪矩形
-        VkViewport viewport{};
-        viewport.x = 0.0f;
-        viewport.y = 0.0f;
-        viewport.width = static_cast<float>(kFrameBuffer->XJGetWidth());
-        viewport.height = static_cast<float>(kFrameBuffer->XJGetHeight());
-        viewport.minDepth = 0.0f;
-        viewport.maxDepth = 1.0f;
-        vkCmdSetViewport(kCommandBuffer, 0, 1, &viewport);
 
-        VkRect2D scissor{};
-        scissor.offset = {0, 0};
-        scissor.extent = {kFrameBuffer->XJGetWidth(), kFrameBuffer->XJGetHeight()};
-        vkCmdSetScissor(kCommandBuffer, 0, 1, &scissor);
-
-        mGlobalBuffer->WriteData(&mGlobalUbo);
-        mInstanceBuffer->WriteData(&mInstanceUbo);
-        UpdataDescriptorSets(kCommandBuffer);
-
-        vkCmdBindDescriptorSets(kCommandBuffer,VK_PIPELINE_BIND_POINT_GRAPHICS, 
-            mPipelineLayout->XJGetPipelineLayout(), 0, 1, mDescriptorSets.data(), 0, nullptr);
-          //推送常量
-        //vkCmdPushConstants(kCommandBuffer, mPipelineLayout->XJGetPipelineLayout(),
-        //    VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(mPushConstants), &mPushConstants);
-            
-        mMesh->Draw(kCommandBuffer);//绘制网格
-*/
         mRenderTarget->RenderMaterialSystem(kCommandBuffer);//便利系统
         mRenderTarget->EndRenderTarget(kCommandBuffer);//结束渲染通道
 
-        // 侧视图  Side view
-        //mRenderTargetSide->BeginRenderTarget(kCommandBuffer);//开始渲染通道
-        //mRenderTargetSide->RenderMaterialSystem(kCommandBuffer);//便利系统
-        //mRenderTargetSide->EndRenderTarget(kCommandBuffer);//结束渲染通道
+     
 
         XJ::XJVulkanCommandPool::EndCommandBuffer(kCommandBuffer);
         //提交命令缓冲区 - 使用 mSubmitFences 作为提交围栏
@@ -305,108 +203,15 @@ protected:
         XJ::XJRenderContext *kRenderContext = XJApplication::XJGetAppContext()->renderContext;
         XJ::XJVulkanDevice* kDevice = kRenderContext->XJGetDevice();
         vkDeviceWaitIdle(kDevice->XJGetDevice());//等待设备空闲
-        /*
-        mGlobalBuffer.reset();
-        mInstanceBuffer.reset();
-        mTextureA.reset();
-        mTextureB.reset();
-        */
         mMesh.reset();
         mCommandBuffers.clear();
-        /*
-        mDescriptorSetLayout.reset();
-        mDescriptorPool.reset();
-        mPipeline.reset();
-        mPipelineLayout.reset();
-        */
+      
         mRenderTarget.reset();
         mRenderPass.reset();
 
         mRender.reset();
     }
-/*
-    void UpdataDescriptorSets(VkCommandBuffer cmdBuffer)
-    {
-        XJ::XJRenderContext *kRenderContext = XJ::XJApplication::XJGetAppContext()->renderContext;
-        XJ::XJVulkanDevice* kDevice = kRenderContext->XJGetDevice();
 
-        VkDescriptorBufferInfo globalBufferInfo{};
-        globalBufferInfo.buffer = mGlobalBuffer->XJGetBuffer();
-        globalBufferInfo.offset = 0;
-        globalBufferInfo.range = sizeof(mGlobalUbo);
-
-        VkDescriptorBufferInfo instanceBufferInfo{};
-        instanceBufferInfo.buffer = mInstanceBuffer->XJGetBuffer();
-        instanceBufferInfo.offset = 0;
-        instanceBufferInfo.range = sizeof(mInstanceUbo);
-
-        VkDescriptorImageInfo textureAImageBufferInfo{};
-        textureAImageBufferInfo.sampler = mTextureA->XJGetSampler();
-        textureAImageBufferInfo.imageView = mTextureA->XJGetImageView()->XJGetImageView();
-        textureAImageBufferInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-
-        VkDescriptorImageInfo textureBImageBufferInfo{};
-        textureBImageBufferInfo.sampler = mTextureB->XJGetSampler();
-        textureBImageBufferInfo.imageView = mTextureB->XJGetImageView()->XJGetImageView();
-        textureBImageBufferInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-
-        VkDescriptorSet descriptorSet = mDescriptorSets[0];
-
-        std::vector<VkWriteDescriptorSet> writeDescriptorSet = 
-        {
-            {
-                .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-                .pNext = nullptr,
-                .dstSet = descriptorSet,
-                .dstBinding = 0,
-                .dstArrayElement = 0,
-                .descriptorCount = 1,
-                .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-                .pBufferInfo = &globalBufferInfo
-                
-            },
-            {
-                .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-                .pNext = nullptr,
-                .dstSet = descriptorSet,
-                .dstBinding = 1,
-                .dstArrayElement = 0,
-                .descriptorCount = 1,
-                .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-                .pBufferInfo = &instanceBufferInfo
-                
-            },
-            {
-                .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-                .pNext = nullptr,
-                .dstSet = descriptorSet,
-                .dstBinding = 2,
-                .dstArrayElement = 0,
-                .descriptorCount = 1,
-                .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-                .pImageInfo  = &textureAImageBufferInfo
-                
-            },
-            {
-                .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-                .pNext = nullptr,
-                .dstSet = descriptorSet,
-                .dstBinding = 3,
-                .dstArrayElement = 0,
-                .descriptorCount = 1,
-                .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-                .pImageInfo  = &textureBImageBufferInfo
-                
-            }
-        };
-
-        
-
-        vkUpdateDescriptorSets(kDevice->XJGetDevice(),
-        writeDescriptorSet.size(), writeDescriptorSet.data(), 0, nullptr);
-
-    }
-*/
    
 private:
     std::shared_ptr<XJ::XJVulkanRenderPass>             mRenderPass;
@@ -425,15 +230,7 @@ private:
 
     VkSampleCountFlagBits mSampleCount = VK_SAMPLE_COUNT_1_BIT; // 多重采样数量
 
-    // PushConstants mPushConstants{};//推送常量实例
-    
-    //GlobalUbo mGlobalUbo;
-    //InstanceUbo mInstanceUbo;
-    //std::shared_ptr<XJ::XJVulkanBuffer> mGlobalBuffer;
-    //std::shared_ptr<XJ::XJVulkanBuffer> mInstanceBuffer;
-    //std::shared_ptr<XJ::XJTexture> mTextureA;
-    //std::shared_ptr<XJ::XJTexture> mTextureB;
-
+   
 
 };
 
