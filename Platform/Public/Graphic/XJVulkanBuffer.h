@@ -26,9 +26,11 @@ namespace XJ
             static void CreateBufferInternal(XJVulkanDevice* device, VkMemoryPropertyFlags memoryPropertyFlags, VkBufferUsageFlags usage, size_t size, VkBuffer* outBuffer, VkDeviceMemory* outBufferMemory);
             static void CopyToBuffer(XJVulkanDevice* device, VkBuffer srcBuffer = VK_NULL_HANDLE, VkBuffer dstBuffer = VK_NULL_HANDLE, size_t size = 0);
             
-            VkResult WriteData(void *data);
+            VkResult WriteData(void *data);//写入数据到缓冲区
 
             VkBuffer XJGetBuffer() const { return mBuffer; }
+
+            VkResult WriteDataOffset(void *data, size_t offset, size_t size);//写入数据到缓冲区的指定偏移位置
         };
     }
 

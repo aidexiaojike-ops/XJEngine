@@ -165,16 +165,45 @@ protected:
     {
         //在这里可以添加场景初始化的代码，例如创建实体、添加组件等
         spdlog::info("场景初始化");
-        XJ::XJEntity* kCube = scene->CreateEntity("CubeEntityA");//创建一个实体
-        auto &kTransformComp = kCube->GetComponent<XJ::XJTransformComponent>();//添加变换组件
-        auto &kMaterialComp = kCube->AddComponent<XJ::XJBaseMaterialComponent>();//添加材质组件
-        auto &kMeshComp = kCube->AddComponent<XJ::XJMeshComponent>();//添加网格组件
+        {
+            XJ::XJEntity* kCube = scene->CreateEntity("CubeEntityA");//创建一个实体
+            auto &kTransformComp = kCube->GetComponent<XJ::XJTransformComponent>();//添加变换组件
+            auto &kMaterialComp = kCube->AddComponent<XJ::XJBaseMaterialComponent>();//添加材质组件
+            auto &kMeshComp = kCube->AddComponent<XJ::XJMeshComponent>();//添加网格组件
 
-        kMeshComp.mMesh = mMesh.get();//设置网格组件的网格对象
+            kMeshComp.mMesh = mMesh.get();//设置网格组件的网格对象
 
-        kTransformComp.rotation = glm::vec3(30.0f, 45.0f, 0.0f);
-        kTransformComp.scale = glm::vec3(1.0f, 1.0f, 0.25f);//设置变换组件的缩放
-        kTransformComp.UpdateModelMatrix(); // 新增：立即更新模型矩阵
+            kTransformComp.position = glm::vec3(0.0f, 1.0f, 0.0f);
+            kTransformComp.rotation = glm::vec3(30.0f, 45.0f, 0.0f);
+            kTransformComp.scale = glm::vec3(0.25f, 0.25f, 0.25f);//设置变换组件的缩放
+            kTransformComp.UpdateModelMatrix(); // 新增：立即更新模型矩阵
+        }
+        {
+            XJ::XJEntity* kCube = scene->CreateEntity("CubeEntityB");//创建一个实体
+            auto &kTransformComp = kCube->GetComponent<XJ::XJTransformComponent>();//添加变换组件
+            auto &kMaterialComp = kCube->AddComponent<XJ::XJBaseMaterialComponent>();//添加材质组件
+            auto &kMeshComp = kCube->AddComponent<XJ::XJMeshComponent>();//添加网格组件
+            
+            kMeshComp.mMesh = mMesh.get();//设置网格组件的网格对象
+            
+            kTransformComp.position = glm::vec3(0.0f, 0.0f, 0.0f);
+            kTransformComp.rotation = glm::vec3(30.0f, 45.0f, 0.0f);
+            kTransformComp.scale = glm::vec3(0.25f, 0.25f, 0.25f);//设置变换组件的缩放
+            kTransformComp.UpdateModelMatrix(); // 新增：立即更新模型矩阵
+        }
+        {
+            XJ::XJEntity* kCube = scene->CreateEntity("CubeEntityC");//创建一个实体
+            auto &kTransformComp = kCube->GetComponent<XJ::XJTransformComponent>();//添加变换组件
+            auto &kMaterialComp = kCube->AddComponent<XJ::XJBaseMaterialComponent>();//添加材质组件
+            auto &kMeshComp = kCube->AddComponent<XJ::XJMeshComponent>();//添加网格组件
+            
+            kMeshComp.mMesh = mMesh.get();//设置网格组件的网格对象
+            
+            kTransformComp.position = glm::vec3(1.0f, 0.5f, 0.0f);
+            kTransformComp.rotation = glm::vec3(30.0f, 45.0f, 0.0f);
+            kTransformComp.scale = glm::vec3(0.25f, 0.25f, 0.25f);//设置变换组件的缩放
+            kTransformComp.UpdateModelMatrix(); // 新增：立即更新模型矩阵
+        }
     }
     void OnSceneDestroy(XJ::XJScene *scene) override
     {

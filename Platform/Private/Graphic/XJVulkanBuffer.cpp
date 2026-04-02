@@ -117,4 +117,21 @@ namespace XJ
         }
         return VK_ERROR_INITIALIZATION_FAILED;
     }
+
+    VkResult XJVulkanBuffer::WriteDataOffset(void *data, size_t offset, size_t size)
+    {
+        if(data && bHostVisible && offset + size <= mSize)//确保写入范围合法
+        {
+            void *mapping;//映射内存
+            VkResult ret = vkMapMemory(mDevice->XJGetDevice(), mBufferMemory, 0, mSize, 0, &mapping);//映射内存
+            XJDebug_Log(ret);//将数据复制到指定偏移位置
+            if(ret == VK_SUCCESS)
+            {
+                memcpy(static_cast<char*>(mapping) + offset, data, size);//解除内存映射
+                vkUnmapMemory(mDevice->XJGetDevice(), mBufferMemory);//返回结果
+            }
+            return ret;
+        }
+        return VK_ERROR_INITIALIZATION_FAILED;
+    }
 }

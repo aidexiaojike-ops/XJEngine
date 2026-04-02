@@ -1,17 +1,17 @@
-#include "ECS/System/XJBaseMaterialSystem.h"
-#include "Graphic/XJVulkanPipeline.h"
-#include "Edit/FileUtil.h"
-#include "Graphic/XJVulkanGeometryUtil.h"
-#include "Graphic/XJVulkanDescriptorSet.h"
-#include "XJApplication.h"
+#include "ECS/System/XJBaseMaterialSystem.h"//获取基础材质系统信息
+#include "Graphic/XJVulkanPipeline.h"//获取管线信息
+#include "Edit/FileUtil.h"//获取文件工具类
+#include "Graphic/XJVulkanGeometryUtil.h"//获取几何体工具类
+#include "Graphic/XJVulkanDescriptorSet.h"//获取描述符集信息
+#include "XJApplication.h"//获取应用程序上下文信息
 
-#include "Graphic/XJVulkanFrameBuffer.h"
-#include "Render/XJRenderTarget.h"
+#include "Graphic/XJVulkanFrameBuffer.h"//获取帧缓冲信息
+#include "Render/XJRenderTarget.h"//获取渲染目标信息
 
-#include "ECS/XJEntity.h"
+#include "ECS/XJEntity.h"//获取实体信息
 
-#include "Graphic/VulkanImageView.h"
-
+#include "Graphic/VulkanImageView.h"//获取图像视图信息
+#include "Graphic/VulkanPhysicalDevices.h"//获取物理设备信息
 
 namespace XJ
 {
@@ -19,8 +19,21 @@ namespace XJ
     void XJBaseMaterialSystem::OnInit(XJVulkanRenderPass *renderPass)
     {
 
-        XJ::XJRenderContext *kRenderContext = XJApplication::XJGetAppContext()->renderContext;
-        XJ::XJVulkanDevice* kDevice = kRenderContext->XJGetDevice();
+        XJ::XJRenderContext *kRenderContext = XJApplication::XJGetAppContext()->renderContext;//获取渲染上下文信息
+        XJ::XJVulkanDevice* kDevice = kRenderContext->XJGetDevice();//获取逻辑设备信息
+        XJ::VulkanPhysicalDevices *kPhysicalDevices = kRenderContext->XJGetPhysicalDevices();//获取物理设备信息
+
+        VkPhysicalDevice physicalDevice  = kPhysicalDevices->XJGetPhysicalDevice();
+        VkPhysicalDeviceProperties properties;//获取物理设备属性
+        vkGetPhysicalDeviceProperties(physicalDevice, &properties);//获取物理设备属性信息
+        
+        size_t minUboAlignment = properties.limits.minUniformBufferOffsetAlignment;//获取最小统一缓冲区偏移对齐要求
+        mDynamicAlignment = sizeof(InstanceUbo);
+        if(minUboAlignment > 0)
+        {
+            mDynamicAlignment = (mDynamicAlignment + minUboAlignment - 1) & ~(minUboAlignment - 1);//计算动态对齐大小
+        }
+    spdlog::info("动态统一缓冲区对齐: {} bytes (InstanceUbo: {} bytes)", mDynamicAlignment, sizeof(InstanceUbo));
 
         //descriptor set   绑定shader
         std::vector<VkDescriptorSetLayoutBinding> kDesctLayoutBindings
@@ -34,7 +47,7 @@ namespace XJ
             },
             {
                 .binding = 1,
-                .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+                .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC,//使用动态统一缓冲区
                 .descriptorCount = 1,
                 .stageFlags = VK_SHADER_STAGE_VERTEX_BIT
             },
@@ -55,7 +68,7 @@ namespace XJ
         mDescriptorSetLayout = std::make_shared<XJ::XJVulkanDescriptorSetLayout>(kDevice, kDesctLayoutBindings);
 
 
-         std::vector<VkDescriptorPoolSize> poolSizes = 
+        std::vector<VkDescriptorPoolSize> poolSizes = 
         {
             {
                 .type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC,
@@ -67,11 +80,12 @@ namespace XJ
             },
         };
 
+
         mDescriptorPool = std::make_shared<XJ::XJVulkanDescriptorPool>(kDevice, 1, poolSizes);
         mDescriptorSets = mDescriptorPool->AllocateDescriptorSet(mDescriptorSetLayout.get(), 1);
         //buffer的资源准备
         mGlobalBuffer = std::make_shared<XJ::XJVulkanBuffer>(kDevice, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT, sizeof(mGlobalUbo),nullptr,true);
-        mInstanceBuffer = std::make_shared<XJ::XJVulkanBuffer>(kDevice, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT, sizeof(mInstanceUbo),nullptr,true);
+        mInstanceBuffer = std::make_shared<XJ::XJVulkanBuffer>(kDevice, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT, MAX_ENTITIES * mDynamicAlignment, nullptr, true);
         //贴图
         mTextureA = std::make_shared<XJ::XJTexture>(XJ_RES_TEXTURE_DIR"R.png");
         mTextureB = std::make_shared<XJ::XJTexture>(XJ_RES_TEXTURE_DIR"R-C.jpeg");
@@ -127,15 +141,11 @@ namespace XJ
         XJAppContext *kAppContext = XJApplication::XJGetAppContext();
         XJScene *kScene = kAppContext->scene;
 
-        if(!kScene){return;}
+        if(!kScene){return;}//如果场景不存在，直接返回
 
         entt::registry &kReg =  kScene->XJGetEcsRegistry();//拿到注射器
-        auto kView = kReg.view<XJTransformComponent, XJMeshComponent, XJBaseMaterialComponent>();
+        auto kView = kReg.view<XJTransformComponent, XJMeshComponent, XJBaseMaterialComponent>();//获取视图，包含有变换组件、网格组件和基础材质组件的实体
 
-        //if (kView.size_hint() == 0) 
-        //{
-        //  return;   // 视图确实为空
-        //}
         if (kView.end() == kView.begin()) 
         {
             return;   // 视图确实为空
@@ -155,50 +165,45 @@ namespace XJ
         viewport.minDepth = 0.0f;
         viewport.maxDepth = 1.0f;
         vkCmdSetViewport(cmdBuffer, 0, 1, &viewport);
-
+        //设置裁剪矩形
         VkRect2D scissor{};
         scissor.offset = {0, 0};
         scissor.extent = {kFrameBuffer->XJGetWidth(), kFrameBuffer->XJGetHeight()};
         vkCmdSetScissor(cmdBuffer, 0, 1, &scissor);
 
+        // 更新全局UBO
         mGlobalBuffer->WriteData(&mGlobalUbo);
-        mInstanceBuffer->WriteData(&mInstanceUbo);
-       
         
         //steup global params
-        
         XJ::XJRenderContext *kRenderContext = XJApplication::XJGetAppContext()->renderContext;
         //更新推送常量  旋转矩阵
-        float kTime = std::chrono::duration<float>(std::chrono::steady_clock::now() 
-        - XJ::XJApplication::XJGetAppContext()->app->XJGetStartTimePoint()).count();
-        //mInstanceUbo.modelMat = glm::rotate(glm::mat4(1.0f), glm::radians(17.0f), glm::vec3(1.0f, 0.0f, 0.0f));
-        //mInstanceUbo.modelMat = glm::rotate(mInstanceUbo.modelMat, glm::radians(45.0f * kTime), glm::vec3(0.0f, 1.0f, 0.0f));这些个旋转矩阵的更新应该放在系统外面，或者放在系统的OnUpdate里，而不是OnRender里
-
         //透视投影矩阵   CameraCompionent 里设置投影矩阵和视图矩阵
-        //mGlobalUbo.projMat = glm::perspectiveRH_ZO(glm::radians(65.0f), static_cast<float>(kSwapchain->XJGetWidth()) * 1.0f / static_cast<float>(kSwapchain->XJGetHeight()), 0.1f, 100.0f);
-        mGlobalUbo.projMat = glm::perspective(glm::radians(65.0f), static_cast<float>(kFrameBuffer->XJGetWidth()) * 1.0f / static_cast<float>(kFrameBuffer->XJGetHeight()), 0.1f, 100.0f);
+       mGlobalUbo.projMat = glm::perspective(glm::radians(65.0f), static_cast<float>(kFrameBuffer->XJGetWidth()) * 1.0f / static_cast<float>(kFrameBuffer->XJGetHeight()), 0.1f, 100.0f);
         mGlobalUbo.projMat[1][1] *= -1;  // 取消注释，启用 Y 轴翻转
         mGlobalUbo.viewMat = glm::lookAt(glm::vec3(0.0f, 0.0f, 2.0f), glm::vec3(0.0f, 0.0f, -1.0f), glm::vec3(0.0f, 1.0f, 0.0f));
         
+         // 在循环外更新描述符集（只更新一次）
+        UpdateDescriptorSets(cmdBuffer);
+
+        uint32_t kEntityIndex = 0; // 实体索引，用于动态UBO偏移计算
         //setup custiom params
-        kView.each([this, &cmdBuffer](const auto &entity, const XJTransformComponent& transComp, XJMeshComponent& meshComp,const XJBaseMaterialComponent& matComp)
+        kView.each([this, &cmdBuffer, &kEntityIndex](const auto &entity, const XJTransformComponent& transComp, XJMeshComponent& meshComp,const XJBaseMaterialComponent& matComp)
         {
             
-             //mesh list draw
-            //更新材质相关的描述符集
-            //matComp.UpdateDescriptorSet(cmdBuffer, mDescriptorSetLayout.get());
-            if(meshComp.mMesh)
+            if(meshComp.mMesh && kEntityIndex < MAX_ENTITIES)
             {
-                mInstanceUbo.modelMat = transComp.modelMatrix;
+                mInstanceUbo.modelMat = transComp.modelMatrix;//设置实例UBO的模型矩阵
 
-                UpdateDescriptorSets(cmdBuffer);
-                       //绑定网格的顶点和索引缓冲区
-                //vkCmdPushConstants(cmdBuffer, mPipelineLayout->XJGetPipelineLayout(),
-                //    VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(mInstanceUbo), &mInstanceUbo);
-        
-                //绘制网格
-                vkCmdBindDescriptorSets(cmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, mPipelineLayout->XJGetPipelineLayout(), 0, 1,  mDescriptorSets.data(), 0, nullptr);
+                //计算动态UBO偏移
+                uint32_t kOffset = kEntityIndex * mDynamicAlignment;
+                //更新实例UBO数据到动态统一缓冲区
+                mInstanceBuffer->WriteDataOffset(&mInstanceUbo, kOffset, sizeof(InstanceUbo));//UBO写入数据偏移
+
+                //使用动态偏移绑定描述符集并绘制网格
+                uint32_t kDynamicOffset = kOffset; // 计算动态偏移
+                vkCmdBindDescriptorSets(cmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, mPipelineLayout->XJGetPipelineLayout(), 0, 1,  mDescriptorSets.data(), 1, &kDynamicOffset);
                 meshComp.mMesh->Draw(cmdBuffer);
+                kEntityIndex++; // 增加实体索引
             }
            
         });
@@ -226,7 +231,7 @@ namespace XJ
         VkDescriptorBufferInfo instanceBufferInfo{};
         instanceBufferInfo.buffer = mInstanceBuffer->XJGetBuffer();
         instanceBufferInfo.offset = 0;
-        instanceBufferInfo.range = sizeof(mInstanceUbo);
+        instanceBufferInfo.range = sizeof(InstanceUbo);//// 单个实例大小
 
         VkDescriptorImageInfo textureAImageBufferInfo{};
         textureAImageBufferInfo.sampler = mTextureA->XJGetSampler();
@@ -252,7 +257,7 @@ namespace XJ
                 .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
                 .pBufferInfo = &globalBufferInfo
                 
-            },
+            },//全局参数
             {
                 .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
                 .pNext = nullptr,
@@ -260,10 +265,10 @@ namespace XJ
                 .dstBinding = 1,
                 .dstArrayElement = 0,
                 .descriptorCount = 1,
-                .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+                .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC,
                 .pBufferInfo = &instanceBufferInfo
                 
-            },
+            },//实例参数
             {
                 .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
                 .pNext = nullptr,
@@ -274,7 +279,7 @@ namespace XJ
                 .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
                 .pImageInfo  = &textureAImageBufferInfo
                 
-            },
+            },//贴图A
             {
                 .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
                 .pNext = nullptr,
@@ -285,10 +290,8 @@ namespace XJ
                 .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
                 .pImageInfo  = &textureBImageBufferInfo
                 
-            }
+            }//贴图B
         };
-
-        
 
         vkUpdateDescriptorSets(kDevice->XJGetDevice(),
         writeDescriptorSet.size(), writeDescriptorSet.data(), 0, nullptr);

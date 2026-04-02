@@ -46,7 +46,11 @@ namespace XJ
     }
     XJRenderTarget::~XJRenderTarget()
     {
-        
+        for(const auto &item: mMaterialSystemList)
+        {
+            item->OnDestroy();
+        }
+        mMaterialSystemList.clear();
     }
     void XJRenderTarget::Init()
     {
