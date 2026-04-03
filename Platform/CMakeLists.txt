@@ -26,6 +26,7 @@ set(PLATFORM_SRC
     ${CMAKE_CURRENT_SOURCE_DIR}/Private/Graphic/XJVulkanDepthImage.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/Private/Graphic/XJVulkanDescriptorSet.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/Private/Graphic/XJVulkanTextureSampler.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/Private/Event/XJEventDispatcher.cpp
     # ${CMAKE_CURRENT_SOURCE_DIR}/Private/XJEngine.cpp
     # 后续新增文件直接添加在这里
 )

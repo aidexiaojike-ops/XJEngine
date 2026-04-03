@@ -1,5 +1,8 @@
-#ifndef XJ_EVENT_H
-#define XJ_EVENT_H
+#ifndef XJ_KEY_EVENT_H
+#define XJ_KEY_EVENT_H
+
+#include "Event/XJEvent.h"
+#include <sstream>
 
 namespace XJ
 {
@@ -269,6 +272,65 @@ namespace XJ
         }
         return "KEY_UNKNOWN";
     }
+    
+    static const char* XJKeyModToStr(KeyMod keyMod){
+        switch (keyMod) {
+            case MOD_SHIFT: return "MOD_SHIFT";
+            case MOD_CONTROL: return "MOD_CONTROL";
+            case MOD_ALT: return "MOD_ALT";
+            case MOD_SUPER: return "MOD_SUPER";
+            case MOD_CAPS_LOCK: return "MOD_CAPS_LOCK";
+            case MOD_NUM_LOCK: return "MOD_NUM_LOCK";
+        }
+        return "unknown";
+    }
+
+//按键事件类，包含按键按下和按键释放事件
+    class XJKeyInputPressEvent : public XJEvent
+    {
+        public:
+            XJKeyInputPressEvent(Key keyCode, KeyMod keyMod, bool repeat) : mKeyCode(keyCode), mKeyMod(keyMod), mRepeat(repeat)
+            {};
+
+            [[nodiscard]] std::string ToString() const override 
+            {
+                std::stringstream ss;
+                ss << XJEvent::ToString() << " KeyCode: " << KeyToString(mKeyCode) 
+                << " KeyMod: " << mKeyMod << " Repeat: " << mRepeat;
+                return ss.str();
+            }
+
+            [[nodiscard]] bool IsShiftPressed() const { return (mKeyMod & MOD_SHIFT) != 0; }//判断Shift键是否被按下
+            [[nodiscard]] bool IsControlPressed() const { return (mKeyMod & MOD_CONTROL) != 0; }//判断Control键是否被按下
+            [[nodiscard]] bool IsAltPressed() const { return (mKeyMod & MOD_ALT) != 0; }//  判断Alt键是否被按下
+            [[nodiscard]] bool IsSuperPressed() const { return (mKeyMod & MOD_SUPER) != 0; }//判断Super键是否被按下
+            [[nodiscard]] bool IsCapsLockOn() const { return (mKeyMod & MOD_CAPS_LOCK) != 0; }//判断CapsLock键是否被按下
+            [[nodiscard]] bool IsNumLockOn() const { return (mKeyMod & MOD_NUM_LOCK) != 0; }//判断NumLock键是否被按下
+            [[nodiscard]] bool IsRepeat() const { return mRepeat; }//判断是否为重复按键事件
+
+            Key mKeyCode;
+            KeyMod mKeyMod;
+            bool mRepeat;
+
+            EVENT_CLASS_TYPE(EVENT_TYPE_KEY_PRESS);
+
+    };
+//按键释放事件类，包含按键释放事件
+    class XJKeyReleaseEvent : public XJEvent 
+    {
+        public:
+            XJKeyReleaseEvent(Key KeyCode) : mKeyCode(KeyCode){};
+            [[nodiscard]] std::string ToString() const override
+            {
+                std::stringstream ss;
+                ss << XJEvent::ToString();
+                ss << " KeyCode: " << KeyToString(mKeyCode);
+                return ss.str();
+            }
+        
+            Key mKeyCode;
+            EVENT_CLASS_TYPE(EVENT_TYPE_KEY_RELEASE);
+    };
 
 }
 
