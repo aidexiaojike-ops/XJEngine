@@ -137,12 +137,12 @@ namespace XJ
     };
     enum KeyMod//键修饰符枚举，定义了各种键修饰符的值
     {
-        MOD_SHIFT   = 0x0001,
-        MOD_CONTROL = 0x0002,
-        MOD_ALT     = 0x0004,
-        MOD_SUPER   = 0x0008,
-        MOD_CAPS_LOCK = 0x0010,
-        MOD_NUM_LOCK = 0x0020,
+        KEY_MOD_SHIFT   = 0x0001,
+        KEY_MOD_CONTROL = 0x0002,
+        KEY_MOD_ALT     = 0x0004,
+        KEY_MOD_SUPER   = 0x0008,
+        KEY_MOD_CAPS_LOCK = 0x0010,
+        KEY_MOD_NUM_LOCK = 0x0020,
     };
     static const char* KeyToString(Key key)//将键枚举转换为字符串
     {
@@ -275,12 +275,12 @@ namespace XJ
     
     static const char* XJKeyModToStr(KeyMod keyMod){
         switch (keyMod) {
-            case MOD_SHIFT: return "MOD_SHIFT";
-            case MOD_CONTROL: return "MOD_CONTROL";
-            case MOD_ALT: return "MOD_ALT";
-            case MOD_SUPER: return "MOD_SUPER";
-            case MOD_CAPS_LOCK: return "MOD_CAPS_LOCK";
-            case MOD_NUM_LOCK: return "MOD_NUM_LOCK";
+            case KEY_MOD_SHIFT: return "MOD_SHIFT";
+            case KEY_MOD_CONTROL: return "MOD_CONTROL";
+            case KEY_MOD_ALT: return "MOD_ALT";
+            case KEY_MOD_SUPER: return "MOD_SUPER";
+            case KEY_MOD_CAPS_LOCK: return "MOD_CAPS_LOCK";
+            case KEY_MOD_NUM_LOCK: return "MOD_NUM_LOCK";
         }
         return "unknown";
     }
@@ -300,12 +300,12 @@ namespace XJ
                 return ss.str();
             }
 
-            [[nodiscard]] bool IsShiftPressed() const { return (mKeyMod & MOD_SHIFT) != 0; }//判断Shift键是否被按下
-            [[nodiscard]] bool IsControlPressed() const { return (mKeyMod & MOD_CONTROL) != 0; }//判断Control键是否被按下
-            [[nodiscard]] bool IsAltPressed() const { return (mKeyMod & MOD_ALT) != 0; }//  判断Alt键是否被按下
-            [[nodiscard]] bool IsSuperPressed() const { return (mKeyMod & MOD_SUPER) != 0; }//判断Super键是否被按下
-            [[nodiscard]] bool IsCapsLockOn() const { return (mKeyMod & MOD_CAPS_LOCK) != 0; }//判断CapsLock键是否被按下
-            [[nodiscard]] bool IsNumLockOn() const { return (mKeyMod & MOD_NUM_LOCK) != 0; }//判断NumLock键是否被按下
+            [[nodiscard]] bool IsShiftPressed() const { return (mKeyMod & KEY_MOD_SHIFT) != 0; }//判断Shift键是否被按下
+            [[nodiscard]] bool IsControlPressed() const { return (mKeyMod & KEY_MOD_CONTROL) != 0; }//判断Control键是否被按下
+            [[nodiscard]] bool IsAltPressed() const { return (mKeyMod & KEY_MOD_ALT) != 0; }//  判断Alt键是否被按下
+            [[nodiscard]] bool IsSuperPressed() const { return (mKeyMod & KEY_MOD_SUPER) != 0; }//判断Super键是否被按下
+            [[nodiscard]] bool IsCapsLockOn() const { return (mKeyMod & KEY_MOD_CAPS_LOCK) != 0; }//判断CapsLock键是否被按下
+            [[nodiscard]] bool IsNumLockOn() const { return (mKeyMod & KEY_MOD_NUM_LOCK) != 0; }//判断NumLock键是否被按下
             [[nodiscard]] bool IsRepeat() const { return mRepeat; }//判断是否为重复按键事件
 
             Key mKeyCode;

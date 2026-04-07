@@ -43,9 +43,8 @@ namespace XJ
                {
                     .eventType = observer,
                     .funchandler = eventFunc
-               }
-               
-               mObserverHandlerMap[T::XJGetEventType()].push_back(handler);
+               };
+               mObserverHandlerMap[T::XJGetStaticType()].push_back(handler);
             }
 
             void DestroyObserverHandler(XJEventObserver* observer)//销毁事件观察者的事件处理函数
@@ -64,7 +63,7 @@ namespace XJ
             void DispatchEvent(XJEvent& event);//分发事件，将事件传递给相应的事件处理函数
         private:
             XJEventDispatcher() = default;
-            static XJEventDispatcher* sInstance;
+            static XJEventDispatcher* sInstance;//事件分发器实例
             
             std::unordered_map<XJEventType, std::vector<EventHandlerEntry>> mObserverHandlerMap;//提供一个注册订阅者的函数
           

@@ -7,6 +7,7 @@
 set(PLATFORM_SRC
     ${CMAKE_CURRENT_SOURCE_DIR}/Private/Edit/SpdlogDebug.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/Private/Edit/XJGlfwWindow.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/Private/Edit/XJEventTesting.cpp
 
     ${CMAKE_CURRENT_SOURCE_DIR}/Private/Graphic/VulkanInstance.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/Private/Graphic/VulkanSurface.cpp
@@ -27,6 +28,7 @@ set(PLATFORM_SRC
     ${CMAKE_CURRENT_SOURCE_DIR}/Private/Graphic/XJVulkanDescriptorSet.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/Private/Graphic/XJVulkanTextureSampler.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/Private/Event/XJEventDispatcher.cpp
+
     # ${CMAKE_CURRENT_SOURCE_DIR}/Private/XJEngine.cpp
     # 后续新增文件直接添加在这里
 )
@@ -55,6 +57,13 @@ target_include_directories(Platform
 
 # 设置 C++ 标准
 target_compile_features(Platform PUBLIC cxx_std_17)
+
+# 禁用 spdlog/fmt 的弃用警告
+if(MSVC)
+    target_compile_options(Platform PRIVATE /wd4996)
+else()
+    target_compile_options(Platform PRIVATE -Wno-deprecated-declarations)
+endif()
 
 # ----------- 添加第三方库 (顺序很重要) -----------
 

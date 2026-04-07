@@ -48,12 +48,12 @@ namespace XJ
                 return ss.str();
             }
             //判断是否按下了Shift、Control、Alt、Super、CapsLock和NumLock键，以及是否是重复事件
-            [[nodiscard]] bool IsShiftPressed() const { return mKeyMod & MOD_SHIFT; };
-            [[nodiscard]] bool IsControlPressed() const { return mKeyMod & MOD_CONTROL; };
-            [[nodiscard]] bool IsAltPressed() const { return mKeyMod & MOD_ALT; };
-            [[nodiscard]] bool IsSuperPressed() const { return mKeyMod & MOD_SUPER; };
-            [[nodiscard]] bool IsCapsLockPressed() const { return mKeyMod & MOD_CAPS_LOCK; };   
-            [[nodiscard]] bool IsNumLockPressed() const { return mKeyMod & MOD_NUM_LOCK; };      
+            [[nodiscard]] bool IsShiftPressed() const { return mKeyMod & KEY_MOD_SHIFT; };
+            [[nodiscard]] bool IsControlPressed() const { return mKeyMod & KEY_MOD_CONTROL; };
+            [[nodiscard]] bool IsAltPressed() const { return mKeyMod & KEY_MOD_ALT; };
+            [[nodiscard]] bool IsSuperPressed() const { return mKeyMod & KEY_MOD_SUPER; };
+            [[nodiscard]] bool IsCapsLockPressed() const { return mKeyMod & KEY_MOD_CAPS_LOCK; };   
+            [[nodiscard]] bool IsNumLockPressed() const { return mKeyMod & KEY_MOD_NUM_LOCK; };      
             [[nodiscard]] bool IsRepeat() const { return mRepeat; };
 
             MouseButton mMouseButton;

@@ -28,7 +28,8 @@ namespace XJ
 //事件基类，所有事件都将从这个类继承
 #define EVENT_CLASS_TYPE(type) static XJEventType XJGetStaticType() { return type; }\
                                virtual XJEventType XJGetEventType() const override { return XJGetStaticType(); }\
-                               virtual const char* XJGetEventTypeName() const override { return #type; }
+                               virtual const char* XJGetEventTypeName() const override { return #type; }\
+                               virtual const char* XJGetEventInfo() const override { return #type; }
 
     class XJEvent
     {
@@ -38,8 +39,9 @@ namespace XJ
             [[nodiscard]] virtual XJEventType XJGetEventType() const = 0;//获取事件类型
             [[nodiscard]] virtual const char *XJGetEventTypeName() const = 0;//获取事件类型名称
             [[nodiscard]] virtual const char *XJGetEventInfo() const = 0;//获取事件信息
-            [[nodiscard]] virtual std::string ToString() const = 0;//将事件信息转换为字符串
-             virtual ~XJEvent() = default;
+            //[[nodiscard]] virtual std::string ToString() const = 0;//将事件信息转换为字符串
+            [[nodiscard]] virtual std::string ToString() const { return "XJEvent"; }
+            virtual ~XJEvent() = default;
     };
     
 }

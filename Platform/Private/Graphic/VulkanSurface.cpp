@@ -18,13 +18,14 @@ namespace XJ
             spdlog::error("VulkanSurface::SurfaceInit 参数错误：传入的window不是XJGlfwWindow类型");
             return;
         }
-        if(!glfWwindow->XJGetWindow())
-        {
-            spdlog::error("VulkanSurface::SurfaceInit 参数错误：GLFW窗口句柄为空");
+      
+        GLFWwindow* XJGetImplWindowPointer = static_cast<GLFWwindow*>(glfWwindow->XJGetImplWindowPointer());
+        if(XJGetImplWindowPointer == nullptr)
+        {   
+            spdlog::error("VulkanSurface::SurfaceInit 获取 GLFW window 句柄失败，XJGetImplWindowPointer 返回空指针");
             return;
         }
-
-        XJDebug_Log(glfwCreateWindowSurface(mInstance->XJGetInstance(), window->XJGetWindow(), nullptr, &mSurface));
+        XJDebug_Log(glfwCreateWindowSurface(mInstance->XJGetInstance(), XJGetImplWindowPointer, nullptr, &mSurface));
         spdlog::trace("{0} : 创建 surface 实例 : {1}", __FUNCTION__, (void*)mSurface);
         //glfwCreateWindowSurface(instance->XJGetVulkanInstance(), window->XJGetWindow(), nullptr, &surface);
         //待实现

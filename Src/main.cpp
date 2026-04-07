@@ -4,6 +4,7 @@
 #include "Graphic/XJVulkanCommandBuffer.h"
 #include "Graphic/XJVulkanGeometryUtil.h"
 #include "Edit/FileUtil.h"
+#include "Edit/XJEventTesting.h"
 #include "Render/XJMesh.h"
 #include "Render/XJRenderer.h"
 #include "Graphic/VulkanCommon.h"
@@ -92,6 +93,9 @@ protected:
          // 创建命令池
         mCommandBuffers = kDevice->XJGetDefaultCmdPool()->AllocateCommandBuffer(static_cast<uint32_t>(kSwapchain->XJGetSwapchainImages().size()));//分配命令缓冲区
         spdlog::info("分配了 {} 个命令缓冲区", mCommandBuffers.size());
+
+        //EVENT
+        mEventTesting = std::make_shared<XJ::XJEventTesting>();
 
          //geometry util 
         std::vector<XJ::XJVulkanVertex> mVertices;
@@ -227,6 +231,9 @@ private:
     std::vector<VkCommandBuffer>                        mCommandBuffers;
     std::shared_ptr<XJ::XJVulkanGeometryUtil>           mGeometryUtil;
     std::shared_ptr<XJ::XJMesh>                         mMesh;
+
+    std::shared_ptr<XJ::XJEventTesting>                 mEventTesting;
+
 
     VkSampleCountFlagBits mSampleCount = VK_SAMPLE_COUNT_1_BIT; // 多重采样数量
 

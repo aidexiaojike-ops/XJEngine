@@ -1,5 +1,5 @@
-#ifndef XJ_MOUSE_EVENT_H
-#define XJ_MOUSE_EVENT_H
+#ifndef XJ_EVENT_OBSERVER_H
+#define XJ_EVENT_OBSERVER_H
 
 #include "Event/XJEventDispatcher.h"
 

@@ -5,17 +5,20 @@
 
 namespace XJ
 {
+    
     class XJFrameBufferResizeEvent : public XJEvent//帧缓冲区大小改变事件类，继承自XJEvent
     {
-        XJFrameBufferResizeEvent(uint32_t width, uint32_t height)//构造函数，接受新的宽度和高度参数
-            : mWidth(width), mHeight(height) {}
-        [[nodiscard]] std::string ToString() const override
-        {
-            return XJEvent::ToString() + "(with: " + std::to_string(mWidth) + ", height: " + std::to_string(mHeight) + ")";
-        }
-        private:
-            uint32_t mWidth;
-            uint32_t mHeight;
+        public:
+            XJFrameBufferResizeEvent(uint32_t width, uint32_t height)//构造函数，接受新的宽度和高度参数
+                : mWidth(width), mHeight(height) {}
+            [[nodiscard]] std::string ToString() const override
+            {
+                return XJEvent::ToString() + "(with: " + std::to_string(mWidth) + ", height: " + std::to_string(mHeight) + ")";
+            }
+    
+
+        uint32_t mWidth;
+        uint32_t mHeight;
 
         EVENT_CLASS_TYPE(EVENT_TYPE_FRAMEBUFFER_RESIZE);
     };
