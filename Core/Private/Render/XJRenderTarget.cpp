@@ -5,6 +5,8 @@
 #include "Graphic/XJVulkanImage.h"
 #include "spdlog/spdlog.h"
 #include "Graphic/XJVulkanDepthImage.h"
+#include "ECS/XJEntity.h"
+#include "ECS/Component/XJCameraComponent.h"
 
 namespace XJ
 {
@@ -337,11 +339,17 @@ namespace XJ
         //spdlog::debug("开始渲染目标：帧缓冲区数量={}, 当前索引={}, 交换链目标={}",
         //          mFrameBuffers.size(), mCurrentBufferIndex, bSwapchainTarget);
 
-        if(bShouldUpdate)
+        if(bShouldUpdate)//如果需要更新帧缓冲（例如窗口大小改变时），重新创建帧缓冲
         {
             ReCreate();
             bShouldUpdate = false;
         }
+
+        if(XJEntity::HasComponent<XJCameraComponent>(mCamera))
+        {
+            mCamera->GetComponent<XJCameraComponent>().XJSetAspectRatio(mExtent.width * 1.0f / mExtent.height);//更新摄像机的投影矩阵
+        }
+
         if(bSwapchainTarget)
         {
              XJRenderContext *renderContext = XJApplication::XJGetAppContext()->renderContext;//`获取渲染上下文

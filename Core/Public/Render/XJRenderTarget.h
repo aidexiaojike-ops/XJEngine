@@ -5,6 +5,7 @@
 #include "Graphic/XJVulkanFrameBuffer.h"
 #include "XJRenderContext.h"
 #include "ECS/XJSystem.h"
+#include "ECS/XJEntity.h"
 
 namespace XJ
 {
@@ -28,11 +29,15 @@ namespace XJ
             bool bSwapchainTarget = false; // 标志是否为交换链目标
             bool bBeginRenderTarget = false; // 标志是否已开始渲染目标
 
+            XJEntity *mCamera = nullptr;//摄像机事件
+
             bool bShouldUpdate = false; // 标志是否需要更新帧缓冲（例如窗口大小改变时） 
              /* data */
 
-            std::vector<std::shared_ptr<XJVulkanImage>> mColorImages;
-            std::vector<std::shared_ptr<XJ::XJVulkanDepthImage>> mDepthImages;
+            std::vector<std::shared_ptr<XJVulkanImage>> mColorImages;//颜色附件图像列表
+            std::vector<std::shared_ptr<XJ::XJVulkanDepthImage>> mDepthImages;//深度附件图像列表
+
+
         public:
             XJRenderTarget(XJVulkanRenderPass *rederPass);//构造函数重载，允许直接传入帧缓冲数量和尺寸
             XJRenderTarget(XJVulkanRenderPass *rederPass,uint32_t bufferCount, VkExtent2D extent);//构造函数重载，允许直接传入帧缓冲数量和尺寸
@@ -68,6 +73,9 @@ namespace XJ
                     item->OnRender(cmdBuffer, this);//渲染
                 }
             }
+
+            void XJSetCamera(XJEntity *camera) { mCamera = camera; }
+            XJEntity *XJGetCamera() const { return mCamera; }
 
     };
 }

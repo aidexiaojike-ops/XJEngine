@@ -32,6 +32,11 @@ namespace XJ
             void Pause() { bPaused = true; }
             void Resume() {if(bPaused) bPaused = false; }
             bool XJGetPaused() const { return bPaused; }
+
+            float XJGetStartTimeSecond() const { return std::chrono::duration<float>(std::chrono::steady_clock::now() - mStartTimePoint).count(); }
+            uint64_t XJGetFrameIndex() const {return mFrameIndex;}//帧的Index
+
+            XJGlfwWindow* XJGetWindow() const { return mWindow.get(); }
         protected:
             virtual void OnConfiguration(AppSettings *appSettings){}
             virtual void OnInit(){}
@@ -45,18 +50,19 @@ namespace XJ
             std::chrono::steady_clock::time_point mStartTimePoint;//程序开始时间点
             std::chrono::steady_clock::time_point mLastTimePoint;//上次更新时间点
             std::unique_ptr<XJRenderContext> mRenderContext; // 渲染上下文
+
+            std::unique_ptr<XJGlfwWindow>      mWindow;//窗口对象
+            std::unique_ptr<XJScene>      mScene;//场景对象
         private:
             void ParseArgs(int argc, char* argv[]);//解析命令行参数
             bool LoadScene(const std::string &filePath = "");//是否加载场景，加载场景 文件夹
             void UnLoadScene();//卸载场景
 
             std::unique_ptr<SpdlogDebug>       mSpdlogDebug;//日志对象
-            std::unique_ptr<XJGlfwWindow>      mWindow;//窗口对象
-            std::unique_ptr<XJScene>      mScene;//场景对象
             AppSettings mAppSettings;//应用程序设置
 
           
-            uint64_t mFrameIndex;//帧索引
+            uint64_t mFrameIndex = 0;//帧索引
             bool bPaused = false;//是否暂停
 
             static XJAppContext sAppContext;//全局应用程序上下文

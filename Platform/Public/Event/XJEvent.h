@@ -26,10 +26,12 @@ namespace XJ
     };
 
 //事件基类，所有事件都将从这个类继承
-#define EVENT_CLASS_TYPE(type) static XJEventType XJGetStaticType() { return type; }\
-                               virtual XJEventType XJGetEventType() const override { return XJGetStaticType(); }\
-                               virtual const char* XJGetEventTypeName() const override { return #type; }\
-                               virtual const char* XJGetEventInfo() const override { return #type; }
+#define EVENT_CLASS_TYPE(type) \
+public: \
+        static XJEventType XJGetStaticType() { return type; }\
+        virtual XJEventType XJGetEventType() const override { return XJGetStaticType(); }\
+        virtual const char* XJGetEventTypeName() const override { return #type; }\
+        virtual const char* XJGetEventInfo() const override { return #type; }
 
     class XJEvent
     {

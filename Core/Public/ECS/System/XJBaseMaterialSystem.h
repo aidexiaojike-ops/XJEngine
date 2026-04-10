@@ -38,7 +38,7 @@ namespace XJ
             std::shared_ptr<XJVulkanDescriptorSetLayout>    mDescriptorSetLayout;
 
             VkSampleCountFlagBits mSampleCount = VK_SAMPLE_COUNT_1_BIT;// 多重采样数量  minmap levels
-            static constexpr uint32_t MAX_ENTITIES  = 16; // 最大实体数量
+            static constexpr uint32_t MAX_ENTITIES  = 10000; // 最大实体数量
             uint32_t mDynamicAlignment  = 0; // 当前实体数量对应的动态对齐大小
         public:
 

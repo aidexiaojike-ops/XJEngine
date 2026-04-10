@@ -173,7 +173,9 @@ namespace XJ
 
     void XJGlfwWindow::XJGetMousePos(glm::vec2 &mousPose) //获取鼠标位置，供Vulkan使用
     {
-        glfwGetCursorPos(mGLFWwindow, reinterpret_cast<double*>(&mousPose.x), reinterpret_cast<double*>(&mousPose.y));
+        double xPos, yPos;
+        glfwGetCursorPos(mGLFWwindow, &xPos, &yPos);
+        mousPose = glm::vec2(static_cast<float>(xPos), static_cast<float>(yPos));
     }
     bool XJGlfwWindow::IsMouseDown(MouseButton mouseButton) const//获取鼠标按键状态，供Vulkan使用
     {   

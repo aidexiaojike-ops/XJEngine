@@ -12,6 +12,7 @@
 #include "ECS/System/XJBaseMaterialSystem.h"
 
 #include "ECS/XJScene.h"
+#include "ECS/Component/XJCameraComponent.h"
 
 #include <chrono>
 
@@ -96,12 +97,27 @@ protected:
 
         //EVENT
         mEventTesting = std::make_shared<XJ::XJEventTesting>();
+        mOvserver = std::make_shared<XJ::XJEventObserver>();
+        mOvserver ->OnEvent<XJ::XJMouseScrollEvent>([this](const XJ::XJMouseScrollEvent &event)
+        {
+            XJ::XJEntity *kCameraEntity = mRenderTarget->XJGetCamera();
+            if(XJ::XJEntity::HasComponent<XJ::XJCameraComponent>(kCameraEntity))
+            {
+                auto &kCameraComp = kCameraEntity->GetComponent<XJ::XJCameraComponent>();
+                float kRadius = kCameraComp.XJGetRadius() + event.mYOffset * -0.3f;
+                if(kRadius < 0.1f)//滚轮最小值
+                {
+                    kRadius = .01f;
+                }
+                kCameraComp.XJSetRadius(kRadius);
+            }
+        });
 
          //geometry util 
         std::vector<XJ::XJVulkanVertex> mVertices;
         std::vector<uint32_t> mIndices;
         mGeometryUtil = std::make_unique<XJ::XJVulkanGeometryUtil>();
-        mGeometryUtil->CreateCube(-0.5f, 0.5f, -0.5f, 0.5f, -0.5f, 0.5f, mVertices, mIndices, true, true, glm::mat4(1.0f));
+        mGeometryUtil->CreateCube(-0.1f, 0.1f, -0.1f, 0.1f, -0.1f, 0.1f, mVertices, mIndices, true, true, glm::mat4(1.0f));
         spdlog::info("创建立方体: {} 个顶点, {} 个索引", mVertices.size(), mIndices.size());
         //创建网格对象
         mMesh = std::make_shared<XJ::XJMesh>(mVertices, mIndices);
@@ -110,46 +126,34 @@ protected:
 
     void OnSceneInit(XJ::XJScene *scene) override
     {
+
+        XJ::XJEntity *kCameraEntity = scene->CreateEntity("CameraEntity");//创建一个实体
+        kCameraEntity->AddComponent<XJ::XJCameraComponent>();//添加摄像机组件
+        // kCameraEntity->AddComponent<XJ::XJTransformComponent>();  // 添加这行
+        mRenderTarget->XJSetCamera(kCameraEntity);//将摄像机实体设置到渲染目标中，以便在渲染过程中使用摄像机信息
+
         //在这里可以添加场景初始化的代码，例如创建实体、添加组件等
         spdlog::info("场景初始化");
+        float x = 0.f;
+        for(int i = 0; i < mSmallCubeSize.x; ++i, x += 0.5f)
         {
-            XJ::XJEntity* kCube = scene->CreateEntity("CubeEntityA");//创建一个实体
-            auto &kTransformComp = kCube->GetComponent<XJ::XJTransformComponent>();//添加变换组件
-            auto &kMaterialComp = kCube->AddComponent<XJ::XJBaseMaterialComponent>();//添加材质组件
-            auto &kMeshComp = kCube->AddComponent<XJ::XJMeshComponent>();//添加网格组件
+            float y = 0.f;
+            for(int j = 0; j < mSmallCubeSize.y; ++j, y += 0.5f)
+            {
+                float z = 0.f;
+                for(int k = 0; k < mSmallCubeSize.z; ++k, z += 0.5f)
+                {
+                    XJ::XJEntity* kCube = scene->CreateEntity("CubeEntityA");//创建一个实体
+                    auto &kTransformComp = kCube->GetComponent<XJ::XJTransformComponent>();//添加变换组件
+                    auto &kMaterialComp = kCube->AddComponent<XJ::XJBaseMaterialComponent>();//添加材质组件
+                    auto &kMeshComp = kCube->AddComponent<XJ::XJMeshComponent>();//添加网格组件
 
-            kMeshComp.mMesh = mMesh.get();//设置网格组件的网格对象
+                    kMeshComp.mMesh = mMesh.get();//设置网格组件的网格对象
 
-            kTransformComp.position = glm::vec3(0.0f, 1.0f, 0.0f);
-            kTransformComp.rotation = glm::vec3(30.0f, 45.0f, 0.0f);
-            kTransformComp.scale = glm::vec3(0.25f, 0.25f, 0.25f);//设置变换组件的缩放
-            kTransformComp.UpdateModelMatrix(); // 新增：立即更新模型矩阵
-        }
-        {
-            XJ::XJEntity* kCube = scene->CreateEntity("CubeEntityB");//创建一个实体
-            auto &kTransformComp = kCube->GetComponent<XJ::XJTransformComponent>();//添加变换组件
-            auto &kMaterialComp = kCube->AddComponent<XJ::XJBaseMaterialComponent>();//添加材质组件
-            auto &kMeshComp = kCube->AddComponent<XJ::XJMeshComponent>();//添加网格组件
-            
-            kMeshComp.mMesh = mMesh.get();//设置网格组件的网格对象
-            
-            kTransformComp.position = glm::vec3(0.0f, 0.0f, 0.0f);
-            kTransformComp.rotation = glm::vec3(30.0f, 45.0f, 0.0f);
-            kTransformComp.scale = glm::vec3(0.25f, 0.25f, 0.25f);//设置变换组件的缩放
-            kTransformComp.UpdateModelMatrix(); // 新增：立即更新模型矩阵
-        }
-        {
-            XJ::XJEntity* kCube = scene->CreateEntity("CubeEntityC");//创建一个实体
-            auto &kTransformComp = kCube->GetComponent<XJ::XJTransformComponent>();//添加变换组件
-            auto &kMaterialComp = kCube->AddComponent<XJ::XJBaseMaterialComponent>();//添加材质组件
-            auto &kMeshComp = kCube->AddComponent<XJ::XJMeshComponent>();//添加网格组件
-            
-            kMeshComp.mMesh = mMesh.get();//设置网格组件的网格对象
-            
-            kTransformComp.position = glm::vec3(1.0f, 0.5f, 0.0f);
-            kTransformComp.rotation = glm::vec3(30.0f, 45.0f, 0.0f);
-            kTransformComp.scale = glm::vec3(0.25f, 0.25f, 0.25f);//设置变换组件的缩放
-            kTransformComp.UpdateModelMatrix(); // 新增：立即更新模型矩阵
+                    kTransformComp.position = glm::vec3(x, y, z);
+                    kTransformComp.UpdateModelMatrix(); // 新增：立即更新模型矩阵
+                }
+            }
         }
     }
     void OnSceneDestroy(XJ::XJScene *scene) override
@@ -160,6 +164,47 @@ protected:
 
     void OnUpdate(float deltaTime) override
     {
+       
+       XJ::XJEntity *kCameraEntity = mRenderTarget->XJGetCamera();//获取摄像机实体
+       if(XJ::XJEntity::HasComponent<XJ::XJCameraComponent>(kCameraEntity))//如果有摄像机组件
+       {
+            if(!XJGetWindow()->IsMouseDown())
+            {
+                bFirstMouseDrag = true;//鼠标释放
+                return;
+            }
+
+            glm::vec2 kMousePos;
+            XJGetWindow()->XJGetMousePos(kMousePos);//获取鼠标位置
+                                    // 上一次鼠标位置x  新鼠标位置      上一次的y   新鼠标位置 y
+            glm::vec2 kMouseDelta = { kMousePos.x - mLastMousePos.x , kMousePos.y - mLastMousePos.y };//计算鼠标移动距离
+            mLastMousePos = kMousePos;//更新上一帧鼠标位置
+
+            if(abs(kMouseDelta.x) > 0.1f || abs(kMouseDelta.y) > 0.1f)//放抖动
+            {
+                if(bFirstMouseDrag)
+                {
+                    bFirstMouseDrag = false;//第一次鼠标拖动
+                }
+                else
+                {
+                    auto &kTransformComp = kCameraEntity->GetComponent<XJ::XJTransformComponent>();//获取变换组件
+                    float kYaw = kTransformComp.rotation.x;//计算偏航角
+                    float kPitch = kTransformComp.rotation.y;//计算俯仰
+
+
+                    kYaw += kMouseDelta.x * mMouseSensitivity;//更新偏航角
+                    kPitch += kMouseDelta.y * mMouseSensitivity;//更新俯仰角
+
+                    kPitch = glm::clamp(kPitch, -89.0f, 89.0f);//限制俯仰角范围
+
+                    kTransformComp.rotation.x = kYaw;//更新摄像机偏航角
+                    kTransformComp.rotation.y = kPitch;//更新摄像机俯仰角
+                    //kTransformComp.rotation = glm::vec3(kYaw, kPitch, 0.0f);//更新摄像机旋转
+
+                }
+            }
+       }
        
 
     }
@@ -233,12 +278,17 @@ private:
     std::shared_ptr<XJ::XJMesh>                         mMesh;
 
     std::shared_ptr<XJ::XJEventTesting>                 mEventTesting;
+    std::shared_ptr<XJ::XJEventObserver>                mOvserver;
 
 
     VkSampleCountFlagBits mSampleCount = VK_SAMPLE_COUNT_1_BIT; // 多重采样数量
 
+    glm::ivec3 mSmallCubeSize{5 ,5 ,5};//立方体尺寸
    
-
+    bool bFirstMouseDrag = true;//相机是否可以移动
+    bool bStartCameraRotation = false;
+    glm::vec2 mLastMousePos;//上一帧鼠标位置
+    float mMouseSensitivity = 0.25f;//鼠标灵敏度
 };
 
 XJ::XJApplication* CreateApplicationEntryPoint()

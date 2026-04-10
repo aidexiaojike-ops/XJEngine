@@ -70,6 +70,10 @@ endif()
 file(GLOB ENGINE_SRC
     ${CMAKE_SOURCE_DIR}/Src/*.cpp
 )
+#代码量过大  添加编译
+if (CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+   add_compile_options(-Wa,-mbig-obj)
+endif()
 
 add_executable(XJEngine ${ENGINE_SRC})#会打开cmd
 #add_executable(XJEngine WIN32 ${ENGINE_SRC})

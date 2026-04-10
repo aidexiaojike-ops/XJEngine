@@ -12,6 +12,7 @@
 
 #include "Graphic/VulkanImageView.h"//获取图像视图信息
 #include "Graphic/VulkanPhysicalDevices.h"//获取物理设备信息
+#include "ECS/Component/XJCameraComponent.h"//获取摄像机组件信息
 
 namespace XJ
 {
@@ -148,7 +149,7 @@ namespace XJ
 
         if (kView.end() == kView.begin()) 
         {
-            return;   // 视图确实为空
+           return;   // 视图确实为空
         }
       
 
@@ -178,10 +179,22 @@ namespace XJ
         XJ::XJRenderContext *kRenderContext = XJApplication::XJGetAppContext()->renderContext;
         //更新推送常量  旋转矩阵
         //透视投影矩阵   CameraCompionent 里设置投影矩阵和视图矩阵
-       mGlobalUbo.projMat = glm::perspective(glm::radians(65.0f), static_cast<float>(kFrameBuffer->XJGetWidth()) * 1.0f / static_cast<float>(kFrameBuffer->XJGetHeight()), 0.1f, 100.0f);
-        mGlobalUbo.projMat[1][1] *= -1;  // 取消注释，启用 Y 轴翻转
-        mGlobalUbo.viewMat = glm::lookAt(glm::vec3(0.0f, 0.0f, 2.0f), glm::vec3(0.0f, 0.0f, -1.0f), glm::vec3(0.0f, 1.0f, 0.0f));
-        
+        glm::mat4 projMat{1.0f};
+        glm::mat4 viewMat{1.0f};
+        XJEntity *kCamera = static_cast<XJEntity*>(renderTarget->XJGetCamera());
+        // void* cameraPtr = renderTarget->XJGetCamera();
+        if(kCamera && kCamera->HasComponent<XJCameraComponent>())
+        {
+            auto& kCameraComponent = kCamera->GetComponent<XJCameraComponent>();
+            projMat = kCameraComponent.XJGetProjectionMatrix();
+            viewMat = kCameraComponent.XJGetViewMatrix();
+
+            // 将投影和视图矩阵赋值给全局UBO
+            mGlobalUbo.projMat = projMat;
+            mGlobalUbo.viewMat = viewMat;
+        }
+
+     
          // 在循环外更新描述符集（只更新一次）
         UpdateDescriptorSets(cmdBuffer);
 
