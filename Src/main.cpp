@@ -1,27 +1,26 @@
 #include "XJEntryPoint.h"
-#include "Render/XJRenderTarget.h"
+#include "Edit/FileUtil.h"
+#include "Edit/XJEventTesting.h"
+
 #include "Graphic/XJVulkanRenderPass.h"
 #include "Graphic/XJVulkanCommandBuffer.h"
 #include "Graphic/XJVulkanGeometryUtil.h"
-#include "Edit/FileUtil.h"
-#include "Edit/XJEventTesting.h"
-#include "Render/XJMesh.h"
-#include "Render/XJRenderer.h"
 #include "Graphic/VulkanCommon.h"
 #include "Graphic/XJVulkanDescriptorSet.h"
-#include "ECS/System/XJBaseMaterialSystem.h"
 
+#include "Render/XJRenderTarget.h"
+#include "Render/XJMesh.h"
+#include "Render/XJRenderer.h"
+#include "Render/XJMaterial.h"
+
+
+#include "ECS/System/XJBaseMaterialSystem.h"
 #include "ECS/XJScene.h"
 #include "ECS/Component/XJCameraComponent.h"
 
 #include <chrono>
 
-struct PushConstants
-{
-    glm::mat4 matrix{1.0f}; // 4x4 矩阵，默认初始化为单位矩阵
-    uint32_t colorType = 0;
-};// 推送常量结构体
-   
+
     
 class XJEngineApp : public XJ::XJApplication
 {
@@ -131,6 +130,8 @@ protected:
         kCameraEntity->AddComponent<XJ::XJCameraComponent>();//添加摄像机组件
         // kCameraEntity->AddComponent<XJ::XJTransformComponent>();  // 添加这行
         mRenderTarget->XJSetCamera(kCameraEntity);//将摄像机实体设置到渲染目标中，以便在渲染过程中使用摄像机信息
+        //
+        auto kBaseMaterial = XJ::XJMaterialFactory::GetInstance()->CreateMaterial<XJ::XJBaseMaterial>();
 
         //在这里可以添加场景初始化的代码，例如创建实体、添加组件等
         spdlog::info("场景初始化");
@@ -146,9 +147,7 @@ protected:
                     XJ::XJEntity* kCube = scene->CreateEntity("CubeEntityA");//创建一个实体
                     auto &kTransformComp = kCube->GetComponent<XJ::XJTransformComponent>();//添加变换组件
                     auto &kMaterialComp = kCube->AddComponent<XJ::XJBaseMaterialComponent>();//添加材质组件
-                    auto &kMeshComp = kCube->AddComponent<XJ::XJMeshComponent>();//添加网格组件
-
-                    kMeshComp.mMesh = mMesh.get();//设置网格组件的网格对象
+                    kMaterialComp.AddMesh(mMesh.get(), kBaseMaterial);//添加网格组件  并设置
 
                     kTransformComp.position = glm::vec3(x, y, z);
                     kTransformComp.UpdateModelMatrix(); // 新增：立即更新模型矩阵

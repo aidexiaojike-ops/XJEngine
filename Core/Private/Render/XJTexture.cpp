@@ -5,7 +5,7 @@
 #include "Graphic/XJVulkanDevice.h"
 #include "Render/XJRenderContext.h"
 #include "XJApplication.h"
-#include "Graphic/XJVulkanTextureSampler.h"
+#
 
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
@@ -29,7 +29,7 @@ namespace XJ
                  mFormat, VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT, VK_SAMPLE_COUNT_1_BIT);
         mImageView = std::make_shared<VulkanImageView>(kDevice,mImage->XJGetImage(), mFormat, VK_IMAGE_ASPECT_COLOR_BIT);
 
-        XJDebug_Log(mTextureSampler->CreateSimpleSampler(kDevice, VK_FILTER_LINEAR, VK_SAMPLER_ADDRESS_MODE_REPEAT, &mSampler));
+        //XJDebug_Log(mTextureSampler->CreateSimpleSampler(kDevice, VK_FILTER_LINEAR, VK_SAMPLER_ADDRESS_MODE_REPEAT, &mSampler));
         
         //COPY DATA TO BUFFER
         size_t size = sizeof(uint8_t) * 4 * mWidth * mHeight;
@@ -49,7 +49,7 @@ namespace XJ
     {
         XJ::XJRenderContext *renderContext = XJApplication::XJGetAppContext()->renderContext;
         XJ::XJVulkanDevice *kDevice  = renderContext->XJGetDevice();
-        vkDestroySampler(kDevice->XJGetDevice(), mSampler, nullptr);
+        // vkDestroySampler(kDevice->XJGetDevice(), mSampler, nullptr);
         mImage.reset();
         mImageView.reset();
     }

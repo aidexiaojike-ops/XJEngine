@@ -9,7 +9,7 @@ namespace XJ
     class VulkanImageView;
     class XJVulkanBuffer;
     class XJAppContext;
-    class XJVulkanTextureSampler;
+    // class XJVulkanTextureSampler;
 
     class XJTexture
     {
@@ -19,10 +19,10 @@ namespace XJ
             /* data */
             std::shared_ptr<XJVulkanImage> mImage;
             std::shared_ptr<VulkanImageView> mImageView;
-            std::shared_ptr<XJVulkanTextureSampler> mTextureSampler;
+            // std::shared_ptr<XJVulkanTextureSampler> mTextureSampler;
 
             
-            VkSampler mSampler;
+          
         public:
             XJTexture(const std::string &filePath);
             ~XJTexture();
@@ -32,7 +32,7 @@ namespace XJ
 
             XJVulkanImage *XJGetImage() const {return mImage.get();}
             VulkanImageView *XJGetImageView() const {return mImageView.get();}
-            VkSampler XJGetSampler() const {return mSampler;}
+        
 
             VkFormat mFormat;
             

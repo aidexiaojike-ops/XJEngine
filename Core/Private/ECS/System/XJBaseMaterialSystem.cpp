@@ -90,6 +90,9 @@ namespace XJ
         //贴图
         mTextureA = std::make_shared<XJ::XJTexture>(XJ_RES_TEXTURE_DIR"R.png");
         mTextureB = std::make_shared<XJ::XJTexture>(XJ_RES_TEXTURE_DIR"R-C.jpeg");
+        // 新增：初始化采样器
+        mSamplerA = std::make_shared<XJ::XJSampler>(VK_FILTER_LINEAR, VK_SAMPLER_ADDRESS_MODE_REPEAT);
+        mSamplerB = std::make_shared<XJ::XJSampler>(VK_FILTER_LINEAR, VK_SAMPLER_ADDRESS_MODE_REPEAT);
 
 
         XJ::ShaderLayout mShaderLayout;
@@ -145,7 +148,7 @@ namespace XJ
         if(!kScene){return;}//如果场景不存在，直接返回
 
         entt::registry &kReg =  kScene->XJGetEcsRegistry();//拿到注射器
-        auto kView = kReg.view<XJTransformComponent, XJMeshComponent, XJBaseMaterialComponent>();//获取视图，包含有变换组件、网格组件和基础材质组件的实体
+        auto kView = kReg.view<XJTransformComponent, XJBaseMaterialComponent>();//获取视图，包含有变换组件、网格组件和基础材质组件的实体
 
         if (kView.end() == kView.begin()) 
         {
@@ -200,24 +203,54 @@ namespace XJ
 
         uint32_t kEntityIndex = 0; // 实体索引，用于动态UBO偏移计算
         //setup custiom params
-        kView.each([this, &cmdBuffer, &kEntityIndex](const auto &entity, const XJTransformComponent& transComp, XJMeshComponent& meshComp,const XJBaseMaterialComponent& matComp)
+        kView.each([this, &cmdBuffer, &kEntityIndex, projMat, viewMat](const auto &entity, const XJTransformComponent& transComp, const XJBaseMaterialComponent& matComp)
         {
-            
-            if(meshComp.mMesh && kEntityIndex < MAX_ENTITIES)
+            auto kMeshMaterials = matComp.XJGetMeshMaterials();
+            for(const auto&entry :kMeshMaterials)//要是没有材质酒放弃渲染
             {
-                mInstanceUbo.modelMat = transComp.modelMatrix;//设置实例UBO的模型矩阵
+                XJBaseMaterial *kMaterial = entry.first;
+                if(!kMaterial)
+                {
+                    spdlog::error("TODO: Default material of error material ?");
+                    continue;
+                }
+                //PushConstants pushConstants //具体某个材质
+                //{
+                //        .matrix = projMat * viewMat * transComp.GetModelMatrix(),
+                //        .colorType = kMaterial->colorType 
+                //};
+                ////vkCmdPushConstants(cmdBuffer, mPipeline->XJGetPipeline(), VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(pushConstants), &pushConstants);
+                //vkCmdPushConstants(cmdBuffer, mPipelineLayout->XJGetPipelineLayout(), VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(pushConstants), &pushConstants);
+                
+                for(const auto&kMeshIndex : entry.second)
+                {
+                    XJMesh *kMesh = matComp.XJGetMesh(kMeshIndex);
+                    //if(kMesh)
+                    //{
+                    //    kMesh->Draw(cmdBuffer);
+                    //}
 
-                //计算动态UBO偏移
-                uint32_t kOffset = kEntityIndex * mDynamicAlignment;
-                //更新实例UBO数据到动态统一缓冲区
-                mInstanceBuffer->WriteDataOffset(&mInstanceUbo, kOffset, sizeof(InstanceUbo));//UBO写入数据偏移
+                    if(kMesh && kEntityIndex < MAX_ENTITIES)
+                    {
+                        mInstanceUbo.modelMat = transComp.modelMatrix;//设置实例UBO的模型矩阵
 
-                //使用动态偏移绑定描述符集并绘制网格
-                uint32_t kDynamicOffset = kOffset; // 计算动态偏移
-                vkCmdBindDescriptorSets(cmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, mPipelineLayout->XJGetPipelineLayout(), 0, 1,  mDescriptorSets.data(), 1, &kDynamicOffset);
-                meshComp.mMesh->Draw(cmdBuffer);
-                kEntityIndex++; // 增加实体索引
+                        //计算动态UBO偏移
+                        uint32_t kOffset = kEntityIndex * mDynamicAlignment;
+                        //更新实例UBO数据到动态统一缓冲区
+                        mInstanceBuffer->WriteDataOffset(&mInstanceUbo, kOffset, sizeof(InstanceUbo));//UBO写入数据偏移
+
+                        //使用动态偏移绑定描述符集并绘制网格
+                        uint32_t kDynamicOffset = kOffset; // 计算动态偏移
+                        vkCmdBindDescriptorSets(cmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, mPipelineLayout->XJGetPipelineLayout(), 0, 1,  mDescriptorSets.data(), 1, &kDynamicOffset);
+                        kMesh->Draw(cmdBuffer);
+                        kEntityIndex++; // 增加实体索引
+                    }
+                }
+
+              
             }
+            
+           
            
         });
 
@@ -247,12 +280,12 @@ namespace XJ
         instanceBufferInfo.range = sizeof(InstanceUbo);//// 单个实例大小
 
         VkDescriptorImageInfo textureAImageBufferInfo{};
-        textureAImageBufferInfo.sampler = mTextureA->XJGetSampler();
+        textureAImageBufferInfo.sampler = mSamplerA->XJGetSampler();
         textureAImageBufferInfo.imageView = mTextureA->XJGetImageView()->XJGetImageView();
         textureAImageBufferInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 
         VkDescriptorImageInfo textureBImageBufferInfo{};
-        textureBImageBufferInfo.sampler = mTextureB->XJGetSampler();
+        textureBImageBufferInfo.sampler = mSamplerB->XJGetSampler();
         textureBImageBufferInfo.imageView = mTextureB->XJGetImageView()->XJGetImageView();
         textureBImageBufferInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 

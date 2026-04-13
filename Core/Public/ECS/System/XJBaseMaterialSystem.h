@@ -2,13 +2,13 @@
 #define XJ_BASEMATERIALSYSTEM_H
 
 #include "ECS/XJSystem.h"
-#include "ECS/Component/XJBaseMaterialComponent.h"
-#include "ECS/Component/XJMeshComponent.h"
+#include "ECS/Component/Material/XJBaseMaterialComponent.h"
+// #include "ECS/Component/Material/XJMeshComponent.h"
 #include "ECS/Component/XJTransformComponent.h"
 
 #include "Graphic/XJVulkanDescriptorSet.h"  // 解决 XJVulkanDescriptorPool 定义
 #include "Render/XJTexture.h"
-
+#include "Render/XJSampler.h"
 
 namespace XJ
 {
@@ -16,6 +16,7 @@ namespace XJ
     class XJVulkanPipeline;
     class XJVulkanDescriptorSetLayout;
     class VulkanImageView;
+
 
     struct GlobalUbo
     {
@@ -28,6 +29,13 @@ namespace XJ
     {
         glm::mat4 modelMat{1.0f};
     };
+
+    struct PushConstants
+    {
+        glm::mat4 matrix{1.0f}; // 4x4 矩阵，默认初始化为单位矩阵
+        uint32_t colorType = 0;
+    };// 推送常量结构体
+   
 
     class XJBaseMaterialSystem : public XJMaterialSystem
     {
@@ -55,6 +63,8 @@ namespace XJ
             std::shared_ptr<XJ::XJVulkanBuffer> mInstanceBuffer;
             std::shared_ptr<XJ::XJTexture> mTextureA;
             std::shared_ptr<XJ::XJTexture> mTextureB;
+            std::shared_ptr<XJ::XJSampler> mSamplerA;
+            std::shared_ptr<XJ::XJSampler> mSamplerB;
 
             std::vector<VkDescriptorSet>                        mDescriptorSets;
             std::shared_ptr<XJVulkanDescriptorPool>  mDescriptorPool;
