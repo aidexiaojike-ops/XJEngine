@@ -63,9 +63,25 @@ namespace XJ
     }
     void XJRenderTarget::ReCreate()
     {
-        // 备份原有帧缓冲区
+        if (mExtent.width == 0 || mExtent.height == 0 || mBufferCount == 0)
+        {
+            spdlog::error("Invalid render target extent or buffer count. ReCreate aborted.");
+            return;
+        }
+        
         auto oldFrameBuffers = std::move(mFrameBuffers);
         mFrameBuffers.clear();
+
+        // 备份原有帧缓冲区
+        if(mFrameBuffers.empty())
+        {
+            if (!oldFrameBuffers.empty()) 
+            {
+                mFrameBuffers = std::move(oldFrameBuffers);
+                spdlog::warn("帧缓冲重建失败，使用旧缓冲区");
+                // 保持 bShouldUpdate = true 以便重试
+            }
+        }
 
         // 检查渲染通道是否有效
         if (!mRenderPass) {
@@ -89,6 +105,7 @@ namespace XJ
         mFrameBuffers.reserve(mBufferCount);
 
         XJRenderContext *kRenderContext = XJApplication::XJGetAppContext()->renderContext;
+        vkDeviceWaitIdle(kRenderContext->XJGetDevice()->XJGetDevice());//// 等待设备空闲，确保无命令缓冲区使用旧资源
         XJVulkanDevice* kDevice = kRenderContext->XJGetDevice();
         XJVulkanSwapchain* kSwapchain = kRenderContext->XJGetSwapchain();
 
@@ -327,6 +344,14 @@ namespace XJ
     }
     void XJRenderTarget::BeginRenderTarget(VkCommandBuffer commandBuffer)
     {
+        if (mFrameBuffers.empty()) {
+            spdlog::warn("紧急重建帧缓冲");
+            ReCreate();
+            if (mFrameBuffers.empty()) {
+                spdlog::error("无法创建帧缓冲，跳过渲染");
+                return;
+            }
+        }
         assert(!bBeginRenderTarget && "RenderPass must be set before beginning render target.");//确保在开始渲染目标之前设置了RenderPass
 
          // 检查帧缓冲区是否为空
@@ -334,6 +359,7 @@ namespace XJ
         {
             spdlog::error("No framebuffers available in render target. FrameBuffer count: {}, Extent: {}x{}", 
                          mBufferCount, mExtent.width, mExtent.height);
+            bBeginRenderTarget = false;
             return;
         }
         //spdlog::debug("开始渲染目标：帧缓冲区数量={}, 当前索引={}, 交换链目标={}",
@@ -345,7 +371,8 @@ namespace XJ
             bShouldUpdate = false;
         }
 
-        if(XJEntity::HasComponent<XJCameraComponent>(mCamera))
+        //if(XJEntity::HasComponent<XJCameraComponent>(mCamera))
+        if(XJEntity::HasComponent<XJCameraComponent>(mCamera) && mExtent.width > 0 && mExtent.height > 0)
         {
             mCamera->GetComponent<XJCameraComponent>().XJSetAspectRatio(mExtent.width * 1.0f / mExtent.height);//更新摄像机的投影矩阵
         }
@@ -367,9 +394,25 @@ namespace XJ
                           mCurrentBufferIndex, mFrameBuffers.size());
             mCurrentBufferIndex = 0; // 重置为安全值
         }
-
-        mRenderPass->BeginRenderPass(commandBuffer, XJGetCurrentFrameBuffer(), mClearValues);//开始渲染通道
-        bBeginRenderTarget = true;
+        // 获取当前帧缓冲区并验证有效性
+        XJ::XJVulkanFrameBuffer* kFrameBuffer =  XJGetCurrentFrameBuffer();
+        if(!kFrameBuffer || !kFrameBuffer -> IsValid())
+        {
+            spdlog::error("无效的帧缓冲区，跳过渲染通道开始");
+            bBeginRenderTarget = false;
+            return; // 不设置 bBeginRenderTarget = true
+        }
+        // 尝试开始渲染通道
+        if(mRenderPass->BeginRenderPass(commandBuffer, kFrameBuffer, mClearValues))
+        {
+            bBeginRenderTarget = true;
+        }
+        else
+        {
+            spdlog::error("渲染通道开始失败");
+            bBeginRenderTarget = false;
+        }
+        
         
     }
     void XJRenderTarget::EndRenderTarget(VkCommandBuffer commandBuffer)
@@ -388,8 +431,15 @@ namespace XJ
         }
         
     }
+    //同步缓冲区计数
     void XJRenderTarget::SetExtent(const VkExtent2D extent)
     {
+        XJRenderContext *kRenderContext = XJApplication::XJGetAppContext()->renderContext;
+        if(bSwapchainTarget)
+        {
+            XJVulkanSwapchain* kSwapchain = kRenderContext->XJGetSwapchain();
+            mBufferCount = kSwapchain->XJGetSwapchainImages().size();
+        }
         mExtent = extent;
         bShouldUpdate = true;
         

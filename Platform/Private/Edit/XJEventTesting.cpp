@@ -27,6 +27,7 @@ namespace XJ
         
         mObserver->OnEvent<XJFrameBufferResizeEvent>([](const XJFrameBufferResizeEvent& event)//帧缓冲区大小改变事件处理函数
         {    //spdlog::info("Key Pressed: {}", event.ToString());
+          
         });
         mObserver->OnEvent<XJWindowFocusEvent>([](const XJWindowFocusEvent& event)//窗口获得焦点事件处理函数
         {    //spdlog::info("Window Focus: {}", event.ToString());

@@ -44,6 +44,8 @@ namespace XJ
 
             bool IsKeyDown(int key) const;//获取键盘按键状态，供Vulkan使用
             bool IsKeyUp(int key) const;//获取键盘按键
+
+            bool IsWindowMinimized() const {return glfwGetWindowAttrib(mGLFWwindow, GLFW_ICONIFIED);}//窗口最小化
     };
     
 }

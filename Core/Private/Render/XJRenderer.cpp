@@ -98,6 +98,12 @@ namespace XJ
                 spdlog::error("{0}: 获取交换链图片失败，错误码：{1}", __FUNCTION__, vk_result_string(kResult));
                 return false;
             }
+
+            uint32_t newImageCount = kSwapchain->XJGetSwapchainImages().size();
+            if(newImageCount != mCommandBuffers.size())
+            {
+                
+            }
         }
         else if(kResult != VK_SUCCESS && kResult != VK_SUBOPTIMAL_KHR)
         {

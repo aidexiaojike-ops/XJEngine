@@ -51,6 +51,8 @@ namespace XJ
             XJVulkanFrameBuffer* XJGetCurrentFrameBuffer() const {  if (mFrameBuffers.empty()) return nullptr; if (mCurrentBufferIndex >= mFrameBuffers.size()) return nullptr; return mFrameBuffers[mCurrentBufferIndex].get();  }
 
             void SetExtent(const VkExtent2D extent);
+            VkExtent2D GetExtent()const {return mExtent;}
+
             void SetBufferCount(uint32_t bufferCount);
 
             void SetColorClearValue(VkClearColorValue colorClearValue);//设置颜色清除值

@@ -244,16 +244,16 @@ namespace XJ
         }
     }
     //开启渲染
-    void XJVulkanRenderPass::BeginRenderPass(VkCommandBuffer commandBuffer, XJVulkanFrameBuffer* framebuffer, const std::vector<VkClearValue>& clearValues) const
+    bool XJVulkanRenderPass::BeginRenderPass(VkCommandBuffer commandBuffer, XJVulkanFrameBuffer* framebuffer, const std::vector<VkClearValue>& clearValues) const
     {
         if (!framebuffer) 
         {
             spdlog::error("Null framebuffer passed to BeginRenderPass");
-            return;
+            return false;
         }
         if (!framebuffer->IsValid()) {
             spdlog::error("Invalid framebuffer passed to BeginRenderPass");
-            return;
+            return false;
         }
         VkRenderPassBeginInfo renderPassBeginInfo{};//渲染通道开始信息
         renderPassBeginInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
@@ -266,6 +266,7 @@ namespace XJ
         renderPassBeginInfo.pClearValues = clearValues.data();//清除值
 
         vkCmdBeginRenderPass(commandBuffer, &renderPassBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
+        return true;   // 执行成功，返回 true
     }
     void XJVulkanRenderPass::EndRenderPass(VkCommandBuffer commandBuffer) const
     {

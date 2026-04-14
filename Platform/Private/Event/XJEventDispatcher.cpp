@@ -5,13 +5,9 @@
 
 namespace XJ
 {
-
-
     // XJEventDispatcher* XJEventDispatcher::sInstance{}  = new XJEventDispatcher();
     XJEventDispatcher* XJEventDispatcher::sInstance = new XJEventDispatcher();
 
-  
-   
     XJEventDispatcher::~XJEventDispatcher()
     {
         mObserverHandlerMap.clear();

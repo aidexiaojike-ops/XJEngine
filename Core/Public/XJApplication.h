@@ -66,6 +66,8 @@ namespace XJ
             bool bPaused = false;//是否暂停
 
             static XJAppContext sAppContext;//全局应用程序上下文
+
+
     };
 }
 

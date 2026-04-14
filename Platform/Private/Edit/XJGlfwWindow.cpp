@@ -99,7 +99,8 @@ namespace XJ
             auto *kWindow = static_cast<XJGlfwWindow *>(glfwGetWindowUserPointer(window));
             if(kWindow)
             {
-                XJWindowMoveEvent windowMovedEvent{ static_cast<uint32_t>(xpos), static_cast<uint32_t>(ypos) };
+                //XJWindowMoveEvent windowMovedEvent{ static_cast<uint32_t>(xpos), static_cast<uint32_t>(ypos) };
+                XJWindowMoveEvent windowMovedEvent{ static_cast<int32_t>(xpos), static_cast<int32_t>(ypos) };
                 XJEventDispatcher::XJGetInstance()->DispatchEvent(windowMovedEvent);
             }
         });

@@ -98,6 +98,12 @@ namespace XJ
         XJ::ShaderLayout mShaderLayout;
         mShaderLayout.descriptorSetLayouts = {mDescriptorSetLayout->XJGetDescriptorSet()};
 
+        // 添加推送常量范围配置
+        mShaderLayout.pushConstantRanges.resize(1);
+        mShaderLayout.pushConstantRanges[0].stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+        mShaderLayout.pushConstantRanges[0].offset = 0;
+        mShaderLayout.pushConstantRanges[0].size = sizeof(PushConstants);  // 68字节 (glm::mat4 + uint32_t)
+
         mPipelineLayout = std::make_shared<XJ::XJVulkanPipelineLayout>(kDevice, 
                                                 XJ_RES_SHADER_DIR"Descriptor.vert",
                                                 XJ_RES_SHADER_DIR"Descriptor.frag", mShaderLayout);//顶点着色器路径  片元着色器路径
@@ -160,6 +166,11 @@ namespace XJ
         mPipeline->BindPipeline(cmdBuffer);//绑定管线
         //vkCmdBindDescriptorSets(cmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, mPipelineLayout->XJGetPipelineLayout(), 0, 1,  mDescriptorSets.data(), 0, nullptr);
         XJ::XJVulkanFrameBuffer *kFrameBuffer = renderTarget->XJGetCurrentFrameBuffer();
+        if (!kFrameBuffer) 
+        {
+            spdlog::error("FrameBuffer is null, skipping render");
+            return;
+        }
         //设置视口和裁剪矩形
         VkViewport viewport{};
         viewport.x = 0.0f;

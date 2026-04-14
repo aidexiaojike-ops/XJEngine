@@ -63,7 +63,7 @@ namespace XJ
                 return  static_cast<uint32_t>(subpass.colorAttachments.size());
             }
 
-            void BeginRenderPass(VkCommandBuffer commandBuffer, XJVulkanFrameBuffer* framebuffer, const std::vector<VkClearValue>& clearValues) const;
+            bool BeginRenderPass(VkCommandBuffer commandBuffer, XJVulkanFrameBuffer* framebuffer, const std::vector<VkClearValue>& clearValues) const;
             void EndRenderPass(VkCommandBuffer commandBuffer) const;
     };
     

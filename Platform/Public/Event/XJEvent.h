@@ -31,7 +31,7 @@ public: \
         static XJEventType XJGetStaticType() { return type; }\
         virtual XJEventType XJGetEventType() const override { return XJGetStaticType(); }\
         virtual const char* XJGetEventTypeName() const override { return #type; }\
-        virtual const char* XJGetEventInfo() const override { return #type; }
+        virtual const char* XJGetEventInfo() const override { return #type; }//// 派生类应覆盖此方法提供详细信息
 
     class XJEvent
     {

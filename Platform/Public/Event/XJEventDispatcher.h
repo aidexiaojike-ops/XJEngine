@@ -7,11 +7,12 @@
 #include <vector>
 #include <algorithm>
 
+
 //事件分发器类，用于将事件分发给相应的事件处理函数
 namespace XJ
 {
     class XJEventObserver;//事件观察者类，包含事件处理函数
-    using FuncEventHandler = std::function<void(XJEvent& e)>;//事件处理函数类型，接受一个事件对象作为参数
+    using FuncEventHandler = std::function<void(const XJEvent& e)>;//事件处理函数类型，接受一个事件对象作为参数
 
     struct EventHandlerEntry//事件处理函数条目，包含事件观察者和事件处理函数
     {

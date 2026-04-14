@@ -1,6 +1,7 @@
 #include "XJEntryPoint.h"
 #include "Edit/FileUtil.h"
 #include "Edit/XJEventTesting.h"
+#include "Event/XJWindowEvent.h"
 
 #include "Graphic/XJVulkanRenderPass.h"
 #include "Graphic/XJVulkanCommandBuffer.h"
@@ -41,7 +42,6 @@ protected:
         XJ::VulkanPhysicalDevices* kPhysicalDevices = kRenderContext->XJGetPhysicalDevices();
         XJ::XJVulkanSwapchain* kSwapchain = kRenderContext->XJGetSwapchain();
       
-
          //renderpass渲染通道配置
         std::vector<XJ::Attachment> attachments{};
         attachments.resize(2);
@@ -54,7 +54,8 @@ protected:
         attachments[0].stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;//模板加载操作 不关心
         attachments[0].stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;//模板存储操作 不关心
         attachments[0].initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;//初始布局 未定义
-        attachments[0].finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;//显示布局
+        //attachments[0].finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;//显示布局
+        attachments[0].finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;//显示布局
         //深度附件
         attachments[1].flags = 0;
         attachments[1].format = kDevice->XJGetSettings().depthFormat;//深度格式
@@ -65,8 +66,6 @@ protected:
         attachments[1].stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
         attachments[1].initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
         attachments[1].finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;//深度附加布局
-
-
       
         //子通道
         std::vector<XJ::RenderSubPass> subpasses = //多重采样
@@ -79,7 +78,6 @@ protected:
                 // .sampleCount = VK_SAMPLE_COUNT_1_BIT//采样数
             }
         };
-
 
         mRenderPass = std::make_shared<XJ::XJVulkanRenderPass>(kDevice, kPhysicalDevices, attachments, subpasses);//创建渲染通道对象
         spdlog::info("渲染通道创建成功");
@@ -112,7 +110,9 @@ protected:
             }
         });
 
-         //geometry util 
+        // 注册按键按下事件
+    
+        //geometry util 
         std::vector<XJ::XJVulkanVertex> mVertices;
         std::vector<uint32_t> mIndices;
         mGeometryUtil = std::make_unique<XJ::XJVulkanGeometryUtil>();
@@ -204,15 +204,20 @@ protected:
                 }
             }
        }
-       
-
     }
     
     void OnRender() override
     {
+        if (XJGetWindow()->IsWindowMinimized())
+        {
+            // 窗口最小化，跳过渲染，但保留事件处理
+            return;
+        }   
         XJ::XJRenderContext *kRenderContext = XJApplication::XJGetAppContext()->renderContext;
         XJ::XJVulkanDevice* kDevice = kRenderContext->XJGetDevice();
         XJ::XJVulkanSwapchain* kSwapchain = kRenderContext->XJGetSwapchain();
+
+    
         
         int32_t imageIndex;//拿image
         if(mRender->XJRendererBegin(&imageIndex, mCommandBuffers))
@@ -284,10 +289,15 @@ private:
 
     glm::ivec3 mSmallCubeSize{5 ,5 ,5};//立方体尺寸
    
-    bool bFirstMouseDrag = true;//相机是否可以移动
     bool bStartCameraRotation = false;
+    bool bFirstMouseDrag = true;//相机是否可以移动
     glm::vec2 mLastMousePos;//上一帧鼠标位置
     float mMouseSensitivity = 0.25f;//鼠标灵敏度
+    // 新增
+    float mCameraMoveSpeed = 0.05f;    // 平移速度
+    float mCameraZoomSpeed = 0.3f;     // 缩放速度
+    float mCameraRotateSpeed = 0.25f;  // 旋转速度
+
 };
 
 XJ::XJApplication* CreateApplicationEntryPoint()

@@ -63,7 +63,20 @@ if(EXISTS ${CMAKE_SOURCE_DIR}/Core/CMakeLists.txt)
 else()
     message(STATUS "Core module: OFF (Core/CMakeLists.txt not found)")
 endif()
+# ------------------------------------------------------------
+# UTF-8
+# ------------------------------------------------------------
+# 为 MSVC 编译器添加 UTF-8 支持
+if(MSVC)
+    add_compile_options(/utf-8)
+    message(STATUS "MSVC: Enabled UTF-8 support (/utf-8)")
+endif()
 
+# 为 Clang/GCC/MinGW 编译器添加 UTF-8 支持
+if(CMAKE_CXX_COMPILER_ID MATCHES "Clang" OR CMAKE_CXX_COMPILER_ID STREQUAL "GCC")
+    add_compile_options(-finput-charset=UTF-8 -fexec-charset=UTF-8)
+    message(STATUS "GCC/Clang/MinGW: Enabled UTF-8 support (-finput-charset=UTF-8 -fexec-charset=UTF-8)")
+endif()
 # ------------------------------------------------------------
 # 主程序源文件
 # ------------------------------------------------------------
