@@ -18,6 +18,7 @@
 #include "ECS/System/XJBaseMaterialSystem.h"
 #include "ECS/XJScene.h"
 #include "ECS/Component/XJCameraComponent.h"
+#include "ECS/System/XJCameraControllerSystem.h"
 
 #include <chrono>
 
@@ -91,8 +92,9 @@ protected:
          // 创建命令池
         mCommandBuffers = kDevice->XJGetDefaultCmdPool()->AllocateCommandBuffer(static_cast<uint32_t>(kSwapchain->XJGetSwapchainImages().size()));//分配命令缓冲区
         spdlog::info("分配了 {} 个命令缓冲区", mCommandBuffers.size());
-
-        //EVENT
+        //摄像机初始化                                                    鼠标灵敏  平移    缩放   旋转
+        mCameraController = std::make_unique<XJ::XJCameraControllerSystem>(0.25f, 0.05f, 0.3f, 0.25f);
+        // 滚轮事件回调
         mEventTesting = std::make_shared<XJ::XJEventTesting>();
         mOvserver = std::make_shared<XJ::XJEventObserver>();
         mOvserver ->OnEvent<XJ::XJMouseScrollEvent>([this](const XJ::XJMouseScrollEvent &event)
@@ -100,17 +102,9 @@ protected:
             XJ::XJEntity *kCameraEntity = mRenderTarget->XJGetCamera();
             if(XJ::XJEntity::HasComponent<XJ::XJCameraComponent>(kCameraEntity))
             {
-                auto &kCameraComp = kCameraEntity->GetComponent<XJ::XJCameraComponent>();
-                float kRadius = kCameraComp.XJGetRadius() + event.mYOffset * -0.3f;
-                if(kRadius < 0.1f)//滚轮最小值
-                {
-                    kRadius = .01f;
-                }
-                kCameraComp.XJSetRadius(kRadius);
+                mCameraController->OnMouseScroll(event.mYOffset, kCameraEntity);
             }
         });
-
-        // 注册按键按下事件
     
         //geometry util 
         std::vector<XJ::XJVulkanVertex> mVertices;
@@ -164,46 +158,11 @@ protected:
     void OnUpdate(float deltaTime) override
     {
        
-       XJ::XJEntity *kCameraEntity = mRenderTarget->XJGetCamera();//获取摄像机实体
-       if(XJ::XJEntity::HasComponent<XJ::XJCameraComponent>(kCameraEntity))//如果有摄像机组件
-       {
-            if(!XJGetWindow()->IsMouseDown())
-            {
-                bFirstMouseDrag = true;//鼠标释放
-                return;
-            }
-
-            glm::vec2 kMousePos;
-            XJGetWindow()->XJGetMousePos(kMousePos);//获取鼠标位置
-                                    // 上一次鼠标位置x  新鼠标位置      上一次的y   新鼠标位置 y
-            glm::vec2 kMouseDelta = { kMousePos.x - mLastMousePos.x , kMousePos.y - mLastMousePos.y };//计算鼠标移动距离
-            mLastMousePos = kMousePos;//更新上一帧鼠标位置
-
-            if(abs(kMouseDelta.x) > 0.1f || abs(kMouseDelta.y) > 0.1f)//放抖动
-            {
-                if(bFirstMouseDrag)
-                {
-                    bFirstMouseDrag = false;//第一次鼠标拖动
-                }
-                else
-                {
-                    auto &kTransformComp = kCameraEntity->GetComponent<XJ::XJTransformComponent>();//获取变换组件
-                    float kYaw = kTransformComp.rotation.x;//计算偏航角
-                    float kPitch = kTransformComp.rotation.y;//计算俯仰
-
-
-                    kYaw += kMouseDelta.x * mMouseSensitivity;//更新偏航角
-                    kPitch += kMouseDelta.y * mMouseSensitivity;//更新俯仰角
-
-                    kPitch = glm::clamp(kPitch, -89.0f, 89.0f);//限制俯仰角范围
-
-                    kTransformComp.rotation.x = kYaw;//更新摄像机偏航角
-                    kTransformComp.rotation.y = kPitch;//更新摄像机俯仰角
-                    //kTransformComp.rotation = glm::vec3(kYaw, kPitch, 0.0f);//更新摄像机旋转
-
-                }
-            }
-       }
+        XJ::XJEntity *kCameraEntity = mRenderTarget->XJGetCamera();//获取摄像机实体
+        if(kCameraEntity && XJ::XJEntity::HasComponent<XJ::XJCameraComponent>(kCameraEntity))
+        {
+            mCameraController->UpdateCameraControl(deltaTime, XJGetWindow(), kCameraEntity);
+        }
     }
     
     void OnRender() override
@@ -258,11 +217,12 @@ protected:
         vkDeviceWaitIdle(kDevice->XJGetDevice());//等待设备空闲
         mMesh.reset();
         mCommandBuffers.clear();
-      
+        
         mRenderTarget.reset();
         mRenderPass.reset();
-
+        
         mRender.reset();
+        mCameraController.reset();
     }
 
    
@@ -284,19 +244,14 @@ private:
     std::shared_ptr<XJ::XJEventTesting>                 mEventTesting;
     std::shared_ptr<XJ::XJEventObserver>                mOvserver;
 
+    // 摄像机控制器
+    std::unique_ptr<XJ::XJCameraControllerSystem>       mCameraController;
 
     VkSampleCountFlagBits mSampleCount = VK_SAMPLE_COUNT_1_BIT; // 多重采样数量
 
     glm::ivec3 mSmallCubeSize{5 ,5 ,5};//立方体尺寸
    
-    bool bStartCameraRotation = false;
-    bool bFirstMouseDrag = true;//相机是否可以移动
-    glm::vec2 mLastMousePos;//上一帧鼠标位置
-    float mMouseSensitivity = 0.25f;//鼠标灵敏度
-    // 新增
-    float mCameraMoveSpeed = 0.05f;    // 平移速度
-    float mCameraZoomSpeed = 0.3f;     // 缩放速度
-    float mCameraRotateSpeed = 0.25f;  // 旋转速度
+    
 
 };
 

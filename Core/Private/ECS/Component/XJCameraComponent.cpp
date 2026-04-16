@@ -68,7 +68,7 @@ namespace XJ
             kDirection = glm::normalize(kDirection);
 
             // 计算右向量和上向量，保持摄像机直立
-            glm::vec3 kRight = glm::normalize(glm::cross(kDirection, mPosition));
+            glm::vec3 kRight = glm::normalize(glm::cross(kDirection, glm::vec3(0.0f, 1.0f, 0.0f)));
             glm::vec3 kUp     = glm::cross(kRight, kDirection);
 
             

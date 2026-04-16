@@ -27,7 +27,11 @@ namespace XJ
             virtual void OnRender(XJVulkanCommandBuffer cmdBuffer, XJRenderTarget* renderTarget) = 0;
             virtual void OnDestroy() = 0;
 
-
+    };
+    class XJCameraSystem : public XJSystem
+    {
+        public:
+            void OnUpdate(float deltaTime) override{};
     };
   
     

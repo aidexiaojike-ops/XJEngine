@@ -65,8 +65,8 @@ namespace XJ
             glm::mat4 viewMat{1.0f};//视图矩阵
 
             // 当前模式
-            //CameraMode mMode{CameraMode::Orbit};  // 默认轨道模式
-            CameraMode mMode{CameraMode::Free};  // 默认轨道模式
+            CameraMode mMode{CameraMode::Orbit};  // 默认轨道模式
+            //CameraMode mMode{CameraMode::Free};  // 默认轨道模式
 
     };
 }
