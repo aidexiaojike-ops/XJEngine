@@ -1,13 +1,63 @@
 # XJEngine
 
+**XJEngine** is a lightweight modern game engine built with Vulkan and ECS architecture. The engine focuses on high-performance graphics rendering, providing a flexible material system, event-driven architecture, and modular rendering pipeline.
+
 **XJEngine** 是一个基于 Vulkan 的现代化实时渲染引擎，采用实体组件系统（ECS）架构设计。引擎专注于高性能图形渲染，提供灵活的材质系统、事件驱动架构和模块化的渲染管线。
 
-## ✨ 特性
+## 🏗️ Engine Architecture
 
-### 🎮 核心架构
-- **实体组件系统（ECS）**：使用 EnTT 库实现的高性能 ECS 架构
-- **事件驱动设计**：完整的事件系统支持窗口、鼠标、键盘等输入事件
-- **模块化系统**：可扩展的材质系统、摄像机控制系统等
+```
++-------------------+
+|    Application    |
++-------------------+
+          |
+          v
++-------------------+
+|       Scene       |
++-------------------+
+          |
+          v
++-------------------+
+|        ECS        |
+| Entity Component  |
+| System            |
++-------------------+
+          |
+          v
++-------------------+
+|     Renderer      |
++-------------------+
+          |
+          v
++-------------------+
+|      Vulkan       |
++-------------------+
+```
+
+### Rendering Pipeline
+```
+Scene
+ ↓
+CameraSystem
+ ↓
+MaterialSystem
+ ↓
+RenderTarget
+ ↓
+CommandBuffer
+ ↓
+Swapchain
+```
+
+## ✨ Features
+
+### Core Architecture
+- **Vulkan Renderer**: Modern graphics API with multi-platform support
+- **ECS Architecture (EnTT)**: High-performance Entity Component System
+- **Event Driven System**: Complete event system for window, mouse, keyboard input
+- **Modular Rendering Pipeline**: Extensible material and rendering systems
+- **Camera Controller**: Orbit and free camera modes with mouse interaction
+- **Material System**: Flexible material pipeline with textures and uniform buffers
 
 ### 🖼️ 图形渲染
 - **Vulkan 后端**：现代图形 API，支持多平台高性能渲染
