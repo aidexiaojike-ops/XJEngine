@@ -18,6 +18,7 @@
 | **ECS Architecture** | High-performance Entity Component System using EnTT library |
 | **Event Driven System** | Complete input handling for window, mouse, keyboard events |
 | **Modular Material System** | Extensible material pipeline with textures, samplers and uniform buffers |
+| **Unlit Material System** | Dedicated unlit shader pipeline with material parameter UBO and texture support |
 | **Dynamic Instancing** | Support for large-scale entity rendering with dynamic uniform buffers |
 | **Camera Controller** | Orbit and free camera modes with intuitive mouse interaction |
 | **Multisampling Anti-aliasing** | MSAA support for improved visual quality |
@@ -122,13 +123,17 @@ Swapchain
 - **Entity Management**: Lightweight entity handles with automatic lifetime tracking
 - **Component Storage**: Dense array storage for optimal cache performance
 - **System Scheduling**: Flexible system registration and execution order
+- **XJMaterialSystem Base Class**: Dedicated base class for material systems with helper methods for device, scene, and camera matrix access
 - **Query System**: Efficient entity queries based on component composition
 
 #### **Material System**
-- **Dynamic Uniform Buffers**: Per-instance data with proper alignment
-- **Texture Management**: Automatic texture loading and sampler creation
+- **XJMaterialSystem Base Class**: Provides helper methods (`XJGetDevice`, `XJGetProjMat`, `XJGetViewMat`, `XJGetScene`) for material systems
+- **Base Material System**: Dynamic uniform buffer instancing with global/per-instance UBOs
+- **Unlit Material System**: Dedicated unlit pipeline with frame UBO, material parameter UBO, and combined image samplers
+- **Dynamic Descriptor Pool**: Automatic expansion of material descriptor sets on demand (up to 2048)
+- **Texture Management**: Per-material texture views with sampler state
+- **Push Constants**: `ModelPC` struct for per-draw model and normal matrix updates
 - **Shader Pipeline**: SPIR-V shader compilation and pipeline state management
-- **Descriptor Sets**: Efficient resource binding to shader stages
 
 #### **Event System**
 - **Event Types**: Window, keyboard, mouse, and custom events
@@ -220,9 +225,14 @@ XJEngine/
 │   │   │   ├── XJSystem.h          # 系统基类
 │   │   │   ├── Component/          # 具体组件
 │   │   │   │   ├── XJCameraComponent.h
-│   │   │   │   └── XJTransformComponent.h
+│   │   │   │   ├── XJTransformComponent.h
+│   │   │   │   └── Material/       # 材质组件
+│   │   │   │       ├── XJBaseMaterialComponent.h
+│   │   │   │       └── XJUnlitMaterialComponent.h
 │   │   │   └── System/             # 具体系统
+│   │   │       ├── XJMaterialSystem.h       # 材质系统基类
 │   │   │       ├── XJBaseMaterialSystem.h
+│   │   │       ├── XJUnlitMaterialSystem.h
 │   │   │       └── XJCameraControllerSystem.h
 │   │   └── Render/         # 渲染相关
 │   │       ├── XJRenderTarget.h
@@ -241,7 +251,7 @@ XJEngine/
 │   └── main.cpp            # 主程序入口
 │
 ├── Resource/               # 资源文件
-│   ├── Shader/             # GLSL 着色器
+│   ├── Shader/             # GLSL 着色器 (BaseVertex, Descriptor, Unlit)
 │   ├── Texture/            # 纹理图像
 │   ├── Mesh/               # 网格数据
 │   └── Config/             # 配置文件
@@ -296,6 +306,36 @@ transform.scale = glm::vec3(1.0f, 1.0f, 1.0f);
 transform.UpdateModelMatrix();
 ```
 
+### Using Unlit Materials
+```cpp
+// Create unlit material with custom parameters
+XJ::XJUnlitMaterial* unlitMat = XJ::XJMaterialFactory::GetInstance()->CreateMaterial<XJ::XJUnlitMaterial>();
+unlitMat->XJSetBaseColorA(glm::vec3(1.0f, 0.0f, 0.0f));
+unlitMat->XJSetBaseColorB(glm::vec3(0.0f, 0.0f, 1.0f));
+unlitMat->XJSetMixValue(0.5f);
+
+// Set texture
+unlitMat->XJSetTextureView(0, texture, sampler);
+
+// Add to entity
+auto& unlitComp = entity->AddComponent<XJ::XJUnlitMaterialComponent>();
+unlitComp.AddMesh(mesh, unlitMat);
+```
+
+### Using Multiple Material Instances
+```cpp
+// Create different material instances for varied rendering
+auto kMaterialA = XJ::XJMaterialFactory::GetInstance()->CreateMaterial<XJ::XJBaseMaterial>();
+auto kMaterialB = XJ::XJMaterialFactory::GetInstance()->CreateMaterial<XJ::XJBaseMaterial>();
+
+// Assign different materials to entities
+for (auto& entity : entities) {
+    auto& matComp = entity->AddComponent<XJ::XJBaseMaterialComponent>();
+    matComp.AddMesh(mMesh, index == 0 ? kMaterialA : kMaterialB);
+    index = (index + 1) % 2;
+}
+```
+
 ### Event Handling
 ```cpp
 mObserver->OnEvent<XJ::XJFrameBufferResizeEvent>([this](const XJ::XJFrameBufferResizeEvent& event) {
@@ -327,9 +367,11 @@ mRenderTarget->XJSetCamera(camera);
 4. Add component to entities using `AddComponent<T>()`
 
 ### Creating New Material Systems
-1. Inherit from `XJMaterialSystem` base class
+1. Inherit from `XJMaterialSystem` base class in `Core/Public/ECS/System/XJMaterialSystem.h`
 2. Implement `OnInit`, `OnRender`, and `OnDestroy` methods
-3. Register system in render target using `AddMaterialSystem<T>()`
+3. Define descriptor set layouts, pipeline layout, and pipeline in `OnInit`
+4. Use helper methods `XJGetDevice()`, `XJGetProjMat()`, `XJGetViewMat()` for camera data
+5. Register system in render target using `AddMaterialSystem<T>()`
 
 ### Shader Development
 - Shader files are located in `Resource/Shader/`
