@@ -8,6 +8,14 @@
 
 namespace XJ
 {
+
+    struct TextureParam
+    {
+        bool enable;
+        alignas(4) float uvRotation{0.0f};//内存对齐的
+        alignas(16) glm::vec4 uvTransform{1.0f,1.0f,1.0f,0.0f};//手动对其
+    };
+
     struct TextureView
     {
         XJTexture *texture = nullptr;//纹理
@@ -24,6 +32,18 @@ namespace XJ
         }
     };
 
+    struct PushConstants
+    {
+        glm::mat4 matrix{1.0f}; // 4x4 矩阵，默认初始化为单位矩阵
+        uint32_t colorType = 0;
+    };// 推送常量结构体
+   
+    struct ModelPC
+    {
+        alignas(16) glm::mat4 modelMat;
+        alignas(16) glm::mat3 normalMat;
+    };
+
     class XJMaterial
     {
         private:
@@ -32,8 +52,26 @@ namespace XJ
             std::unordered_map<uint32_t, TextureView> mTextures;
             friend class XJMaterialFactory;
         public:
-           
+            XJMaterial(const XJMaterial&) = delete;
+            XJMaterial &operator = (const XJMaterial&) = delete;
+
+            int32_t XJGetIndex() const {return mIndex;}
+            bool ShouldFlushParams() const {return bShouldFlushParams;}  
+            bool ShouldFlushResoure() const {return bShouldFlushResoure;}
+            void FinishFlushParams()  { bShouldFlushParams = false;}  
+            void FinishFlushResoure() { bShouldFlushResoure = false;}
+
+            bool HasTexture(uint32_t id) const;
+            TextureView* XJGetTextureView(uint32_t id);
+            void XJSetTextureView(uint32_t id, XJTexture *texture, XJSampler *sampler);
+        
+        protected:
+            XJMaterial() = default;
+
+            bool bShouldFlushParams = false;
+            bool bShouldFlushResoure = false;
     };
+
 
  //材质工厂
     class XJMaterialFactory

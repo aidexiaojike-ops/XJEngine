@@ -22,6 +22,8 @@
 
 namespace XJ
 {  
+#define NUM_MATERIAL_BATCH                  16
+#define NUM_MATERIAL_BATCH_MAX              2048
      //获取文件名
     static std::string GetFileName(const std::string &filePath)
     {

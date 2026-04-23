@@ -125,10 +125,13 @@ protected:
         // kCameraEntity->AddComponent<XJ::XJTransformComponent>();  // 添加这行
         mRenderTarget->XJSetCamera(kCameraEntity);//将摄像机实体设置到渲染目标中，以便在渲染过程中使用摄像机信息
         //
-        auto kBaseMaterial = XJ::XJMaterialFactory::GetInstance()->CreateMaterial<XJ::XJBaseMaterial>();
+        auto kBaseMaterialA = XJ::XJMaterialFactory::GetInstance()->CreateMaterial<XJ::XJBaseMaterial>();
+        auto kBaseMaterialB = XJ::XJMaterialFactory::GetInstance()->CreateMaterial<XJ::XJBaseMaterial>();
+        
 
         //在这里可以添加场景初始化的代码，例如创建实体、添加组件等
         spdlog::info("场景初始化");
+        uint32_t index = 0;
         float x = 0.f;
         for(int i = 0; i < mSmallCubeSize.x; ++i, x += 0.5f)
         {
@@ -141,10 +144,12 @@ protected:
                     XJ::XJEntity* kCube = scene->CreateEntity("CubeEntityA");//创建一个实体
                     auto &kTransformComp = kCube->GetComponent<XJ::XJTransformComponent>();//添加变换组件
                     auto &kMaterialComp = kCube->AddComponent<XJ::XJBaseMaterialComponent>();//添加材质组件
-                    kMaterialComp.AddMesh(mMesh.get(), kBaseMaterial);//添加网格组件  并设置
+                    kMaterialComp.AddMesh(mMesh.get(), index ==0 ? kBaseMaterialA : kBaseMaterialB);//添加网格组件  并设置
 
                     kTransformComp.position = glm::vec3(x, y, z);
                     kTransformComp.UpdateModelMatrix(); // 新增：立即更新模型矩阵
+
+                    index = (index + 1) % 2;
                 }
             }
         }
@@ -183,7 +188,6 @@ protected:
         {
             mRenderTarget->SetExtent({kSwapchain->XJGetWidth(),kSwapchain->XJGetHeight()});
         }
-
 
         VkCommandBuffer kCommandBuffer = mCommandBuffers[imageIndex];//拿到commandbuffer
         if (kCommandBuffer == VK_NULL_HANDLE) 

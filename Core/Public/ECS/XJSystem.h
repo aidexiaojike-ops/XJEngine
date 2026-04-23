@@ -18,16 +18,6 @@ namespace XJ
             
     };
 
-    class XJMaterialSystem : public XJSystem
-    {
-        private:
-            /* data */
-        public:
-            virtual void OnInit(XJVulkanRenderPass *renderPass) = 0;
-            virtual void OnRender(XJVulkanCommandBuffer cmdBuffer, XJRenderTarget* renderTarget) = 0;
-            virtual void OnDestroy() = 0;
-
-    };
     class XJCameraSystem : public XJSystem
     {
         public:

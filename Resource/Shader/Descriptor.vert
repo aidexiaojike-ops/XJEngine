@@ -19,7 +19,7 @@ layout(set = 0, binding = 0, std140) uniform GlobalUbo
 
 layout(set = 0, binding = 1, std140) uniform InstanceUbo
 {
-    mat4 modelMat;
+    mat4 modelMat;//模型矩阵
 } instanceUbo;
 
 out layout(location = 1) vec2 v_Texcoord;

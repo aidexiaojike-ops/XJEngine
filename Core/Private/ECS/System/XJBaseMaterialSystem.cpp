@@ -21,8 +21,8 @@ namespace XJ
     {
 
         XJ::XJRenderContext *kRenderContext = XJApplication::XJGetAppContext()->renderContext;//获取渲染上下文信息
-        XJ::XJVulkanDevice* kDevice = kRenderContext->XJGetDevice();//获取逻辑设备信息
         XJ::VulkanPhysicalDevices *kPhysicalDevices = kRenderContext->XJGetPhysicalDevices();//获取物理设备信息
+        XJ::XJVulkanDevice* kDevice = XJGetDevice();//获取逻辑设备信息
 
         VkPhysicalDevice physicalDevice  = kPhysicalDevices->XJGetPhysicalDevice();
         VkPhysicalDeviceProperties properties;//获取物理设备属性
@@ -34,7 +34,7 @@ namespace XJ
         {
             mDynamicAlignment = (mDynamicAlignment + minUboAlignment - 1) & ~(minUboAlignment - 1);//计算动态对齐大小
         }
-    spdlog::info("动态统一缓冲区对齐: {} bytes (InstanceUbo: {} bytes)", mDynamicAlignment, sizeof(InstanceUbo));
+        spdlog::info("动态统一缓冲区对齐: {} bytes (InstanceUbo: {} bytes)", mDynamicAlignment, sizeof(InstanceUbo));
 
         //descriptor set   绑定shader
         std::vector<VkDescriptorSetLayoutBinding> kDesctLayoutBindings
@@ -148,8 +148,8 @@ namespace XJ
     void XJBaseMaterialSystem::OnRender(XJVulkanCommandBuffer cmdBuffer, XJRenderTarget *renderTarget)
     {
         //entt::each
-        XJAppContext *kAppContext = XJApplication::XJGetAppContext();
-        XJScene *kScene = kAppContext->scene;
+        // XJAppContext *kAppContext = XJApplication::XJGetAppContext();
+        XJScene *kScene = XJGetScene();
 
         if(!kScene){return;}//如果场景不存在，直接返回
 
@@ -193,21 +193,11 @@ namespace XJ
         XJ::XJRenderContext *kRenderContext = XJApplication::XJGetAppContext()->renderContext;
         //更新推送常量  旋转矩阵
         //透视投影矩阵   CameraCompionent 里设置投影矩阵和视图矩阵
-        glm::mat4 projMat{1.0f};
-        glm::mat4 viewMat{1.0f};
-        XJEntity *kCamera = static_cast<XJEntity*>(renderTarget->XJGetCamera());
-        // void* cameraPtr = renderTarget->XJGetCamera();
-        if(kCamera && kCamera->HasComponent<XJCameraComponent>())
-        {
-            auto& kCameraComponent = kCamera->GetComponent<XJCameraComponent>();
-            projMat = kCameraComponent.XJGetProjectionMatrix();
-            viewMat = kCameraComponent.XJGetViewMatrix();
-
-            // 将投影和视图矩阵赋值给全局UBO
-            mGlobalUbo.projMat = projMat;
-            mGlobalUbo.viewMat = viewMat;
-        }
-
+        glm::mat4 projMat = XJGetProjMat(renderTarget);
+        glm::mat4 viewMat = XJGetViewMat(renderTarget);
+        // 将投影和视图矩阵赋值给全局UBO
+        mGlobalUbo.projMat = projMat;
+        mGlobalUbo.viewMat = viewMat;
      
          // 在循环外更新描述符集（只更新一次）
         UpdateDescriptorSets(cmdBuffer);
@@ -220,7 +210,7 @@ namespace XJ
             for(const auto&entry :kMeshMaterials)//要是没有材质酒放弃渲染
             {
                 XJBaseMaterial *kMaterial = entry.first;
-                if(!kMaterial)
+                if(!kMaterial) 
                 {
                     spdlog::error("TODO: Default material of error material ?");
                     continue;
@@ -230,7 +220,6 @@ namespace XJ
                 //        .matrix = projMat * viewMat * transComp.GetModelMatrix(),
                 //        .colorType = kMaterial->colorType 
                 //};
-                ////vkCmdPushConstants(cmdBuffer, mPipeline->XJGetPipeline(), VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(pushConstants), &pushConstants);
                 //vkCmdPushConstants(cmdBuffer, mPipelineLayout->XJGetPipelineLayout(), VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(pushConstants), &pushConstants);
                 
                 for(const auto&kMeshIndex : entry.second)
@@ -278,7 +267,7 @@ namespace XJ
     void XJBaseMaterialSystem::UpdateDescriptorSets(VkCommandBuffer cmdBuffer)
     {
         XJ::XJRenderContext *kRenderContext = XJ::XJApplication::XJGetAppContext()->renderContext;
-        XJ::XJVulkanDevice* kDevice = kRenderContext->XJGetDevice();
+        XJ::XJVulkanDevice* kDevice = XJGetDevice();
 
         VkDescriptorBufferInfo globalBufferInfo{};
         globalBufferInfo.buffer = mGlobalBuffer->XJGetBuffer();

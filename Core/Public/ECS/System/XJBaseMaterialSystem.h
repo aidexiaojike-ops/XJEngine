@@ -1,7 +1,7 @@
 #ifndef XJ_BASEMATERIALSYSTEM_H
 #define XJ_BASEMATERIALSYSTEM_H
 
-#include "ECS/XJSystem.h"
+#include "ECS/System/XJMaterialSystem.h"
 #include "ECS/Component/Material/XJBaseMaterialComponent.h"
 // #include "ECS/Component/Material/XJMeshComponent.h"
 #include "ECS/Component/XJTransformComponent.h"
@@ -29,13 +29,6 @@ namespace XJ
     {
         glm::mat4 modelMat{1.0f};
     };
-
-    struct PushConstants
-    {
-        glm::mat4 matrix{1.0f}; // 4x4 矩阵，默认初始化为单位矩阵
-        uint32_t colorType = 0;
-    };// 推送常量结构体
-   
 
     class XJBaseMaterialSystem : public XJMaterialSystem
     {
