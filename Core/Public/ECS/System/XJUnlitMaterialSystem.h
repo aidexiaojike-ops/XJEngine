@@ -11,6 +11,7 @@ namespace XJ
     class XJVulkanPipeline;
     class XJVulkanDescriptorSetLayout;
     class XJVulkanDescriptorPool;
+    class XJVulkanFrameBuffer;
 
     class XJUnlitMaterialSystem : public XJMaterialSystem
     {
@@ -26,8 +27,8 @@ namespace XJ
             void ReCreateMaterialDescPool(uint32_t materialCount);
             //更新数据
             void UpdateFrameUboDescSet(XJRenderTarget *renderTarget);
-            void UpdataMaterialParamsDescSet(VkDescriptorSet descSet, XJUnlitMaterial *material);
-            void UpdataMaterialResourceDescSet(VkDescriptorSet descSet, XJUnlitMaterial *material);
+            void UpdateMaterialParamsDescSet(VkDescriptorSet descSet, XJUnlitMaterial *material);
+            void UpdateMaterialResourceDescSet(VkDescriptorSet descSet, XJUnlitMaterial *material);
 
             //shader 里面的三个输入
             std::shared_ptr<XJVulkanDescriptorSetLayout> mFrameUboDescSetLayout;
@@ -49,8 +50,11 @@ namespace XJ
             std::vector<std::shared_ptr<XJVulkanBuffer>> mMaterialBuffers;//所有材质参数
 
 
-            std::shared_ptr<XJ::XJVulkanBuffer> mGlobalBuffer;
-            std::shared_ptr<XJ::XJVulkanBuffer> mInstanceBuffer;
+            //std::shared_ptr<XJ::XJVulkanBuffer> mGlobalBuffer;
+            //std::shared_ptr<XJ::XJVulkanBuffer> mInstanceBuffer;
+
+            //GlobalUbo mGlobalUbo;
+            //InstanceUbo mInstanceUbo;
     };
 
 }

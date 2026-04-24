@@ -183,4 +183,29 @@ namespace XJ
         queue->Submit({commandBuffer});
         queue->WaitIdle();
     }
+    VkResult XJVulkanDevice::CreateSimpleSampler(VkFilter filter, VkSamplerAddressMode addressMode, VkSampler *outSampler) 
+    {
+      
+        VkSamplerCreateInfo samplerInfo = {
+                .sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
+                .pNext = nullptr,
+                .flags = 0,
+                .magFilter = filter,
+                .minFilter = filter,
+                .mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR,
+                .addressModeU = addressMode,
+                .addressModeV = addressMode,
+                .addressModeW = addressMode,
+                .mipLodBias = 0,
+                .anisotropyEnable = VK_FALSE,
+                .maxAnisotropy = 0,
+                .compareEnable = VK_FALSE,
+                .compareOp = VK_COMPARE_OP_NEVER,
+                .minLod = 0,
+                .maxLod = 1,
+                .borderColor = VK_BORDER_COLOR_FLOAT_OPAQUE_BLACK,
+                .unnormalizedCoordinates = VK_FALSE
+        };
+        return vkCreateSampler(mDevice, &samplerInfo, nullptr, outSampler);
+    }
 }

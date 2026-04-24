@@ -47,7 +47,7 @@ namespace XJ
             VkCommandBuffer CreateAndBeginOneDefaultCommandBuffer();//开始单个命令缓冲区
             void SubmitAndEndOneDefaultCommandBuffer(VkCommandBuffer& commandBuffer);//结束单个命令缓冲区
 
-           
+            VkResult CreateSimpleSampler(VkFilter filter, VkSamplerAddressMode addressMode, VkSampler *outSampler);//传入的格式 环绕方式
         private:
             void CreatePipelineCache();//创建管线缓存
             void CreateDefaultCommandPool();//创建默认命令池

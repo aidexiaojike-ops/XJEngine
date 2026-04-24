@@ -6,6 +6,20 @@
 
 namespace XJ
 {
+
+    enum UnlitMaterialTexture
+    {
+        UNLIT_MAT_BASE_COLOR_A,
+        UNLIT_MAT_BASE_COLOR_B
+    };
+    struct FrameUbo
+    {
+        glm::mat4  projMat{ 1.f };
+        glm::mat4  viewMat{ 1.f };
+        alignas(8) glm::ivec2 resolution;
+        alignas(4) uint32_t frameId;
+        alignas(4) float time;
+    };
     struct UnlitMaterialUbo
     {
         alignas(16) glm::vec3 baseColorA;
@@ -19,6 +33,7 @@ namespace XJ
     class XJUnlitMaterial : public XJMaterial
     {
         public:
+        const  UnlitMaterialUbo &XJGetParams() const { return mParams; }
         const  glm::vec3 XJGetBaseColorA() const {return mParams.baseColorA;};
         const  glm::vec3 XJGetBaseColorB() const {return mParams.baseColorB;};
         float XJGetMixValue() const{return mParams.mixValue;};
@@ -32,7 +47,7 @@ namespace XJ
         void XJSetTextureParamB(const TextureParam &texParam){    mParams.textureParamB = texParam; bShouldFlushParams = true;}
 
         private:
-            UnlitMaterialUbo mParams{};
+            UnlitMaterialUbo mParams{};//材质参数
     };
 
     class XJUnlitMaterialComponent : public XJMaterialComponent<XJUnlitMaterial>

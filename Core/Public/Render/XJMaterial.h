@@ -55,6 +55,13 @@ namespace XJ
             XJMaterial(const XJMaterial&) = delete;
             XJMaterial &operator = (const XJMaterial&) = delete;
 
+            static void UpdateTextureParams(const TextureView *textureView, TextureParam *param)//是否开启 是否可用
+            {
+                param->enable = textureView->IsValid() && textureView->bEnable;
+                param->uvRotation = textureView->uvRotation;
+                param->uvTransform = { textureView->uvScale.x, textureView->uvScale.y, textureView->uvTranslation.x, textureView->uvTranslation.y };
+            }
+
             int32_t XJGetIndex() const {return mIndex;}
             bool ShouldFlushParams() const {return bShouldFlushParams;}  
             bool ShouldFlushResoure() const {return bShouldFlushResoure;}
@@ -62,8 +69,13 @@ namespace XJ
             void FinishFlushResoure() { bShouldFlushResoure = false;}
 
             bool HasTexture(uint32_t id) const;
-            TextureView* XJGetTextureView(uint32_t id);
+            const TextureView* XJGetTextureView(uint32_t id) const;
             void XJSetTextureView(uint32_t id, XJTexture *texture, XJSampler *sampler);
+            
+            void UpdateTextureViewEnable(uint32_t id, bool enable);
+            void UpdateTextureViewUVTranslation(uint32_t id, const glm::vec2 &uvTranslation);
+            void UpdateTextureViewUVRotation(uint32_t id, float uvRotation);
+            void UpdateTextureViewUVScale(uint32_t id, const glm::vec2 &uvScale);
         
         protected:
             XJMaterial() = default;

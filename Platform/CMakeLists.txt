@@ -123,5 +123,7 @@ set(SHADERS
     ${SHADER_ROOT}/BaseVertex.frag
     ${SHADER_ROOT}/Descriptor.vert
     ${SHADER_ROOT}/Descriptor.frag
+    ${SHADER_ROOT}/Unlit.vert
+    ${SHADER_ROOT}/Unlit.frag
 )
 
