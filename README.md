@@ -18,7 +18,7 @@
 | **ECS Architecture** | High-performance Entity Component System using EnTT library |
 | **Event Driven System** | Complete input handling for window, mouse, keyboard events |
 | **Modular Material System** | Extensible material pipeline with textures, samplers and uniform buffers |
-| **Unlit Material System** | Dedicated unlit shader pipeline with material parameter UBO and texture support |
+| **Unlit Material System** | Complete unlit shader pipeline with Frame UBO, material parameter UBO, texture blending, and dynamic descriptor pool expansion |
 | **Dynamic Instancing** | Support for large-scale entity rendering with dynamic uniform buffers |
 | **Camera Controller** | Orbit and free camera modes with intuitive mouse interaction |
 | **Multisampling Anti-aliasing** | MSAA support for improved visual quality |
@@ -127,11 +127,12 @@ Swapchain
 - **Query System**: Efficient entity queries based on component composition
 
 #### **Material System**
-- **XJMaterialSystem Base Class**: Provides helper methods (`XJGetDevice`, `XJGetProjMat`, `XJGetViewMat`, `XJGetScene`) for material systems
+- **XJMaterialSystem Base Class**: Provides helper methods (`XJGetDevice`, `XJGetProjMat`, `XJGetViewMat`, `XJGetScene`, `XJGetApp`) for material systems
 - **Base Material System**: Dynamic uniform buffer instancing with global/per-instance UBOs
-- **Unlit Material System**: Dedicated unlit pipeline with frame UBO, material parameter UBO, and combined image samplers
+- **Unlit Material System**: Complete unlit pipeline with Frame UBO (proj/view/resolution/time), material parameter UBO (colors, mix, texture params), and combined image samplers
+- **DescriptorSetWriter**: Utility class providing static helpers for descriptor buffer/image info creation and descriptor set writes
 - **Dynamic Descriptor Pool**: Automatic expansion of material descriptor sets on demand (up to 2048)
-- **Texture Management**: Per-material texture views with sampler state
+- **Texture Management**: Per-material texture views with sampler state, UV transform support
 - **Push Constants**: `ModelPC` struct for per-draw model and normal matrix updates
 - **Shader Pipeline**: SPIR-V shader compilation and pipeline state management
 
@@ -235,6 +236,9 @@ XJEngine/
 │   │   │       ├── XJUnlitMaterialSystem.h
 │   │   │       └── XJCameraControllerSystem.h
 │   │   └── Render/         # 渲染相关
+│   │       ├── XJMaterial.h
+│   │       ├── XJSampler.h
+│   │       ├── XJTexture.h
 │   │       ├── XJRenderTarget.h
 │   │       └── XJRenderer.h
 │   └── Private/            # 私有实现
