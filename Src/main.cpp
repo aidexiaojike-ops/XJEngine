@@ -1,5 +1,6 @@
 #include "XJEntryPoint.h"
 #include "Edit/FileUtil.h"
+#include "Edit/Mathinclude.h"
 #include "Edit/XJEventTesting.h"
 #include "Event/XJWindowEvent.h"
 
@@ -8,6 +9,7 @@
 #include "Graphic/XJVulkanGeometryUtil.h"
 #include "Graphic/VulkanCommon.h"
 #include "Graphic/XJVulkanDescriptorSet.h"
+#include "Graphic/XJVulkanImage.h"
 
 #include "Render/XJRenderTarget.h"
 #include "Render/XJMesh.h"
@@ -19,8 +21,12 @@
 #include "ECS/XJScene.h"
 #include "ECS/Component/XJCameraComponent.h"
 #include "ECS/System/XJCameraControllerSystem.h"
+#include "ECS/Component/Material/XJUnlitMaterialComponent.h"
+#include "ECS/System/XJUnlitMaterialSystem.h"
 
 #include <chrono>
+
+
 
 
     
@@ -86,7 +92,9 @@ protected:
 
         mRenderTarget->SetColorClearValue(0, VkClearColorValue{0.1f, 0.1f, 0.1f, 1.0f});//设置颜色清除值
         mRenderTarget->SetDepthClearValue(VkClearDepthStencilValue{1.0f, 0});//设置深度清除值
+        //添加材质系统
         mRenderTarget->AddMaterialSystem<XJ::XJBaseMaterialSystem>();
+        mRenderTarget->AddMaterialSystem<XJ::XJUnlitMaterialSystem>();
 
         mRender = std::make_shared<XJ::XJRenderer>();
          // 创建命令池
@@ -115,6 +123,18 @@ protected:
         //创建网格对象
         mMesh = std::make_shared<XJ::XJMesh>(mVertices, mIndices);
 
+        //纹理和采样器初始化
+        XJ::RGBAColor kWhitePixel{255, 255, 255, 255};//白色像素
+        XJ::RGBAColor kBlackPixel{0, 0, 0, 255};//黑色像素
+        XJ::RGBAColor kMultiPixel[4] = { {255, 0, 0, 255}, {0, 255, 0, 255}, {0, 0, 255, 255}, {255, 255, 0, 255} };//多像素数据
+        mWhiteTexture = std::make_shared<XJ::XJTexture>(1,1, &kWhitePixel);//创建白色纹理
+        mBlackTexture = std::make_shared<XJ::XJTexture>(1,1, &kBlackPixel);//创建黑色纹理
+        mMultiPixelTexture = std::make_shared<XJ::XJTexture>(2,2, kMultiPixel);//创建多像素纹理
+        mFileTexture = std::make_shared<XJ::XJTexture>(XJ_RES_TEXTURE_DIR"R-C.jpeg");//创建文件纹理
+
+        mDefaultSampler = std::make_shared<XJ::XJSampler>(VK_FILTER_NEAREST, VK_SAMPLER_ADDRESS_MODE_REPEAT);//创建默认采样器
+
+
     }
 
     void OnSceneInit(XJ::XJScene *scene) override
@@ -127,7 +147,7 @@ protected:
         //
         auto kBaseMaterialA = XJ::XJMaterialFactory::GetInstance()->CreateMaterial<XJ::XJBaseMaterial>();
         auto kBaseMaterialB = XJ::XJMaterialFactory::GetInstance()->CreateMaterial<XJ::XJBaseMaterial>();
-        
+        kBaseMaterialA->colorType = XJ::COLOR_TYPE_TEXCOOR;
 
         //在这里可以添加场景初始化的代码，例如创建实体、添加组件等
         spdlog::info("场景初始化");
@@ -142,14 +162,13 @@ protected:
                 for(int k = 0; k < mSmallCubeSize.z; ++k, z += 0.5f)
                 {
                     XJ::XJEntity* kCube = scene->CreateEntity("CubeEntityA");//创建一个实体
-                    auto &kTransformComp = kCube->GetComponent<XJ::XJTransformComponent>();//添加变换组件
-                    auto &kMaterialComp = kCube->AddComponent<XJ::XJBaseMaterialComponent>();//添加材质组件
-                    kMaterialComp.AddMesh(mMesh.get(), index ==0 ? kBaseMaterialA : kBaseMaterialB);//添加网格组件  并设置
 
+                    auto &kTransformComp = kCube->GetComponent<XJ::XJTransformComponent>();//添加变换组件
                     kTransformComp.position = glm::vec3(x, y, z);
                     kTransformComp.UpdateModelMatrix(); // 新增：立即更新模型矩阵
 
                     index = (index + 1) % 2;
+                    mSmallCubes.push_back(kCube);//将立方体实体添加到列表中
                 }
             }
         }
@@ -162,6 +181,32 @@ protected:
 
     void OnUpdate(float deltaTime) override
     {
+        uint64_t kFrameIndex = XJGetFrameIndex();
+        //在这里可以添加每帧更新的代码，例如处理输入、更新游戏逻
+        XJ::XJTexture *kTextures[] = {mWhiteTexture.get(), mBlackTexture.get(), mMultiPixelTexture.get(), mFileTexture.get()};//纹理数组
+        if(kFrameIndex % 10 == 0 && mUnlitMaterials.size() < mSmallCubes.size()) // 每10帧创建一个新的材质，直到达到1000个
+        {
+            auto kMaterial = XJ::XJMaterialFactory::GetInstance()->CreateMaterial<XJ::XJUnlitMaterial>();//创建基础材质 
+            kMaterial->XJSetBaseColorA(glm::linearRand(glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(1.0,1.0f,1.0f)));//随机颜色
+            kMaterial->XJSetBaseColorB(glm::linearRand(glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(1.0,1.0f,1.0f)));//随机颜色
+            kMaterial->XJSetTextureView(XJ::UNLIT_MAT_BASE_COLOR_A,kTextures[glm::linearRand(0, (int)ARRAY_SIZE(kTextures)-1)], mDefaultSampler.get());//随机纹理
+            kMaterial->XJSetTextureView(XJ::UNLIT_MAT_BASE_COLOR_B,kTextures[glm::linearRand(0, (int)ARRAY_SIZE(kTextures)-1)], mDefaultSampler.get());//随机纹理
+            kMaterial->UpdateTextureViewEnable(XJ::UNLIT_MAT_BASE_COLOR_A, glm::linearRand(0, 1) > 0.5f);//随机启用
+            kMaterial->UpdateTextureViewEnable(XJ::UNLIT_MAT_BASE_COLOR_B, glm::linearRand(0, 1) > 0.5f);//随机启用
+            kMaterial->XJSetMixValue(glm::linearRand(0.1f, 0.8f));//随机混合值
+
+            uint32_t kCubeIndex = mUnlitMaterials.size();
+            if(!XJ::XJEntity::HasComponent<XJ::XJUnlitMaterialComponent>(mSmallCubes[kCubeIndex]))
+            {
+                mSmallCubes[kCubeIndex]->AddComponent<XJ::XJUnlitMaterialComponent>();//添加基础材质组件
+            }
+            auto &kMatComp = mSmallCubes[kCubeIndex]->GetComponent<XJ::XJUnlitMaterialComponent>();//获取基础材质组件
+            kMatComp.AddMesh(mMesh.get(), kMaterial);//将材质与网格关联
+
+            mUnlitMaterials.push_back(kMaterial);//将材质添加到列表中
+
+            //spdlog::info("Unlit Material Count:{0}", mUnlitMaterials.size());
+        }
        
         XJ::XJEntity *kCameraEntity = mRenderTarget->XJGetCamera();//获取摄像机实体
         if(kCameraEntity && XJ::XJEntity::HasComponent<XJ::XJCameraComponent>(kCameraEntity))
@@ -219,6 +264,13 @@ protected:
         XJ::XJRenderContext *kRenderContext = XJApplication::XJGetAppContext()->renderContext;
         XJ::XJVulkanDevice* kDevice = kRenderContext->XJGetDevice();
         vkDeviceWaitIdle(kDevice->XJGetDevice());//等待设备空闲
+        mWhiteTexture.reset();//白色纹理
+        mBlackTexture.reset();//黑色纹理
+        mMultiPixelTexture.reset();//多像素纹理
+        mFileTexture.reset();//文件纹理
+        mDefaultSampler.reset();//默认采样器
+
+
         mMesh.reset();
         mCommandBuffers.clear();
         
@@ -235,25 +287,29 @@ private:
     std::shared_ptr<XJ::XJRenderTarget>                 mRenderTarget;
     std::shared_ptr<XJ::XJRenderer>                     mRender;
 
-    //std::shared_ptr<XJ::XJVulkanDescriptorSetLayout>    mDescriptorSetLayout;
-    //std::shared_ptr<XJ::XJVulkanDescriptorPool>         mDescriptorPool;
-    //std::vector<VkDescriptorSet>                        mDescriptorSets;
-
-    //std::shared_ptr<XJ::XJVulkanPipelineLayout>         mPipelineLayout;
-    //std::shared_ptr<XJ::XJVulkanPipeline>               mPipeline;
+   
     std::vector<VkCommandBuffer>                        mCommandBuffers;
     std::shared_ptr<XJ::XJVulkanGeometryUtil>           mGeometryUtil;
     std::shared_ptr<XJ::XJMesh>                         mMesh;
+    std::shared_ptr<XJ::XJTexture>                      mWhiteTexture;//白色纹理
+    std::shared_ptr<XJ::XJTexture>                      mBlackTexture;//黑色纹理
+    std::shared_ptr<XJ::XJTexture>                      mMultiPixelTexture;//多像素纹理
+    std::shared_ptr<XJ::XJTexture>                      mFileTexture;//文件纹理
+    std::shared_ptr<XJ::XJSampler>                      mDefaultSampler;//默认采样器
+
+    std::vector<XJ::XJUnlitMaterial*>                   mUnlitMaterials;//基础材质系统使用的无光照材质列表
 
     std::shared_ptr<XJ::XJEventTesting>                 mEventTesting;
     std::shared_ptr<XJ::XJEventObserver>                mOvserver;
+
 
     // 摄像机控制器
     std::unique_ptr<XJ::XJCameraControllerSystem>       mCameraController;
 
     VkSampleCountFlagBits mSampleCount = VK_SAMPLE_COUNT_1_BIT; // 多重采样数量
 
-    glm::ivec3 mSmallCubeSize{5 ,5 ,5};//立方体尺寸
+    glm::ivec3 mSmallCubeSize{10 ,10 ,10};//立方体尺寸
+    std::vector<XJ::XJEntity*> mSmallCubes;//立方体实体列表
    
     
 

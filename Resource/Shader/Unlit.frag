@@ -1,4 +1,4 @@
-#version 450 es
+#version 450 
 
 layout(location = 1) in vec2 v_Texcoord;
 

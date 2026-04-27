@@ -6,6 +6,7 @@
 #include "XJRenderContext.h"
 #include "ECS/XJSystem.h"
 #include "ECS/XJEntity.h"
+#include "ECS/System/XJMaterialSystem.h"
 
 namespace XJ
 {

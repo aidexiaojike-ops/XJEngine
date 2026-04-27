@@ -10,6 +10,7 @@
 #include "Edit/FileUtil.h"//获取文件工具类
 
 #include "ECS/Component/XJTransformComponent.h"
+#include "ECS/Component/Material/XJBaseMaterialComponent.h"//获取材质信息
 
 
 namespace XJ
@@ -80,7 +81,8 @@ namespace XJ
         ShaderLayout kShaderLayout = 
         {
             .descriptorSetLayouts = { mFrameUboDescSetLayout->XJGetDescriptorSet(), 
-                                      mMaterialParamDescSetLayout->XJGetDescriptorSet()},
+                                      mMaterialParamDescSetLayout->XJGetDescriptorSet(),
+                                      mMaterialResourceDescSetLayout->XJGetDescriptorSet()},
             .pushConstantRanges = { kModelPC}
         };
         //资源
@@ -213,7 +215,7 @@ namespace XJ
             auto kMeshMaterials = matComp.XJGetMeshMaterials();
             for(const auto&entry :kMeshMaterials)//要是没有材质酒放弃渲染
             {
-                XJBaseMaterial *kMaterial = entry.first;
+                XJUnlitMaterial *kMaterial = entry.first;
                 uint32_t kMaterialIndex = kMaterial->XJGetIndex();
                 if(!kMaterial || kMaterialIndex < 0) 
                 {
@@ -242,7 +244,7 @@ namespace XJ
                 vkCmdBindDescriptorSets(cmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, mPipelineLayout->XJGetPipelineLayout(),
                                         0, ARRAY_SIZE(kDescriptorSet), kDescriptorSet, 0, nullptr);
                 
-                ModelPC kPC = {transComp.GetTransform()};
+                ModelPC kPC = {transComp.GetModelMatrix()};
                 //推送常量
                 vkCmdPushConstants(cmdBuffer, mPipelineLayout->XJGetPipelineLayout(), VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(kPC), &kPC);
                 for(const auto&kMeshIndex : entry.second)
@@ -272,6 +274,7 @@ namespace XJ
         while(kNewDescriptorSetCount < materialCount)
         {
             kNewDescriptorSetCount *= 2;//2倍数增长  直到大于材质数量
+            spdlog::info("ReCreateMaterialDescPool, new Descriptor Set count: {0}", kNewDescriptorSetCount);
         }
 
         if(kNewDescriptorSetCount > NUM_MATERIAL_BATCH_MAX)//大于最大的数量就报错
@@ -313,6 +316,7 @@ namespace XJ
         }
         //更新上一次的数量
         mLastDescriptorSetCount = kNewDescriptorSetCount;
+    
     }
 
 

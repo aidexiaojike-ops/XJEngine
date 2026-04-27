@@ -88,6 +88,7 @@ namespace XJ
                     .imageView = imagerView,
                     .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
                 };
+                return imageInfo;
             }
              // 写入缓冲区描述符
             static VkWriteDescriptorSet WriteBuffer(VkDescriptorSet dstSet, uint32_t dstBinding, VkDescriptorType descriptorType, const VkDescriptorBufferInfo *pBufferInfo) {
