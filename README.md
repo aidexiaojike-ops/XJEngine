@@ -18,9 +18,11 @@
 | **ECS Architecture** | High-performance Entity Component System using EnTT library |
 | **Event Driven System** | Complete input handling for window, mouse, keyboard events |
 | **Modular Material System** | Extensible material pipeline with textures, samplers and uniform buffers |
-| **Unlit Material System** | Complete unlit shader pipeline with Frame UBO, material parameter UBO, texture blending, and dynamic descriptor pool expansion |
+| **Unlit Material System** | Complete unlit pipeline with Frame UBO, material parameter UBO, texture blending, and dynamic descriptor pool expansion |
+| **Runtime Material Generation** | Programmatic material creation with random colors, textures, and UV transforms at runtime |
+| **Procedural Textures** | Generate textures from pixel data (single color or multi-pixel arrays) without external files |
 | **Dynamic Instancing** | Support for large-scale entity rendering with dynamic uniform buffers |
-| **Camera Controller** | Orbit and free camera modes with intuitive mouse interaction |
+| **Camera Controller** | Orbit and free camera modes (Free as default) with intuitive mouse interaction |
 | **Multisampling Anti-aliasing** | MSAA support for improved visual quality |
 | **Depth Testing** | Complete depth buffer management |
 | **Shader Compilation** | Automatic GLSL to SPIR-V compilation at build time |
@@ -319,11 +321,34 @@ unlitMat->XJSetBaseColorB(glm::vec3(0.0f, 0.0f, 1.0f));
 unlitMat->XJSetMixValue(0.5f);
 
 // Set texture
-unlitMat->XJSetTextureView(0, texture, sampler);
+unlitMat->XJSetTextureView(XJ::UNLIT_MAT_BASE_COLOR_A, texture, sampler);
+unlitMat->UpdateTextureViewEnable(XJ::UNLIT_MAT_BASE_COLOR_A, true);
 
 // Add to entity
 auto& unlitComp = entity->AddComponent<XJ::XJUnlitMaterialComponent>();
 unlitComp.AddMesh(mesh, unlitMat);
+```
+
+### Using Procedural Textures
+```cpp
+// Create solid color textures from pixel data
+XJ::RGBAColor kWhitePixel{255, 255, 255, 255};
+XJ::RGBAColor kBlackPixel{0, 0, 0, 255};
+auto whiteTex = std::make_shared<XJ::XJTexture>(1, 1, &kWhitePixel);
+auto blackTex = std::make_shared<XJ::XJTexture>(1, 1, &kBlackPixel);
+
+// Create multi-pixel texture
+XJ::RGBAColor kMultiPixel[4] = {
+    {255, 0, 0, 255}, {0, 255, 0, 255},
+    {0, 0, 255, 255}, {255, 255, 0, 255}
+};
+auto multiTex = std::make_shared<XJ::XJTexture>(2, 2, kMultiPixel);
+
+// Create texture from file
+auto fileTex = std::make_shared<XJ::XJTexture>(XJ_RES_TEXTURE_DIR "image.jpeg");
+
+// Create sampler
+auto sampler = std::make_shared<XJ::XJSampler>(VK_FILTER_NEAREST, VK_SAMPLER_ADDRESS_MODE_REPEAT);
 ```
 
 ### Using Multiple Material Instances
