@@ -81,6 +81,7 @@ add_subdirectory(${GLFW_DIR})
 
 # 3. ImGui
 set(IMGUI_DIR ${CMAKE_CURRENT_SOURCE_DIR}/External/imgui)
+set(HAVE_VULKAN TRUE CACHE BOOL "Enable ImGui Vulkan backend")
 add_subdirectory(${IMGUI_DIR})
 
 # 4.GLM

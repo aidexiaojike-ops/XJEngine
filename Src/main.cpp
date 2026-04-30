@@ -24,6 +24,10 @@
 #include "ECS/Component/Material/XJUnlitMaterialComponent.h"
 #include "ECS/System/XJUnlitMaterialSystem.h"
 
+#include "UI/XJUIContext.h"
+#include "UI/XJEditorRenderer.h"
+
+
 #include <chrono>
 
 
@@ -131,8 +135,24 @@ protected:
         mBlackTexture = std::make_shared<XJ::XJTexture>(1,1, &kBlackPixel);//创建黑色纹理
         mMultiPixelTexture = std::make_shared<XJ::XJTexture>(2,2, kMultiPixel);//创建多像素纹理
         mFileTexture = std::make_shared<XJ::XJTexture>(XJ_RES_TEXTURE_DIR"R-C.jpeg");//创建文件纹理
-
+        // 创建默认采样器
         mDefaultSampler = std::make_shared<XJ::XJSampler>(VK_FILTER_NEAREST, VK_SAMPLER_ADDRESS_MODE_REPEAT);//创建默认采样器
+
+        //UI初始化
+        XJ::XJEditorRendererInitInfo kUIRendererInfo = {};
+        kUIRendererInfo.instance       = kRenderContext->XJGetInstance()->XJGetInstance();
+        kUIRendererInfo.physicalDevice = kPhysicalDevices->XJGetPhysicalDevice();
+        kUIRendererInfo.device         = kDevice->XJGetDevice();
+        kUIRendererInfo.renderPass     = mRenderPass->XJGetRenderPass();
+        kUIRendererInfo.commandPool    = kDevice->XJGetDefaultCmdPool()->XJGetCommandPool();
+        kUIRendererInfo.queueFamily    = kPhysicalDevices->XJGetGraphicQueueFamilyInfo().queueFamilyIndex;
+        kUIRendererInfo.queue          = kDevice->XJGetFirstGraphicQueue()->XJGetQueue();
+        kUIRendererInfo.imageCount     = static_cast<uint32_t>(kSwapchain->XJGetSwapchainImages().size());
+
+        mUIContext = std::make_unique<XJ::XJUIContext>();
+        mEditorRenderer = std::make_unique<XJ::XJEditorRenderer>();
+        mUIContext->Init(static_cast<GLFWwindow*>(XJGetWindow()->XJGetImplWindowPointer()));
+        mEditorRenderer->Init(kUIRendererInfo);
 
 
     }
@@ -172,6 +192,7 @@ protected:
                 }
             }
         }
+
     }
     void OnSceneDestroy(XJ::XJScene *scene) override
     {
@@ -181,6 +202,10 @@ protected:
 
     void OnUpdate(float deltaTime) override
     {
+         // ===== UI Begin =====
+        mUIContext->BeginFrame();
+        ImGui::ShowDemoWindow();     // 验证用，能跑通后删掉
+
         uint64_t kFrameIndex = XJGetFrameIndex();
         //在这里可以添加每帧更新的代码，例如处理输入、更新游戏逻
         XJ::XJTexture *kTextures[] = {mWhiteTexture.get(), mBlackTexture.get(), mMultiPixelTexture.get(), mFileTexture.get()};//纹理数组
@@ -213,6 +238,9 @@ protected:
         {
             mCameraController->UpdateCameraControl(deltaTime, XJGetWindow(), kCameraEntity);
         }
+
+         // ===== UI End =====
+        mUIContext->EndFrame();
     }
     
     void OnRender() override
@@ -247,9 +275,14 @@ protected:
         mRenderTarget->BeginRenderTarget(kCommandBuffer);//开始渲染通道
 
         mRenderTarget->RenderMaterialSystem(kCommandBuffer);//便利系统
+
+         // ===== ↓ 新增 UI 渲染 =====
+        mEditorRenderer->RenderDrawData(kCommandBuffer, mUIContext->XJGetDrawData());
+        // ===== UI 渲染结束 =====
+
         mRenderTarget->EndRenderTarget(kCommandBuffer);//结束渲染通道
 
-     
+   
 
         XJ::XJVulkanCommandPool::EndCommandBuffer(kCommandBuffer);
         //提交命令缓冲区 - 使用 mSubmitFences 作为提交围栏
@@ -261,6 +294,11 @@ protected:
     }
     void OnDestroy() override
     {
+         // ===== ↓ 先关 UI =====
+        mEditorRenderer->Shutdown();
+        mUIContext->Shutdown();
+        
+
         XJ::XJRenderContext *kRenderContext = XJApplication::XJGetAppContext()->renderContext;
         XJ::XJVulkanDevice* kDevice = kRenderContext->XJGetDevice();
         vkDeviceWaitIdle(kDevice->XJGetDevice());//等待设备空闲
@@ -302,6 +340,8 @@ private:
     std::shared_ptr<XJ::XJEventTesting>                 mEventTesting;
     std::shared_ptr<XJ::XJEventObserver>                mOvserver;
 
+    std::unique_ptr<XJ::XJUIContext>                    mUIContext;
+    std::unique_ptr<XJ::XJEditorRenderer>               mEditorRenderer;
 
     // 摄像机控制器
     std::unique_ptr<XJ::XJCameraControllerSystem>       mCameraController;

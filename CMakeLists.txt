@@ -64,6 +64,15 @@ else()
     message(STATUS "Core module: OFF (Core/CMakeLists.txt not found)")
 endif()
 # ------------------------------------------------------------
+# Editor  模块（可选，如果存在）
+# ------------------------------------------------------------
+if(EXISTS ${CMAKE_SOURCE_DIR}/Editor/CMakeLists.txt)
+    add_subdirectory(Editor)
+    message(STATUS "Editor module: ON")
+else()
+    message(STATUS "Editor module: OFF (Editor/CMakeLists.txt not found)")
+endif()
+# ------------------------------------------------------------
 # UTF-8
 # ------------------------------------------------------------
 # 为 MSVC 编译器添加 UTF-8 支持
@@ -94,6 +103,7 @@ add_executable(XJEngine ${ENGINE_SRC})#会打开cmd
 target_link_libraries(XJEngine
     PRIVATE Platform
     PRIVATE Core # 如果 Core 模块存在，则链接它
+    PRIVATE Editor
 )
 
 # ------------------------------------------------------------
