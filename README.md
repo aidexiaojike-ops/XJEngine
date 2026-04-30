@@ -27,6 +27,7 @@
 | **Depth Testing** | Complete depth buffer management |
 | **Shader Compilation** | Automatic GLSL to SPIR-V compilation at build time |
 | **Resource Management** | Automatic resource copying to runtime directory |
+| **ImGui Editor UI** | In-engine editor with ImGui, Vulkan-accelerated rendering, panel stubs (Viewport, Hierarchy, Inspector, Stats) |
 
 ## 📋 Table of Contents
 - [Features](#-key-features)
@@ -107,6 +108,8 @@ MaterialSystem
  ↓
 RenderTarget
  ↓
+Editor/Renderer (ImGui UI overlay)
+ ↓
 CommandBuffer
  ↓
 Swapchain
@@ -162,7 +165,7 @@ Swapchain
 - **GLM**: Mathematics library for graphics
 - **spdlog**: Fast logging library
 - **stb_image**: Image loading library
-- **Dear ImGui**: Debug UI (optional)
+- **Dear ImGui**: Editor UI framework with Vulkan backend
 
 ## 🚀 Building
 
@@ -244,6 +247,12 @@ XJEngine/
 │   │       ├── XJRenderTarget.h
 │   │       └── XJRenderer.h
 │   └── Private/            # 私有实现
+│
+├── Editor/                   # 编辑器模块（ImGui UI）
+│   ├── Public/UI/            # UI 上下文、渲染器、编辑器层
+│   │   └── Panels/           # 编辑器面板（视口、层级、检查器、统计）
+│   ├── Private/UI/           # UI 实现
+│   └── cmake/                # SPIR-V 编译和 Vulkan DLL 部署
 │
 ├── Platform/               # 平台相关代码
 │   ├── External/           # 第三方库
@@ -385,6 +394,37 @@ cameraComp.XJSetTarget(glm::vec3(0.0f, 0.0f, 0.0f));
 
 // Set camera as active camera in render target
 mRenderTarget->XJSetCamera(camera);
+```
+
+### Editor UI Integration
+```cpp
+// Initialize UI (after render context setup)
+XJ::XJEditorRendererInitInfo kUIRendererInfo = {};
+kUIRendererInfo.instance       = kRenderContext->XJGetInstance()->XJGetInstance();
+kUIRendererInfo.physicalDevice = kPhysicalDevices->XJGetPhysicalDevice();
+kUIRendererInfo.device         = kDevice->XJGetDevice();
+kUIRendererInfo.renderPass     = mRenderPass->XJGetRenderPass();
+kUIRendererInfo.commandPool    = kDevice->XJGetDefaultCmdPool()->XJGetCommandPool();
+kUIRendererInfo.queueFamily    = kPhysicalDevices->XJGetGraphicQueueFamilyInfo().queueFamilyIndex;
+kUIRendererInfo.queue          = kDevice->XJGetFirstGraphicQueue()->XJGetQueue();
+kUIRendererInfo.imageCount     = static_cast<uint32_t>(kSwapchain->XJGetSwapchainImages().size());
+
+mUIContext = std::make_unique<XJ::XJUIContext>();
+mEditorRenderer = std::make_unique<XJ::XJEditorRenderer>();
+mUIContext->Init(static_cast<GLFWwindow*>(XJGetWindow()->XJGetImplWindowPointer()));
+mEditorRenderer->Init(kUIRendererInfo);
+
+// In update loop
+mUIContext->BeginFrame();
+// ... ImGui calls here (panels, widgets, etc.) ...
+mUIContext->EndFrame();
+
+// In render loop (after material systems)
+mEditorRenderer->RenderDrawData(kCommandBuffer, mUIContext->XJGetDrawData());
+
+// Shutdown
+mEditorRenderer->Shutdown();
+mUIContext->Shutdown();
 ```
 
 ## 🔧 Development
