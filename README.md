@@ -27,7 +27,7 @@
 | **Depth Testing** | Complete depth buffer management |
 | **Shader Compilation** | Automatic GLSL to SPIR-V compilation at build time |
 | **Resource Management** | Automatic resource copying to runtime directory |
-| **ImGui Editor UI** | In-engine editor with ImGui, Vulkan-accelerated rendering, panel stubs (Viewport, Hierarchy, Inspector, Stats) |
+| **ImGui Editor UI** | In-engine editor with ImGui, Vulkan-accelerated rendering, docking, multi-viewport support, panel stubs (Viewport, Hierarchy, Inspector, Stats) |
 
 ## 📋 Table of Contents
 - [Features](#-key-features)
@@ -146,6 +146,12 @@ Swapchain
 - **Event Dispatcher**: Efficient event routing and handling
 - **Observer Pattern**: Flexible callback registration for event processing
 - **Thread Safety**: Safe event handling in multi-threaded scenarios
+
+#### **Editor UI System**
+- **Lifecycle Hooks**: `OnUIBegin`/`OnUIEnd`/`OnUIRender`/`OnUIDestroy` virtual methods in XJApplication base class
+- **XJUIContext**: ImGui context management with GLFW backend, docking, and multi-viewport support
+- **XJEditorRenderer**: Vulkan-accelerated ImGui draw data rendering with descriptor pool management
+- **Multi-Viewport**: Support for floating/detached editor windows via ImGui platform windows
 
 ## 🛠️ System Requirements
 
