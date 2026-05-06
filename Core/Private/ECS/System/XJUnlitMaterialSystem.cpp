@@ -131,7 +131,8 @@ namespace XJ
         std::vector<VkDescriptorPoolSize> kPoolSizes = 
         {
             {
-                .type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC,
+                //.type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC,
+                .type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
                 .descriptorCount = 2
             },
             {
@@ -291,7 +292,8 @@ namespace XJ
         std::vector<VkDescriptorPoolSize> kPoolSizes = 
         {
             {
-                .type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC,
+                // .type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC,
+                .type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
                 .descriptorCount = kNewDescriptorSetCount
             },
             {

@@ -69,11 +69,15 @@ namespace XJ
         mDescriptorSetLayout = std::make_shared<XJ::XJVulkanDescriptorSetLayout>(kDevice, kDesctLayoutBindings);
 
 
-        std::vector<VkDescriptorPoolSize> poolSizes = 
+        std::vector<VkDescriptorPoolSize> kPoolSizes = 
         {
             {
+               .type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,      // ← 新增：binding 0 用
+               .descriptorCount = 1
+           },
+            {
                 .type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC,
-                .descriptorCount = 2
+                .descriptorCount = 1
             },
             {
                 .type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
@@ -82,7 +86,7 @@ namespace XJ
         };
 
 
-        mDescriptorPool = std::make_shared<XJ::XJVulkanDescriptorPool>(kDevice, 1, poolSizes);
+        mDescriptorPool = std::make_shared<XJ::XJVulkanDescriptorPool>(kDevice, 1, kPoolSizes);
         mDescriptorSets = mDescriptorPool->AllocateDescriptorSet(mDescriptorSetLayout.get(), 1);
         //buffer的资源准备
         mGlobalBuffer = std::make_shared<XJ::XJVulkanBuffer>(kDevice, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT, sizeof(mGlobalUbo),nullptr,true);
@@ -99,10 +103,10 @@ namespace XJ
         mShaderLayout.descriptorSetLayouts = {mDescriptorSetLayout->XJGetDescriptorSet()};
 
         // 添加推送常量范围配置
-        mShaderLayout.pushConstantRanges.resize(1);
-        mShaderLayout.pushConstantRanges[0].stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
-        mShaderLayout.pushConstantRanges[0].offset = 0;
-        mShaderLayout.pushConstantRanges[0].size = sizeof(PushConstants);  // 68字节 (glm::mat4 + uint32_t)
+        //mShaderLayout.pushConstantRanges.resize(1);
+        //mShaderLayout.pushConstantRanges[0].stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+        //mShaderLayout.pushConstantRanges[0].offset = 0;
+        //mShaderLayout.pushConstantRanges[0].size = sizeof(PushConstants);  // 68字节 (glm::mat4 + uint32_t)
 
         mPipelineLayout = std::make_shared<XJ::XJVulkanPipelineLayout>(kDevice, 
                                                 XJ_RES_SHADER_DIR"Descriptor.vert",
@@ -186,15 +190,16 @@ namespace XJ
         scissor.extent = {kFrameBuffer->XJGetWidth(), kFrameBuffer->XJGetHeight()};
         vkCmdSetScissor(cmdBuffer, 0, 1, &scissor);
 
-        // 更新全局UBO
-        mGlobalBuffer->WriteData(&mGlobalUbo);
-        
+      
         //steup global params
         XJ::XJRenderContext *kRenderContext = XJApplication::XJGetAppContext()->renderContext;
         //更新推送常量  旋转矩阵
         //透视投影矩阵   CameraCompionent 里设置投影矩阵和视图矩阵
         glm::mat4 projMat = XJGetProjMat(renderTarget);
         glm::mat4 viewMat = XJGetViewMat(renderTarget);
+          // 更新全局UBO
+        mGlobalBuffer->WriteData(&mGlobalUbo);
+        
         // 将投影和视图矩阵赋值给全局UBO
         mGlobalUbo.projMat = projMat;
         mGlobalUbo.viewMat = viewMat;
