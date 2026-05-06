@@ -35,6 +35,7 @@ namespace XJ
     {
         // 在这里可以添加应用程序停止时的清理代码
         spdlog::info("应用程序停止");
+        OnUIDestroy();   // Shutdown 在设备销毁前
         UnLoadScene();//卸载场景
         OnDestroy();
     }
@@ -44,8 +45,11 @@ namespace XJ
         mLastTimePoint = std::chrono::steady_clock::now();//记录上次更新时间点
         // 在这里可以添加应用程序的主循环代码
         spdlog::info("进入主循环");
-        while (!mWindow->ShouldClose()) {
+        while (!mWindow->ShouldClose()) 
+        {
             mWindow->PollEvents();
+
+            OnUIBegin(); // UI 渲染开始
 
             float deltaTime = std::chrono::duration<float>(std::chrono::steady_clock::now() - mLastTimePoint).count();
             mLastTimePoint = std::chrono::steady_clock::now();//记录上次更新时间点
@@ -55,6 +59,8 @@ namespace XJ
             {
                 OnUpdate(deltaTime);
             }
+            
+            OnUIEnd();// UI 渲染结束
 
             OnRender();
 

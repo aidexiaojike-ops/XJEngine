@@ -11,6 +11,8 @@ namespace XJ
 
         ImGuiIO& kIo = ImGui::GetIO();
         kIo.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;       // Enable Keyboard Controls  键盘输入
+        kIo.ConfigFlags |= ImGuiConfigFlags_DockingEnable;           // Enable Docking            停靠
+        kIo.ConfigFlags |= ImGuiConfigFlags_ViewportsEnable;         // Enable Multi-Viewport / Platform Windows  多视口/平台窗口
         ImGui::StyleColorsDark();//设置 ImGui 样式
         // ImGui::StyleColorsClassic();
         // ImGui::StyleColorsLight();

@@ -13,13 +13,19 @@ namespace XJ
         VkInstance       instance;
         VkPhysicalDevice physicalDevice;
         VkDevice         device;
-        VkRenderPass     renderPass;
+
+        VkRenderPass     renderPass;   // ✔ 核心
         VkCommandPool    commandPool;
+
         uint32_t         queueFamily;
         VkQueue          queue;
+
         uint32_t         imageCount;
-        VkSampleCountFlagBits msaaSamples = VK_SAMPLE_COUNT_1_BIT;
-        uint32_t         subpass = 0;
+
+        VkSampleCountFlagBits msaaSamples = VK_SAMPLE_COUNT_1_BIT; // ✔ 可保留
+        uint32_t         subpass = 0;                              // ✔ 可保留
+
+        VkFormat         colorFormat;
     };
 
     class XJEditorRenderer

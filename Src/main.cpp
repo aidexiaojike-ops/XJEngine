@@ -31,8 +31,6 @@
 #include <chrono>
 
 
-
-
     
 class XJEngineApp : public XJ::XJApplication
 {
@@ -153,10 +151,8 @@ protected:
         mEditorRenderer = std::make_unique<XJ::XJEditorRenderer>();
         mUIContext->Init(static_cast<GLFWwindow*>(XJGetWindow()->XJGetImplWindowPointer()));
         mEditorRenderer->Init(kUIRendererInfo);
-
-
     }
-
+    //场景
     void OnSceneInit(XJ::XJScene *scene) override
     {
 
@@ -199,11 +195,15 @@ protected:
         //在这里可以添加场景销毁的代码，例如清理资源等
         spdlog::info("场景销毁");
     }
+    //UI
+    void OnUIBegin() override { if(mUIContext) mUIContext->BeginFrame(); }
+    void OnUIEnd() override { if(mUIContext) mUIContext->EndFrame(); }
+    void OnUIDestroy() override { mEditorRenderer.reset(); mUIContext.reset(); }
 
     void OnUpdate(float deltaTime) override
     {
          // ===== UI Begin =====
-        mUIContext->BeginFrame();
+        //mUIContext->BeginFrame();
         ImGui::ShowDemoWindow();     // 验证用，能跑通后删掉
 
         uint64_t kFrameIndex = XJGetFrameIndex();
@@ -240,7 +240,7 @@ protected:
         }
 
          // ===== UI End =====
-        mUIContext->EndFrame();
+        //mUIContext->EndFrame();
     }
     
     void OnRender() override
@@ -277,7 +277,19 @@ protected:
         mRenderTarget->RenderMaterialSystem(kCommandBuffer);//便利系统
 
          // ===== ↓ 新增 UI 渲染 =====
+        if(mEditorRenderer && mUIContext)
         mEditorRenderer->RenderDrawData(kCommandBuffer, mUIContext->XJGetDrawData());
+
+        // ===== 主Viewport Vulkan UI 已经画完 =====
+        if (ImGui::GetIO().ConfigFlags & ImGuiConfigFlags_ViewportsEnable)
+        {
+            GLFWwindow* backup = glfwGetCurrentContext();//备份当前上下文
+        
+            ImGui::UpdatePlatformWindows();//更新平台窗口，处理多视口的窗口创建、调整大小等平台相关操作
+            ImGui::RenderPlatformWindowsDefault();//渲染平台窗口，调用每个次级视口的渲染函数，默认实现会调用每个次级视口的RenderWindow/SwapBuffers平台函数进行渲染
+        
+            glfwMakeContextCurrent(backup);//恢复之前的上下文
+        }
         // ===== UI 渲染结束 =====
 
         mRenderTarget->EndRenderTarget(kCommandBuffer);//结束渲染通道
@@ -295,8 +307,8 @@ protected:
     void OnDestroy() override
     {
          // ===== ↓ 先关 UI =====
-        mEditorRenderer->Shutdown();
-        mUIContext->Shutdown();
+        //mEditorRenderer->Shutdown();
+        //mUIContext->Shutdown();
         
 
         XJ::XJRenderContext *kRenderContext = XJApplication::XJGetAppContext()->renderContext;

@@ -7,9 +7,15 @@
 // XJApplication.h
 #include "Render/XJRenderContext.h" // 确保包含
 //应用程序基类
+struct ImDrawData;
+class GLFWwindow;
 
 namespace XJ
 {
+
+ 
+
+
     struct AppSettings
     {
         // 可以在这里添加应用程序的配置选项，例如窗口标题、初始窗口大小等
@@ -43,9 +49,14 @@ namespace XJ
             virtual void OnUpdate(float deltaTime){}
             virtual void OnRender(){}
             virtual void OnDestroy(){}
-
+            //场景
             virtual void OnSceneInit(XJScene *scene){}//场景初始化
             virtual void OnSceneDestroy(XJScene *scene){}//场景销毁
+            //UI
+            virtual void OnUIBegin() {}
+            virtual void OnUIEnd() {}
+            virtual void OnUIRender(VkCommandBuffer) {}
+            virtual void OnUIDestroy() {}
             
             std::chrono::steady_clock::time_point mStartTimePoint;//程序开始时间点
             std::chrono::steady_clock::time_point mLastTimePoint;//上次更新时间点

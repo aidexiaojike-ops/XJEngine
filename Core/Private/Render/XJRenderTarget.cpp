@@ -175,6 +175,7 @@ namespace XJ
         for (int idx : colorAttachmentIndices) 
         {
             const auto& attach = kAttachments[idx];
+            static_cast<int>(attach.finalLayout), static_cast<int>(attach.samples);
             spdlog::debug("颜色附件[{}]: format={}, finalLayout={}, samples={}", 
                           idx, vk_format_string(attach.format), 
                           attach.finalLayout, attach.samples);
