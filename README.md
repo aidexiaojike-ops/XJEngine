@@ -461,15 +461,16 @@ mUIContext->Shutdown();
 
 ## 🐛 Known Issues
 
-1. **Vulkan Validation Layer Errors**: Push constant range and descriptor set synchronization issues need further investigation
-2. **Memory Management**: Some resource cleanup logic needs improvement
-3. **Platform Support**: Limited testing on macOS with MoltenVK
+1. **Memory Management**: Some resource cleanup logic needs improvement
+2. **Platform Support**: Limited testing on macOS with MoltenVK
+3. **Editor Panels**: Editor panel implementations (Viewport, Hierarchy, Inspector, Stats) are pending
 
 ## 🗺️ Roadmap
 
 ### Short-term (Next 3 months)
-- [ ] Fix Vulkan validation layer errors
+- [x] ~~Fix Vulkan validation layer errors~~
 - [ ] Improve memory management and resource cleanup
+- [ ] Implement editor panels (Viewport, Hierarchy, Inspector, Stats)
 - [ ] Add unit tests for core systems
 - [ ] Enhance documentation with API references
 - [ ] Optimize rendering performance for large scenes
