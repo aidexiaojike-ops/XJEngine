@@ -92,6 +92,11 @@ add_subdirectory(${GLM_DIR})
 set(TINYOBJLOADER_DIR ${CMAKE_CURRENT_SOURCE_DIR}/External/tinyobjloader)
 add_subdirectory(${TINYOBJLOADER_DIR})
 
+# 6. tinygltf
+set(TINYGLTF_DIR ${CMAKE_CURRENT_SOURCE_DIR}/External/tinygltf)
+set(TINYGLTF_HEADER_ONLY ON CACHE BOOL "Use tinygltf as header-only")
+add_subdirectory(${TINYGLTF_DIR})
+
 # 4. spdlog
 #    这一步会执行 spdlog 的 CMakeLists.txt，从而创建 spdlog::spdlog 目标
 set(SPDLOG_DIR ${CMAKE_CURRENT_SOURCE_DIR}/External/spdlog)
@@ -113,6 +118,7 @@ target_link_libraries(Platform
         spdlog # 现在 CMake 认识这个目标了
         glm::glm-header-only
         tinyobjloader
+        tinygltf
         stb
         EnTT::EnTT
 )
