@@ -61,6 +61,14 @@ namespace XJ
         SetDepthClearValue({1.0f, 0});//默认深度清除值为1.0，模板清除值为0
         
     }
+    void XJRenderTarget::UpdateIfNeeded()
+    {
+        if (bShouldUpdate)
+        {
+            ReCreate();
+            bShouldUpdate = false;
+        }
+    }
     void XJRenderTarget::ReCreate()
     {
         if (mExtent.width == 0 || mExtent.height == 0 || mBufferCount == 0)
@@ -70,18 +78,6 @@ namespace XJ
         }
         
         auto oldFrameBuffers = std::move(mFrameBuffers);
-        mFrameBuffers.clear();
-
-        // 备份原有帧缓冲区
-        if(mFrameBuffers.empty())
-        {
-            if (!oldFrameBuffers.empty()) 
-            {
-                mFrameBuffers = std::move(oldFrameBuffers);
-                spdlog::warn("帧缓冲重建失败，使用旧缓冲区");
-                // 保持 bShouldUpdate = true 以便重试
-            }
-        }
 
         // 检查渲染通道是否有效
         if (!mRenderPass) {
@@ -89,23 +85,18 @@ namespace XJ
             return;
         }
 
-        if(mExtent.width == 0 || mExtent.height == 0 || mBufferCount == 0)
-        {
-            spdlog::error("Invalid render target extent or buffer count. ReCreate aborted.");
-            return;
-        }
-
-        if(mExtent.width == 0 || mExtent.height == 0 || mBufferCount == 0)
-        {
-            spdlog::error("Invalid render target extent or buffer count. ReCreate aborted.");
-            return;
-        }
+     
         mFrameBuffers.clear();
         mDepthImages.clear();
         mFrameBuffers.reserve(mBufferCount);
 
         XJRenderContext *kRenderContext = XJApplication::XJGetAppContext()->renderContext;
-        vkDeviceWaitIdle(kRenderContext->XJGetDevice()->XJGetDevice());//// 等待设备空闲，确保无命令缓冲区使用旧资源
+        //vkDeviceWaitIdle(kRenderContext->XJGetDevice()->XJGetDevice());//// 等待设备空闲，确保无命令缓冲区使用旧资源
+        VkResult idleRet = vkDeviceWaitIdle(kRenderContext->XJGetDevice()->XJGetDevice());
+        if (idleRet != VK_SUCCESS)
+        {
+            spdlog::critical("STEP3-FAIL: ReCreate vkDeviceWaitIdle returned {}", vk_result_string(idleRet));
+        }
         XJVulkanDevice* kDevice = kRenderContext->XJGetDevice();
         XJVulkanSwapchain* kSwapchain = kRenderContext->XJGetSwapchain();
 
@@ -276,7 +267,8 @@ namespace XJ
                                  vk_format_string(depthAttach.format), depthAttach.samples);
                     return;
                 }
-                spdlog::debug("深度附件创建成功，采样数: {}", depthAttach.samples);
+                spdlog::debug("深度附件创建成功，采样数: {}, 函数:{}", depthAttach.samples, __FILE__);
+                mDepthImages.push_back(depthImage);
             }
             
         
@@ -323,34 +315,33 @@ namespace XJ
             if (!framebuffer->IsValid()) {
                 spdlog::error("帧缓冲创建失败");
                 mFrameBuffers.clear();  // 清理已创建的部分
-                return;
+                break; // 退出循环，避免继续创建无效帧缓冲
             }
 
             mFrameBuffers.push_back(framebuffer);
         }
-
          // 如果创建失败，恢复原有帧缓冲区
         if (mFrameBuffers.empty()) 
         {
             if (!oldFrameBuffers.empty()) 
             {
                 mFrameBuffers = std::move(oldFrameBuffers);
-                spdlog::warn("Frame buffer recreation failed, using old buffers");
+                spdlog::warn("帧缓冲重建失败，使用旧缓冲区");
             } else {
-                spdlog::error("Frame buffer creation failed and no old buffers to restore");
+                spdlog::error("帧缓冲创建失败且无旧缓冲区可恢复");
             }
         }
 
 
     }
-    void XJRenderTarget::BeginRenderTarget(VkCommandBuffer commandBuffer)
+    bool XJRenderTarget::BeginRenderTarget(VkCommandBuffer commandBuffer)
     {
         if (mFrameBuffers.empty()) {
             spdlog::warn("紧急重建帧缓冲");
             ReCreate();
             if (mFrameBuffers.empty()) {
                 spdlog::error("无法创建帧缓冲，跳过渲染");
-                return;
+                return false;
             }
         }
         assert(!bBeginRenderTarget && "RenderPass must be set before beginning render target.");//确保在开始渲染目标之前设置了RenderPass
@@ -361,17 +352,13 @@ namespace XJ
             spdlog::error("No framebuffers available in render target. FrameBuffer count: {}, Extent: {}x{}", 
                          mBufferCount, mExtent.width, mExtent.height);
             bBeginRenderTarget = false;
-            return;
+            return false;
         }
         //spdlog::debug("开始渲染目标：帧缓冲区数量={}, 当前索引={}, 交换链目标={}",
         //          mFrameBuffers.size(), mCurrentBufferIndex, bSwapchainTarget);
 
-        if(bShouldUpdate)//如果需要更新帧缓冲（例如窗口大小改变时），重新创建帧缓冲
-        {
-            ReCreate();
-            bShouldUpdate = false;
-        }
-
+        UpdateIfNeeded();//如果需要更新帧缓冲（例如窗口大小改变时），重新创建帧缓冲
+       
         //if(XJEntity::HasComponent<XJCameraComponent>(mCamera))
         if(XJEntity::HasComponent<XJCameraComponent>(mCamera) && mExtent.width > 0 && mExtent.height > 0)
         {
@@ -401,7 +388,7 @@ namespace XJ
         {
             spdlog::error("无效的帧缓冲区，跳过渲染通道开始");
             bBeginRenderTarget = false;
-            return; // 不设置 bBeginRenderTarget = true
+            return false; // 不设置 bBeginRenderTarget = true
         }
         // 尝试开始渲染通道
         if(mRenderPass->BeginRenderPass(commandBuffer, kFrameBuffer, mClearValues))
@@ -413,8 +400,8 @@ namespace XJ
             spdlog::error("渲染通道开始失败");
             bBeginRenderTarget = false;
         }
-        
-        
+
+        return bBeginRenderTarget;
     }
     void XJRenderTarget::EndRenderTarget(VkCommandBuffer commandBuffer)
     {
@@ -455,7 +442,7 @@ namespace XJ
         std::vector<Attachment> renderPassAttachments = mRenderPass->XJGetAttachments();
         for (size_t i = 0; i < renderPassAttachments.size(); ++i)
         {
-            if(IsDepthStencilFormat(renderPassAttachments[i].format) && renderPassAttachments[i].loadOp == VK_ATTACHMENT_LOAD_OP_CLEAR)
+            if(!IsDepthStencilFormat(renderPassAttachments[i].format) && renderPassAttachments[i].loadOp == VK_ATTACHMENT_LOAD_OP_CLEAR)
             {
                 mClearValues[i].color = colorClearValue;
             }
@@ -481,7 +468,7 @@ namespace XJ
         std::vector<Attachment> renderPassAttachments = mRenderPass->XJGetAttachments();
         if(attachmentIndex <= renderPassAttachments.size() - 1)
         {
-            if(IsDepthStencilFormat(renderPassAttachments[attachmentIndex].format) && renderPassAttachments[attachmentIndex].loadOp == VK_ATTACHMENT_LOAD_OP_CLEAR)
+            if(!IsDepthStencilFormat(renderPassAttachments[attachmentIndex].format) && renderPassAttachments[attachmentIndex].loadOp == VK_ATTACHMENT_LOAD_OP_CLEAR)
             {
                 mClearValues[attachmentIndex].color = colorClearValue;
             }

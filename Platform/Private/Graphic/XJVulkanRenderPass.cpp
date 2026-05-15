@@ -122,7 +122,8 @@ namespace XJ
                     mAttachments[colorAttachment].finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL; // 多重采样附件通常不需要存储
                 } else {
                     // 对于单采样，确保最终布局是PRESENT_SRC_KHR
-                    mAttachments[colorAttachment].finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+                     if (mAttachments[colorAttachment].finalLayout == VK_IMAGE_LAYOUT_UNDEFINED)
+                         mAttachments[colorAttachment].finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
                 }
             }
             //  // 深度/模板附件引用
@@ -178,11 +179,12 @@ namespace XJ
         dependencies[1].srcSubpass = 0;
         dependencies[1].dstSubpass = VK_SUBPASS_EXTERNAL;
         dependencies[1].srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-        dependencies[1].dstStageMask = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
+        //dependencies[1].dstStageMask = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
+        dependencies[1].dstStageMask = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
         dependencies[1].srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
-        dependencies[1].dstAccessMask = 0;
+        //dependencies[1].dstAccessMask = 0;
+        dependencies[1].dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
         dependencies[1].dependencyFlags = 0;
-    
 
         //createinfo 结构体
         std::vector<VkAttachmentDescription> vkAttachments;
@@ -222,7 +224,7 @@ namespace XJ
         }
         
         // 检查附件布局设置
-        spdlog::debug("渲染通道创建成功，附件详细信息：");
+        spdlog::debug("渲染通道创建成功，附件详细信息：{0}, {1}, {2}", __FUNCTION__,  mAttachments[0].finalLayout, mAttachments[0].initialLayout);
         for (size_t i = 0; i < mAttachments.size(); ++i) {
             const auto& attach = mAttachments[i];
             spdlog::debug("附件[{}]: format={}, initialLayout={}, finalLayout={}, samples={}", 

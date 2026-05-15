@@ -42,6 +42,13 @@ namespace XJ
 
     void XJApplication::MainLoop()
     {
+        // 确保工作目录是 exe 所在目录（IDE/cmake 启动也能找到 Resource）
+        char exePath[MAX_PATH];
+        GetModuleFileNameA(nullptr, exePath, MAX_PATH);
+        std::filesystem::path exeDir = std::filesystem::path(exePath).parent_path();
+        std::filesystem::current_path(exeDir);
+
+
         mLastTimePoint = std::chrono::steady_clock::now();//记录上次更新时间点
         // 在这里可以添加应用程序的主循环代码
         spdlog::info("进入主循环");

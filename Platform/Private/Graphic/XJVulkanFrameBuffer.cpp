@@ -47,7 +47,7 @@ namespace XJ
         mDepthImage = depthImage;
         mResolveImage = resolveImage;
         mColorViews.clear();
-        mDepthViews.clear();
+        // mDepthViews.clear();
         mResolveViews.clear();
         // 准备附件数组（颜色附件 + 深度附件）
         std::vector<VkImageView> attachments;
@@ -74,21 +74,18 @@ namespace XJ
             attachments.push_back(mColorViews[i]->XJGetImageView());
         }
 
-        // 2. 添加深度附件（如果提供了深度图像）
+            // 2. 添加深度附件（如果存在）
         if (mDepthImage && mDepthImage->IsValid())
         {
-             // 深度图像视图已经由VulkanDepthImage创建，直接使用
-            auto depthView = std::make_shared<VulkanImageView>(mDevice,
-                mDepthImage->XJGetImage(),
-                mDepthImage->XJGetFormat(),
-                VK_IMAGE_ASPECT_DEPTH_BIT
-            );
-            mDepthViews.push_back(depthView);
-            attachments.push_back(depthView->XJGetImageView());
+            attachments.push_back(mDepthImage->XJGetImageView());
         }
         else
         {
-            spdlog::warn("深度图像无效或缺失，跳过深度附件");
+            spdlog::warn("深度图像无效或缺失  ptr={}  isValid={}  image={}  view={}",
+                (void*)mDepthImage.get(),
+                mDepthImage ? (int)mDepthImage->IsValid() : -1,
+                mDepthImage ? (void*)mDepthImage->XJGetImage() : nullptr,
+                mDepthImage ? (void*)mDepthImage->XJGetImageView() : nullptr);
         }
        
         // 3. 添加解析附件（对应索引2）
@@ -108,7 +105,9 @@ namespace XJ
        
         
         spdlog::debug("帧缓冲附件：颜色={}, 深度={}, 解析={}", 
-              mColorViews.size(), mDepthViews.size(), mResolveViews.size());
+              mColorViews.size(),
+              (mDepthImage && mDepthImage->IsValid()) ? 1 : 0,
+              mResolveViews.size());
         for (size_t i = 0; i < attachments.size(); i++) {
             spdlog::debug("  附件[{}]: {}", i, (void*)attachments[i]);
         }

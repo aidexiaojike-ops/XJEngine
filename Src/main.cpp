@@ -26,8 +26,10 @@
 
 #include "UI/XJUIContext.h"
 #include "UI/XJEditorRenderer.h"
+#include "UI/Viewports/XJScenePreview.h" 
+#include "UI/Viewports/XJGamePreview.h"
 
-
+#include <iostream>
 #include <chrono>
 
 
@@ -151,15 +153,32 @@ protected:
         mEditorRenderer = std::make_unique<XJ::XJEditorRenderer>();
         mUIContext->Init(static_cast<GLFWwindow*>(XJGetWindow()->XJGetImplWindowPointer()));
         mEditorRenderer->Init(kUIRendererInfo);
+        // ── 场景预览初始化 ──  UI   
+        // 创建场景预览和游戏预览对象，并初始化它们
+        mScenePreview = std::make_unique<XJ::XJScenePreview>();
+        mScenePreview->SetViewportName("Scene Preview");
+        mScenePreview->Init(kRenderContext);
+        mScenePreview->AddMaterialSystem<XJ::XJBaseMaterialSystem>();
+        mScenePreview->AddMaterialSystem<XJ::XJUnlitMaterialSystem>();
+
+        mGamePreview = std::make_unique<XJ::XJGamePreview>();
+        mGamePreview->SetViewportName("Game Preview"); 
+        mGamePreview->Init(kRenderContext);
+        mGamePreview->AddMaterialSystem<XJ::XJBaseMaterialSystem>();
+        mGamePreview->AddMaterialSystem<XJ::XJUnlitMaterialSystem>();
     }
     //场景
     void OnSceneInit(XJ::XJScene *scene) override
     {
+        XJ::XJEntity* kPreviewCam = scene->CreateEntity("PreviewCamera");
+        kPreviewCam->AddComponent<XJ::XJCameraComponent>();
+        mScenePreview->SetCamera(kPreviewCam);
 
-        XJ::XJEntity *kCameraEntity = scene->CreateEntity("CameraEntity");//创建一个实体
-        kCameraEntity->AddComponent<XJ::XJCameraComponent>();//添加摄像机组件
+        XJ::XJEntity *kGameCam = scene->CreateEntity("CameraEntity");//创建一个实体
+        kGameCam->AddComponent<XJ::XJCameraComponent>();//添加摄像机组件
+        mGamePreview->SetCamera(kGameCam);
         // kCameraEntity->AddComponent<XJ::XJTransformComponent>();  // 添加这行
-        mRenderTarget->XJSetCamera(kCameraEntity);//将摄像机实体设置到渲染目标中，以便在渲染过程中使用摄像机信息
+        mRenderTarget->XJSetCamera(kGameCam);//将摄像机实体设置到渲染目标中，以便在渲染过程中使用摄像机信息
         //
         auto kBaseMaterialA = XJ::XJMaterialFactory::GetInstance()->CreateMaterial<XJ::XJBaseMaterial>();
         auto kBaseMaterialB = XJ::XJMaterialFactory::GetInstance()->CreateMaterial<XJ::XJBaseMaterial>();
@@ -196,14 +215,38 @@ protected:
         spdlog::info("场景销毁");
     }
     //UI
-    void OnUIBegin() override { if(mUIContext) mUIContext->BeginFrame(); }
-    void OnUIEnd() override { if(mUIContext) mUIContext->EndFrame(); }
-    void OnUIDestroy() override { mEditorRenderer.reset(); mUIContext.reset(); }
+    void OnUIBegin() override 
+    { 
+        if (mUIContext)
+        {
+            mUIContext->BeginFrame();
+            ImGui::DockSpaceOverViewport(ImGui::GetMainViewport()->ID);
+        }
+    }
+    void OnUIEnd() override 
+    {
+        if (mUIContext)
+            mUIContext->EndFrame();
+    }
+    
+    void OnUIDestroy() override
+    {
+        if (mScenePreview) mScenePreview->Shutdown();
+        if (mGamePreview) mGamePreview->Shutdown();
+
+        mEditorRenderer.reset();
+        mUIContext.reset();
+    }
 
     void OnUpdate(float deltaTime) override
     {
          // ===== UI Begin =====
         //mUIContext->BeginFrame();
+        if (mScenePreview) 
+            mScenePreview->DrawUI(); // 绘制场景预览UI 
+        
+        if (mGamePreview) 
+           mGamePreview->DrawUI();// 绘制游戏预览UI
         ImGui::ShowDemoWindow();     // 验证用，能跑通后删掉
 
         uint64_t kFrameIndex = XJGetFrameIndex();
@@ -255,13 +298,21 @@ protected:
         XJ::XJVulkanSwapchain* kSwapchain = kRenderContext->XJGetSwapchain();
 
     
-        
         int32_t imageIndex;//拿image
         if(mRender->XJRendererBegin(&imageIndex, mCommandBuffers))
         {
             mRenderTarget->SetExtent({kSwapchain->XJGetWidth(),kSwapchain->XJGetHeight()});
         }
+       
+        if (mScenePreview)
+        {
+            mScenePreview->PrepareBeforeRender();
+        }
+        if (mGamePreview)
+        {
+          mGamePreview->PrepareBeforeRender();
 
+        } 
         VkCommandBuffer kCommandBuffer = mCommandBuffers[imageIndex];//拿到commandbuffer
         if (kCommandBuffer == VK_NULL_HANDLE) 
         {
@@ -270,32 +321,56 @@ protected:
         }
         //启动命令缓冲 commandbuffer 
         XJ::XJVulkanCommandPool::BeginCommandBuffer(kCommandBuffer);
+        // ── 场景预览离屏渲染 ──
+        if (mScenePreview)
+        {
+            if (!mScenePreview->Render(kCommandBuffer))
+            {
+                // spdlog::error("ScenePreview render failed");
+            }
+        }
+
+        if (mGamePreview)
+        {
+           if (!mGamePreview->Render(kCommandBuffer))
+           {
+               // spdlog::error("GamePreview render failed");
+           }
+        }
+
+        if (mScenePreview)
+        {
+           mScenePreview->PostRender();
+        }
+
+        if (mGamePreview)
+        {
+           mGamePreview->PostRender();
+        }
 
         //正视图 RT
-        mRenderTarget->BeginRenderTarget(kCommandBuffer);//开始渲染通道
-
-        mRenderTarget->RenderMaterialSystem(kCommandBuffer);//便利系统
-
-         // ===== ↓ 新增 UI 渲染 =====
-        if(mEditorRenderer && mUIContext)
-        mEditorRenderer->RenderDrawData(kCommandBuffer, mUIContext->XJGetDrawData());
-
-        // ===== 主Viewport Vulkan UI 已经画完 =====
-        if (ImGui::GetIO().ConfigFlags & ImGuiConfigFlags_ViewportsEnable)
+        if (mRenderTarget->BeginRenderTarget(kCommandBuffer))
         {
-            GLFWwindow* backup = glfwGetCurrentContext();//备份当前上下文
+            //// 改为（GLFW 窗口不再直接渲染方块）：
+            // mRenderTarget->RenderMaterialSystem(kCommandBuffer);
+            // ===== ↓ 新增 UI 渲染 =====
+            if (mEditorRenderer && mUIContext)
+                mEditorRenderer->RenderDrawData(kCommandBuffer, mUIContext->XJGetDrawData());
+            // ===== 主Viewport Vulkan UI 已经画完 =====
+            if (ImGui::GetIO().ConfigFlags & ImGuiConfigFlags_ViewportsEnable)
+            {
+                GLFWwindow* backup = glfwGetCurrentContext();//备份当前上下文
         
-            ImGui::UpdatePlatformWindows();//更新平台窗口，处理多视口的窗口创建、调整大小等平台相关操作
-            ImGui::RenderPlatformWindowsDefault();//渲染平台窗口，调用每个次级视口的渲染函数，默认实现会调用每个次级视口的RenderWindow/SwapBuffers平台函数进行渲染
+                ImGui::UpdatePlatformWindows();//更新平台窗口，处理多视口的窗口创建、调整大小等平台相关操作
+                ImGui::RenderPlatformWindowsDefault();//渲染平台窗口，调用每个次级视口的渲染函数，默认实现会调用每个次级视口的RenderWindow/SwapBuffers平台函数进行渲染
         
-            glfwMakeContextCurrent(backup);//恢复之前的上下文
+                glfwMakeContextCurrent(backup);//恢复之前的上下文
+            }
+             // ===== UI 渲染结束 =====
+            mRenderTarget->EndRenderTarget(kCommandBuffer);//结束渲染通道
         }
-        // ===== UI 渲染结束 =====
-
-        mRenderTarget->EndRenderTarget(kCommandBuffer);//结束渲染通道
-
-   
-
+        
+      
         XJ::XJVulkanCommandPool::EndCommandBuffer(kCommandBuffer);
         //提交命令缓冲区 - 使用 mSubmitFences 作为提交围栏
         if(mRender->XJRendererEnd(imageIndex, {kCommandBuffer}))
@@ -354,6 +429,8 @@ private:
 
     std::unique_ptr<XJ::XJUIContext>                    mUIContext;
     std::unique_ptr<XJ::XJEditorRenderer>               mEditorRenderer;
+    std::unique_ptr<XJ::XJScenePreview>                 mScenePreview;
+    std::unique_ptr<XJ::XJGamePreview>                  mGamePreview;
 
     // 摄像机控制器
     std::unique_ptr<XJ::XJCameraControllerSystem>       mCameraController;

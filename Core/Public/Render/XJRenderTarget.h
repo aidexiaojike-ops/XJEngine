@@ -44,8 +44,9 @@ namespace XJ
             XJRenderTarget(XJVulkanRenderPass *rederPass,uint32_t bufferCount, VkExtent2D extent);//构造函数重载，允许直接传入帧缓冲数量和尺寸
             ~XJRenderTarget();
            
+            void UpdateIfNeeded();
 
-            void BeginRenderTarget(VkCommandBuffer commandBuffer);//开始渲染目标
+            bool BeginRenderTarget(VkCommandBuffer commandBuffer);//开始渲染目标
             void EndRenderTarget(VkCommandBuffer commandBuffer);//结束渲染目标
 
             XJVulkanRenderPass *XJGetRenderPass() const { return mRenderPass; }

@@ -190,7 +190,8 @@ namespace XJ
         presentInfo.pResults = nullptr;
 
         VkResult result = vkQueuePresentKHR(mDevice->XJGetFirstPresentQueue()->XJGetQueue(), &presentInfo);
-        mDevice->XJGetFirstPresentQueue()->WaitIdle();
+        // Core/Private/Render/XJRenderer.cpp，第 147 行     XJDebug_Log(vkDeviceWaitIdle(kDevice->XJGetDevice()));//等待每一帧结束之后
+        // mDevice->XJGetFirstPresentQueue()->WaitIdle();
         return result;
     }
 

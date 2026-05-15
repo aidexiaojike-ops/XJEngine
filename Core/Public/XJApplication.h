@@ -14,13 +14,11 @@ namespace XJ
 {
 
  
-
-
     struct AppSettings
     {
         // 可以在这里添加应用程序的配置选项，例如窗口标题、初始窗口大小等
-        int windowWidth = 800;
-        int windowHeight = 600;
+        int windowWidth = 1600;
+        int windowHeight = 1200;
         const char *title = "XJEngine Application";
     };
 

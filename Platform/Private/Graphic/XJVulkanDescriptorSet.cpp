@@ -74,10 +74,11 @@ namespace XJ
             // 执行分配
             VkResult ret = vkAllocateDescriptorSets(mDevice->XJGetDevice(),&allocateInfo, descriptorSets.data());
             XJDebug_Log(ret);
-            if(ret != VK_SUCCESS) // 如果分配失败，清空返回向量（表示无有效句柄）
+            if (ret == VK_SUCCESS && !descriptorSets.empty()) 
             {
-                spdlog::error("Failed to create descriptor set layout: {}", ret);
-                descriptorSets.clear();
+                spdlog::trace("Descriptor set allocated: {}", (void*)descriptorSets[0]);
+            } else {
+                spdlog::error("Descriptor set allocation FAILED, ret={}", static_cast<int>(ret));
             }
 
 

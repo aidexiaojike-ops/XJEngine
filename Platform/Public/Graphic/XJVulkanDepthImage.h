@@ -31,12 +31,14 @@ namespace XJ
             VkImageView XJGetImageView() const { return mDepthImageView; }
             VkFormat XJGetFormat() const { return mFormat; }
 
+
             VkFormat FindDepthFormat() const;
 
             uint32_t XJGetWidth() const { return mWidth; }
             uint32_t XJGetHeight() const { return mHeight; }
 
             bool IsValid() const { return mDepthImage != VK_NULL_HANDLE && mDepthImageView != VK_NULL_HANDLE; }
+
 
         private:
             bool CreateImage();

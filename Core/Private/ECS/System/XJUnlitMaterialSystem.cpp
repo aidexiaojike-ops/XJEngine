@@ -1,4 +1,6 @@
 #include "ECS/System/XJUnlitMaterialSystem.h"
+#include "Graphic/XJVulkanRenderPass.h"
+#include "Graphic/VulkanCommon.h"
 #include "Graphic/XJVulkanPipeline.h"
 #include "Graphic/XJVulkanDescriptorSet.h"
 #include "Graphic/VulkanImageView.h"
@@ -120,7 +122,17 @@ namespace XJ
         };
 
         mPipeline = std::make_shared<XJVulkanPipeline>(kDevice, renderPass, mPipelineLayout.get());
-        mPipeline->EnableDepthTest(VK_TRUE);//启用深度测试
+        // 仅当 render pass 有深度附件时才启用深度测试
+        {
+            bool hasDepth = false;
+            const auto& attachments = renderPass->XJGetAttachments();
+            for (const auto& att : attachments)
+            {
+                if (IsDepthStencilFormat(att.format)) { hasDepth = true; break; }
+            }
+            if (hasDepth)
+                mPipeline->EnableDepthTest(VK_TRUE);
+        }
         mPipeline->SetVertexInputState(kVertexBindings, kVertexAttributes);//设置顶点输入状态
         mPipeline->SetInputAssemblyState(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST);//设置输入装配状态 三角形列表
         mPipeline->SetDynamicState({VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR});
@@ -195,6 +207,7 @@ namespace XJ
 
         if(kMaterialCount > mLastDescriptorSetCount)//做扩容
         {
+            spdlog::info("Unlit: pool resize, count={}→{}", mLastDescriptorSetCount, kMaterialCount);
             ReCreateMaterialDescPool(kMaterialCount);
             bShouldForceUpdateMaterial = true;
         }
@@ -211,7 +224,7 @@ namespace XJ
         uint32_t kEntityIndex = 0; // 实体索引，用于动态UBO偏移计算
         //材质是否更新
         std::vector<bool> kUpdateFlags(kMaterialCount);
-        kView.each([this, &cmdBuffer, kUpdateFlags, bShouldForceUpdateMaterial, &kEntityIndex](const auto &entity, const XJTransformComponent& transComp, const XJUnlitMaterialComponent& matComp)
+        kView.each([this, &cmdBuffer, &kUpdateFlags, bShouldForceUpdateMaterial, &kEntityIndex](const auto &entity, const XJTransformComponent& transComp, const XJUnlitMaterialComponent& matComp)
         {
             auto kMeshMaterials = matComp.XJGetMeshMaterials();
             for(const auto&entry :kMeshMaterials)//要是没有材质酒放弃渲染
@@ -229,16 +242,13 @@ namespace XJ
 
                 if(!kUpdateFlags[kMaterialIndex])
                 {
-                    if(kMaterial->ShouldFlushParams() || bShouldForceUpdateMaterial)
-                    {
-                        UpdateMaterialParamsDescSet(kParamsDescSet, kMaterial);
-                        kMaterial -> FinishFlushParams();
-                    }
-                    if(kMaterial->ShouldFlushResoure() || bShouldForceUpdateMaterial)
-                    {
-                        UpdateMaterialResourceDescSet(kResourceDescSet, kMaterial);
-                        kMaterial -> FinishFlushResoure();
-                    }
+                    UpdateMaterialParamsDescSet(kParamsDescSet, kMaterial);
+                    kMaterial->FinishFlushParams();
+                    
+                     // 无条件更新 texture/sampler descriptor（防止首次创建后从未更新）
+                    UpdateMaterialResourceDescSet(kResourceDescSet, kMaterial);
+                    kMaterial -> FinishFlushResoure();
+                    kUpdateFlags[kMaterialIndex] = true;
                 }
 
                 VkDescriptorSet kDescriptorSet[] = { mFrameUboDescSet, kParamsDescSet, kResourceDescSet};
@@ -248,6 +258,7 @@ namespace XJ
                 ModelPC kPC = {transComp.GetModelMatrix()};
                 //推送常量
                 vkCmdPushConstants(cmdBuffer, mPipelineLayout->XJGetPipelineLayout(), VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(kPC), &kPC);
+                //spdlog::warn("Draw: inst={} matIdx={} meshCnt={}",(void*)this, kMaterialIndex, entry.second.size());
                 for(const auto&kMeshIndex : entry.second)
                 {
                     matComp.XJGetMesh(kMeshIndex)->Draw(cmdBuffer);

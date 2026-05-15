@@ -9,8 +9,8 @@ namespace XJ
         : mDevice(device), mFormat(format), mExtent(extent), mUsage(usage), mSampleCount(sampleCount)
     {
         //默认线性平铺  深度格式使用最优平铺
-        VkImageTiling tiling = VK_IMAGE_TILING_LINEAR;
-        //VkImageTiling tiling = VK_IMAGE_TILING_OPTIMAL;
+        // VkImageTiling tiling = VK_IMAGE_TILING_LINEAR;
+        VkImageTiling tiling = VK_IMAGE_TILING_OPTIMAL;
         bool isDepthStencilFormat = IsDepthStencilFormat(format);
         if(isDepthStencilFormat || sampleCount > VK_SAMPLE_COUNT_1_BIT)
         {
@@ -76,8 +76,11 @@ namespace XJ
     {
         VkBufferImageCopy region{};//COPY 的范围
         region.bufferOffset = 0;
-        region.bufferRowLength = mExtent.width;
-        region.bufferImageHeight = mExtent.height;
+        //region.bufferRowLength = mExtent.width;
+        //region.bufferImageHeight = mExtent.height;
+        //0 表示紧密排列，是 Vulkan 上传贴图最常见写法。
+        region.bufferRowLength = 0;
+        region.bufferImageHeight = 0;
         region.imageSubresource = 
         {
             .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,

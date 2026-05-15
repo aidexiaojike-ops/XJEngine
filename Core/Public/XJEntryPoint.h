@@ -12,6 +12,7 @@ extern XJ::XJApplication* CreateApplicationEntryPoint();
 int main(int argc, char* argv[])
 {
     // 创建应用程序实例
+    
     std::cout <<"--------开始执行-------"<< std::endl;
     XJ::XJApplication* app = CreateApplicationEntryPoint();
     //start

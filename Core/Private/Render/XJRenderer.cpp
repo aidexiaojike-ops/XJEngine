@@ -65,7 +65,14 @@ namespace XJ
         //swapchain 重新创建  render target也做对应的更新
         
         // 等待上一帧的提交围栏完成
-        XJDebug_Log(vkWaitForFences(kDevice->XJGetDevice(), 1, &mSubmitFences[mCurrentBuffer], VK_TRUE, UINT64_MAX));
+        VkResult fenceResult = vkWaitForFences(kDevice->XJGetDevice(), RENDERER_NUM_BUFFER, mSubmitFences.data(), VK_TRUE, UINT64_MAX);//等待上一帧的提交围栏完成
+        if(fenceResult == VK_ERROR_DEVICE_LOST)
+        {
+            spdlog::critical("WaitForFences: 设备丢失，无法继续渲染");
+            return false;
+        }
+        XJDebug_Log(fenceResult);
+        // XJDebug_Log(vkWaitForFences(kDevice->XJGetDevice(), 1, &mSubmitFences[mCurrentBuffer], VK_TRUE, UINT64_MAX));//等待上一帧
         XJDebug_Log(vkResetFences(kDevice->XJGetDevice(), 1, &mSubmitFences[mCurrentBuffer]));
         // 等待图像获取围栏完成（如果存在未完成的获取操作）
         if (mAcquireFences[mCurrentBuffer] != VK_NULL_HANDLE)
@@ -76,6 +83,7 @@ namespace XJ
 
         //交换链 获取图片
         VkResult kResult = kSwapchain->AcquireImage(outImageIndex, mImageAvailableSemaphores[mCurrentBuffer], mAcquireFences[mCurrentBuffer]);
+        //spdlog::trace("STEP2: AcquireImage returned {}", vk_result_string(kResult));  
         if(kResult == VK_ERROR_OUT_OF_DATE_KHR)//交换链过期 需要重建
         {
             XJDebug_Log(vkDeviceWaitIdle(kDevice->XJGetDevice()));//device wait idle 等待设备空闲
@@ -131,7 +139,12 @@ namespace XJ
         kDevice->XJGetFirstGraphicQueue()->Submit(cmdBuffers, { mImageAvailableSemaphores[mCurrentBuffer] }, { mSubmitedSemaphores[mCurrentBuffer] }, mSubmitFences[mCurrentBuffer]);
         //显示 presen
         VkResult ret = kSwapchain->Present(imageIndex, { mSubmitedSemaphores[mCurrentBuffer] });
-        if(ret == VK_SUBOPTIMAL_KHR)
+        if(ret == VK_ERROR_DEVICE_LOST)
+        {
+            spdlog::critical("Present 失败：设备丢失 (VK_ERROR_DEVICE_LOST)");
+            return false;
+        }
+        if(ret == VK_ERROR_OUT_OF_DATE_KHR || ret == VK_SUBOPTIMAL_KHR)
         {
            XJDebug_Log(vkDeviceWaitIdle(kDevice->XJGetDevice()));//device wait idle 等待设备空闲
            VkExtent2D originExtent = { kSwapchain->XJGetWidth(), kSwapchain->XJGetHeight() };
@@ -144,7 +157,13 @@ namespace XJ
                
            }
         }
-        XJDebug_Log(vkDeviceWaitIdle(kDevice->XJGetDevice()));//等待每一帧结束之后
+        else if(ret != VK_SUCCESS)
+        {
+            spdlog::error("Present 失败：{}", vk_result_string(ret));
+            return false;
+        }
+        //latform/Private/Graphic/XJVulkanSwapchain.cpp，第 192-194 行两处 WaitIdle 让每帧变成完全同步（等 GPU 跑完才进入下一帧），严重拖慢性能。
+        // XJDebug_Log(vkDeviceWaitIdle(kDevice->XJGetDevice()));//等待每一帧结束之后
         mCurrentBuffer = (mCurrentBuffer + 1) % RENDERER_NUM_BUFFER;
         return bShouldUpdateTarget;
     

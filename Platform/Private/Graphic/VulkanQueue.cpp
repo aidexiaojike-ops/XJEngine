@@ -24,6 +24,12 @@ namespace XJ
 
     void VulkanQueue::Submit(std::vector<VkCommandBuffer> commandBuffers, const std::vector<VkSemaphore>& waitSemaphores, const std::vector<VkSemaphore>& signalSemaphores, VkFence FrameFence)//提交命令缓冲区到队列
     {
+        //spdlog::warn("Queue Submit");
+        const char* caller = (FrameFence != VK_NULL_HANDLE) ? "PER-FRAME" : "ONE-TIME";
+        /*spdlog::debug("Submit [{}]: cmdBuf={}, waitSem={}, sigSem={}, fence={}",
+            caller, commandBuffers.size(), waitSemaphores.size(),
+            signalSemaphores.size(), (void*)FrameFence);*/
+
         VkPipelineStageFlags WaitDststageMask[] = {VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT};
         VkSubmitInfo submitInfo{};
         submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
@@ -36,7 +42,12 @@ namespace XJ
         submitInfo.signalSemaphoreCount = static_cast<uint32_t>(signalSemaphores.size());
         submitInfo.pSignalSemaphores = signalSemaphores.data();
         
-        XJDebug_Log(vkQueueSubmit(mQueue, 1, &submitInfo, FrameFence));
+        VkResult ret = vkQueueSubmit(mQueue, 1, &submitInfo, FrameFence);
+        if (ret != VK_SUCCESS)
+        {
+            spdlog::error("Submit [{}] FAILED: {}", caller, vk_result_string(ret));
+        }
+        XJDebug_Log(ret);
     }
 
 }

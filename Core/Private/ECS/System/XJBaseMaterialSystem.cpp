@@ -271,6 +271,11 @@ namespace XJ
     }
     void XJBaseMaterialSystem::UpdateDescriptorSets(VkCommandBuffer cmdBuffer)
     {
+        if (mDescriptorSets.empty() || mDescriptorSets[0] == VK_NULL_HANDLE) 
+        {
+            spdlog::error("UpdateDescriptorSets called but mDescriptorSets[0] is null!");
+            return;
+        }
         XJ::XJRenderContext *kRenderContext = XJ::XJApplication::XJGetAppContext()->renderContext;
         XJ::XJVulkanDevice* kDevice = XJGetDevice();
 

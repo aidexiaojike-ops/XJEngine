@@ -41,8 +41,14 @@ namespace XJ
     
     VkCommandBuffer XJVulkanCommandPool::AllocateSingleCommandBuffer() const//分配单个命令缓冲区
     {
-        std::vector<VkCommandBuffer> commandBuffers = AllocateCommandBuffer(1);
-        return commandBuffers[0];
+         static thread_local VkCommandBuffer sStagingCB = VK_NULL_HANDLE;
+        if (sStagingCB == VK_NULL_HANDLE)
+        {
+            std::vector<VkCommandBuffer> buffers = AllocateCommandBuffer(1);
+            sStagingCB = buffers[0];
+        }
+        return sStagingCB;
+    
     }
 
     void XJVulkanCommandPool::BeginCommandBuffer(VkCommandBuffer commandBuffer)//开始记录命令
