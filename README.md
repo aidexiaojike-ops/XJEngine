@@ -173,6 +173,8 @@ Swapchain
 - **GLM**: Mathematics library for graphics
 - **spdlog**: Fast logging library
 - **stb_image**: Image loading library
+- **tinyobjloader**: OBJ model file loader
+- **tinygltf**: glTF 2.0 model file loader (header-only)
 - **Dear ImGui**: Editor UI framework with Vulkan backend
 
 ## 🚀 Building
