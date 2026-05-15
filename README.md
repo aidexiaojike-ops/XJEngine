@@ -27,7 +27,7 @@
 | **Depth Testing** | Complete depth buffer management |
 | **Shader Compilation** | Automatic GLSL to SPIR-V compilation at build time |
 | **Resource Management** | Automatic resource copying to runtime directory |
-| **ImGui Editor UI** | In-engine editor with ImGui, Vulkan-accelerated rendering, docking, multi-viewport support, panel stubs (Viewport, Hierarchy, Inspector, Stats) |
+| **ImGui Editor UI** | In-engine editor with ImGui, Vulkan-accelerated rendering, docking, multi-viewport, Scene/Game preview panels |
 
 ## 📋 Table of Contents
 - [Features](#-key-features)
@@ -152,6 +152,8 @@ Swapchain
 - **XJUIContext**: ImGui context management with GLFW backend, docking, and multi-viewport support
 - **XJEditorRenderer**: Vulkan-accelerated ImGui draw data rendering with descriptor pool management
 - **Multi-Viewport**: Support for floating/detached editor windows via ImGui platform windows
+- **Viewport System**: `XJViewport` base class with off-screen render target, descriptor set, and ImGui texture display
+- **Scene/Game Preview**: `XJScenePreview` and `XJGamePreview` panels for separate scene and game camera views
 
 ## 🛠️ System Requirements
 
@@ -256,8 +258,9 @@ XJEngine/
 │
 ├── Editor/                   # 编辑器模块（ImGui UI）
 │   ├── Public/UI/            # UI 上下文、渲染器、编辑器层
-│   │   └── Panels/           # 编辑器面板（视口、层级、检查器、统计）
-│   ├── Private/UI/           # UI 实现
+│   │   ├── Panels/           # 编辑器面板（视口、层级、检查器、统计）
+│   │   └── Viewports/        # 视口系统（场景预览、游戏预览）
+│   ├── Private/UI/           # UI 实现及视口实现
 │   └── cmake/                # SPIR-V 编译和 Vulkan DLL 部署
 │
 ├── Platform/               # 平台相关代码
