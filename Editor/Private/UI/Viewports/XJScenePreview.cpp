@@ -34,8 +34,7 @@ namespace XJ
         colorAttachment.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
         colorAttachment.finalLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
         colorAttachment.usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
-        //暂时禁用这个功能，[2026-05-14 21:12:32.846] [error] Vulkan 错误：VkResult = -4，
-        //文件：E:\VSCode\XJEngine\Platform\Private\Graphic\VulkanQueue.cpp，行号：50, 函数：ret
+        
         Attachment depthAttachment{};
         depthAttachment.format = depthFormat;
         depthAttachment.samples = VK_SAMPLE_COUNT_1_BIT;

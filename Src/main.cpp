@@ -12,7 +12,7 @@
 #include "Graphic/XJVulkanImage.h"
 
 #include "Render/XJRenderTarget.h"
-#include "Render/XJMesh.h"
+#include "Render/Resource/XJMesh.h"
 #include "Render/XJRenderer.h"
 #include "Render/XJMaterial.h"
 

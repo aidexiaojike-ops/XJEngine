@@ -35,6 +35,7 @@ if(CORE_SOURCES)
     target_link_libraries(Core
         PUBLIC
             Platform
+            tinygltf
     )
     
     # 设置C++标准

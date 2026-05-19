@@ -9,6 +9,7 @@ namespace XJ
     {
         glm::vec3 position; // 位置
         glm::vec2 texcoord0; // 纹理坐标
+        glm::vec3 tangent;  
         glm::vec3 normal;
     };
     

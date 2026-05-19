@@ -7,7 +7,7 @@
 #include "ECS/Component/XJTransformComponent.h"
 
 #include "Graphic/XJVulkanDescriptorSet.h"  // 解决 XJVulkanDescriptorPool 定义
-#include "Render/XJTexture.h"
+#include "Render//Resource/XJTexture.h"          // 解决 XJTexture 定义
 #include "Render/XJSampler.h"
 
 namespace XJ

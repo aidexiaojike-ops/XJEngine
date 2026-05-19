@@ -1,6 +1,7 @@
-#include "Render/XJMesh.h"
+#include "Render/Resource/XJMesh.h"
 #include "Render/XJRenderContext.h"
 #include "XJApplication.h"
+#include <spdlog/spdlog.h>
 
 namespace XJ
 {

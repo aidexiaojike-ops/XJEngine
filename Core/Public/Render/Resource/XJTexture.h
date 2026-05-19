@@ -1,7 +1,10 @@
-#ifndef XJ_TEXTRUE_H
-#define XJ_TEXTRUE_H
+#ifndef XJ_TEXTURE_H 
+#define XJ_TEXTURE_H 
 
 #include "Graphic/VulkanCommon.h"
+#include  <memory>
+#include  <cstdint>
+#include  <string>
 
 namespace XJ
 {
@@ -37,7 +40,7 @@ namespace XJ
             XJTexture(uint32_t width, uint32_t height, RGBAColor *pixels);//图片的长宽高 和像素信息
             ~XJTexture();
 
-            uint32_t XJGetWdidth() const{return mWidth;}
+            uint32_t XJGetWidth() const { return mWidth; }
             uint32_t XJGetHeight() const{return mHeight;}
 
             XJVulkanImage *XJGetImage() const {return mImage.get();}

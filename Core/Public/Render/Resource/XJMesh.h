@@ -3,7 +3,11 @@
 
 #include "Graphic/XJVulkanBuffer.h"
 #include "Graphic/XJVulkanGeometryUtil.h"
+#include  <memory>
+#include  <cstdint>
+#include  <string>
 
+//XJMesh 是 GPU Resource
 namespace XJ
 {
     class XJMesh

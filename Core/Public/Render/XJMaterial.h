@@ -3,7 +3,7 @@
 
 #include "Edit/Mathinclude.h"
 #include "Render/XJSampler.h"
-#include "XJTexture.h"
+#include "Render/Resource/XJTexture.h"
 #include "entt/core/type_info.hpp"
 
 namespace XJ

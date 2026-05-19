@@ -1,7 +1,7 @@
 #ifndef XJ_MATERIAL_COMPONENT_H
 #define XJ_MATERIAL_COMPONENT_H
 
-#include "Render/XJMesh.h"
+#include "Render/Resource/XJMesh.h"
 #include "Render/XJMaterial.h"
 #include "ECS/XJComponent.h"
 

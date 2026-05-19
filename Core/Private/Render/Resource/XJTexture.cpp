@@ -1,11 +1,12 @@
-#include "Render/XJTexture.h"
+#include "Render/Resource/XJTexture.h"
 #include "Graphic/XJVulkanBuffer.h"
 #include "Graphic/XJVulkanImage.h"
 #include "Graphic/VulkanImageView.h"
 #include "Graphic/XJVulkanDevice.h"
 #include "Render/XJRenderContext.h"
 #include "XJApplication.h"
-#
+#include <spdlog/spdlog.h>
+
 
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
@@ -29,6 +30,8 @@ namespace XJ
         CreateImage(size, data);
         // 释放图片数据
         stbi_image_free(data);
+
+        
     }
     XJTexture::XJTexture(uint32_t width, uint32_t height, RGBAColor *pixels) : mWidth(width), mHeight(height) 
     {   
@@ -36,6 +39,7 @@ namespace XJ
         mFormat = VK_FORMAT_R8G8B8A8_UNORM;//mipmap
         size_t size = sizeof(uint8_t) * 4 * mWidth * mHeight;
         CreateImage(size, pixels);
+        
     }
     XJTexture::~XJTexture()
     {
