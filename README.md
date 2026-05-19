@@ -27,6 +27,7 @@
 | **Depth Testing** | Complete depth buffer management |
 | **Shader Compilation** | Automatic GLSL to SPIR-V compilation at build time |
 | **Resource Management** | Automatic resource copying to runtime directory |
+| **Asset System** | Two-layer Asset/Resource architecture, glTF 2.0 importer, asset manager with handle-based caching |
 | **ImGui Editor UI** | In-engine editor with ImGui, Vulkan-accelerated rendering, docking, multi-viewport, Scene/Game preview panels |
 
 ## 📋 Table of Contents
@@ -141,6 +142,14 @@ Swapchain
 - **Push Constants**: `ModelPC` struct for per-draw model and normal matrix updates
 - **Shader Pipeline**: SPIR-V shader compilation and pipeline state management
 
+#### **Asset System**
+- **Two-Layer Architecture**: Assets (CPU-side pure data) separate from Render Resources (GPU-side Vulkan objects)
+- **Asset Manager**: Handle-based cache (`XJAssetManager`) for reuse across multiple render resources
+- **glTF 2.0 Importer**: `XJGltfImporter` parses `.glb`/`.gltf` via tinygltf, extracts vertices/indices/materials
+- **Texture Importer**: `XJTextureImporter` loads PNG/JPG/etc. via stb_image into `XJTextureAsset`
+- **Factories**: `XJMeshFactory` and `XJTextureFactory` convert Assets into GPU Render Resources
+- **Data Flow**: `File → Importer → Asset → Factory → Render Resource → Renderer`
+
 #### **Event System**
 - **Event Types**: Window, keyboard, mouse, and custom events
 - **Event Dispatcher**: Efficient event routing and handling
@@ -253,9 +262,24 @@ XJEngine/
 │   │   └── Render/         # 渲染相关
 │   │       ├── XJMaterial.h
 │   │       ├── XJSampler.h
-│   │       ├── XJTexture.h
 │   │       ├── XJRenderTarget.h
-│   │       └── XJRenderer.h
+│   │       ├── XJRenderer.h
+│   │       └── Resource/    # GPU 渲染资源
+│   │           ├── XJMesh.h
+│   │           ├── XJMeshFactory.h
+│   │           ├── XJTexture.h
+│   │           └── XJTextureFactory.h
+│   │   └── Asset/           # 资产管理（CPU 侧）
+│   │       ├── XJAsset.h
+│   │       ├── XJAssetManager.h
+│   │       ├── XJMeshAsset.h
+│   │       ├── XJTextureAsset.h
+│   │       ├── XJMaterialAsset.h
+│   │       ├── Importer/    # 格式导入器
+│   │       │   ├── XJGltfImporter.h
+│   │       │   ├── XJTextureImporter.h
+│   │       │   └── XJMaterialImporter.h
+│   │       └── Serialization/ # 场景序列化
 │   └── Private/            # 私有实现
 │
 ├── Editor/                   # 编辑器模块（ImGui UI）
