@@ -149,6 +149,7 @@ Swapchain
 - **Texture Importer**: `XJTextureImporter` loads PNG/JPG/etc. via stb_image into `XJTextureAsset`
 - **Factories**: `XJMeshFactory` and `XJTextureFactory` convert Assets into GPU Render Resources
 - **Data Flow**: `File → Importer → Asset → Factory → Render Resource → Renderer`
+- **Scene Serialization**: `XJSceneSerialization::LoadSceneFromGltf` loads full glTF scenes into ECS with entities, meshes, and materials
 
 #### **Event System**
 - **Event Types**: Window, keyboard, mouse, and custom events
@@ -260,7 +261,6 @@ XJEngine/
 │   │   │       ├── XJUnlitMaterialSystem.h
 │   │   │       └── XJCameraControllerSystem.h
 │   │   └── Render/         # 渲染相关
-│   │       ├── XJMaterial.h
 │   │       ├── XJSampler.h
 │   │       ├── XJRenderTarget.h
 │   │       ├── XJRenderer.h
@@ -268,7 +268,9 @@ XJEngine/
 │   │           ├── XJMesh.h
 │   │           ├── XJMeshFactory.h
 │   │           ├── XJTexture.h
-│   │           └── XJTextureFactory.h
+│   │           ├── XJTextureFactory.h
+│   │           ├── XJMaterial.h
+│   │           └── XJMaterialFactory.h
 │   │   └── Asset/           # 资产管理（CPU 侧）
 │   │       ├── XJAsset.h
 │   │       ├── XJAssetManager.h
