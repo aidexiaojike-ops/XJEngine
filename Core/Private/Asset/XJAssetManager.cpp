@@ -1,5 +1,4 @@
 #include "Asset/XJAssetManager.h"
-#include "Asset/XJMeshAsset.h"
 
 namespace XJ
 {

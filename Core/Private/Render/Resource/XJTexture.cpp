@@ -6,33 +6,10 @@
 #include "Render/XJRenderContext.h"
 #include "XJApplication.h"
 #include <spdlog/spdlog.h>
-
-
-#define STB_IMAGE_IMPLEMENTATION
-#include "stb_image.h"
+#include "Asset/Importer/XJTextureImporter.h"
 
 namespace XJ
 {
-    XJTexture::XJTexture(const std::string &filePath)
-    {
-        int numChannel;//贴图通道
-         // 加载图片数据，STBI_rgb_alpha 表示加载为 RGBA 格式
-        uint8_t *data =  stbi_load(filePath.c_str(), reinterpret_cast<int *>(&mWidth), reinterpret_cast<int *>(&mHeight), &numChannel, STBI_rgb_alpha);
-        if(!data)
-        {
-            spdlog::error("Can not load this image: {0}", filePath);
-            return;
-        }
-
-        mFormat = VK_FORMAT_R8G8B8A8_UNORM;
-        size_t size = sizeof(uint8_t) * 4 * mWidth * mHeight;  // 计算图片的总大小（RGBA）
-        //清理图片
-        CreateImage(size, data);
-        // 释放图片数据
-        stbi_image_free(data);
-
-        
-    }
     XJTexture::XJTexture(uint32_t width, uint32_t height, RGBAColor *pixels) : mWidth(width), mHeight(height) 
     {   
         // 设置纹理的格式为 VK_FORMAT_R8G8B8A8_UNORM（标准 RGBA 格式）

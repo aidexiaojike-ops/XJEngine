@@ -19,6 +19,7 @@
 #define XJ_RES_MATERIAL_DIR                     XJ_RES_ROOT_DIR"Material/"
 #define XJ_RES_TEXTURE_DIR                      XJ_RES_ROOT_DIR"Texture/"
 #define XJ_RES_SCRNE_DIR                        XJ_RES_ROOT_DIR"Scene/"
+#define XJ_RES_MESH_DIR                         XJ_RES_ROOT_DIR"Mesh/"
 
 namespace XJ
 {  

@@ -14,6 +14,9 @@
 #include "Graphic/VulkanPhysicalDevices.h"//获取物理设备信息
 #include "ECS/Component/XJCameraComponent.h"//获取摄像机组件信息
 
+#include "Asset/Importer/XJTextureImporter.h"
+#include "Render/Resource/XJTextureFactory.h"
+
 namespace XJ
 {
  
@@ -92,8 +95,10 @@ namespace XJ
         mGlobalBuffer = std::make_shared<XJ::XJVulkanBuffer>(kDevice, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT, sizeof(mGlobalUbo),nullptr,true);
         mInstanceBuffer = std::make_shared<XJ::XJVulkanBuffer>(kDevice, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT, MAX_ENTITIES * mDynamicAlignment, nullptr, true);
         //贴图
-        mTextureA = std::make_shared<XJ::XJTexture>(XJ_RES_TEXTURE_DIR"R.png");
-        mTextureB = std::make_shared<XJ::XJTexture>(XJ_RES_TEXTURE_DIR"R-C.jpeg");
+        auto kAssetA = XJTextureImporter::ImportTexture(XJ_RES_TEXTURE_DIR"R.png");
+        if (kAssetA) mTextureA = XJTextureFactory::CreateTextureFromAsset(*kAssetA);
+        auto kAssetB = XJTextureImporter::ImportTexture(XJ_RES_TEXTURE_DIR"R-C.jpeg");
+        if (kAssetB) mTextureB = XJTextureFactory::CreateTextureFromAsset(*kAssetB);
         // 新增：初始化采样器
         mSamplerA = std::make_shared<XJ::XJSampler>(VK_FILTER_LINEAR, VK_SAMPLER_ADDRESS_MODE_REPEAT);
         mSamplerB = std::make_shared<XJ::XJSampler>(VK_FILTER_LINEAR, VK_SAMPLER_ADDRESS_MODE_REPEAT);

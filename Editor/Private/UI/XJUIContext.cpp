@@ -10,6 +10,7 @@ namespace XJ
         ImGui::CreateContext();//创建 ImGui 上下文
 
         ImGuiIO& kIo = ImGui::GetIO();
+        kIo.IniFilename = "imgui.ini"; //固定路径
         kIo.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;       // Enable Keyboard Controls  键盘输入
         kIo.ConfigFlags |= ImGuiConfigFlags_DockingEnable;           // Enable Docking            停靠
         kIo.ConfigFlags |= ImGuiConfigFlags_ViewportsEnable;         // Enable Multi-Viewport / Platform Windows  多视口/平台窗口

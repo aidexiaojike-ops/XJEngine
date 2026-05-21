@@ -2,7 +2,7 @@
 #define XJ_MATERIAL_COMPONENT_H
 
 #include "Render/Resource/XJMesh.h"
-#include "Render/XJMaterial.h"
+#include "Render/Resource/XJMaterial.h"
 #include "ECS/XJComponent.h"
 
 namespace XJ

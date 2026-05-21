@@ -1,25 +1,12 @@
 #include "Asset/Importer/XJGltfImporter.h"
-#include <tiny_gltf.h>
+// #include <tiny_gltf.h>
 #include "spdlog/spdlog.h"
 
 
 namespace XJ
 {
-    std::shared_ptr<XJMeshAsset> XJGltfImporter::ImportMesh(const std::string& path)
-    {
-        tinygltf::Model model;// 创建 tinygltf 模型对象
-        tinygltf::TinyGLTF loader;// 创建 tinygltf 加载器对象
-        std::string err, warn;// 用于存储加载过程中的错误和警告信息
-
-        //bool kRet = loader.LoadASCIIFromFile(&model, &err, &warn, path);// .gltf 是文本JSON + 外部资源（bin, textures），加载可能需要多个文件。
-        bool kRet = loader.LoadBinaryFromFile(&model, &err, &warn, path);// .glb 是二进制容器，包含所有数据在一个文件中，更紧凑，加载更快，只需要单个文件。
-        if (!warn.empty()) spdlog::warn("glTF: {}", warn);
-        if (!err.empty())  spdlog::error("glTF: {}", err);
-        if (!kRet) {
-            spdlog::error("Failed to load glTF: {}", path);
-            return nullptr;
-        }
-
+    std::shared_ptr<XJMeshAsset> XJGltfImporter::ExtractMesh(const tinygltf::Model& model, int meshIndex)
+    {   
         auto kMeshAsset = std::make_shared<XJMeshAsset>();
         kMeshAsset->mHandle = XJAsset::GenerateHandle();
         kMeshAsset->mType = XJAssetType::Mesh;
@@ -109,4 +96,18 @@ namespace XJ
         // kReshAsset->mHandle = XJAsset::GenerateHandle();
         return kMeshAsset;
     }
+
+    bool XJGltfImporter::LoadMeshAsset(const std::string& path)
+    {
+        tinygltf::TinyGLTF loader;
+        std::string err, warn;
+        if (!loader.LoadBinaryFromFile(&mModel, &err, &warn, path))
+        {
+            spdlog::error("XJGltfImporter::Load failed: {}", path);
+            return false;
+        }
+        mFilePath = path;
+        return true;
+    }
+   
 }

@@ -36,7 +36,6 @@ namespace XJ
             
           
         public:
-            XJTexture(const std::string &filePath);//传入文件
             XJTexture(uint32_t width, uint32_t height, RGBAColor *pixels);//图片的长宽高 和像素信息
             ~XJTexture();
 

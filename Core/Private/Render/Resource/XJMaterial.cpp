@@ -1,9 +1,8 @@
-#include "Render/XJMaterial.h"
+#include "Render/Resource/XJMaterial.h"
 
 
 namespace XJ
 {
-    XJMaterialFactory XJMaterialFactory::s_MaterialFactory{};
 
     bool XJMaterial::HasTexture(uint32_t id) const 
     {
@@ -23,7 +22,7 @@ namespace XJ
         return nullptr;
     }
 
-    void XJMaterial::XJSetTextureView(uint32_t id, XJTexture *texture, XJSampler *sampler)//更新纹理和采样方式
+    void XJMaterial::XJSetTextureView(uint32_t id, const std::shared_ptr<XJTexture>& texture, const std::shared_ptr<XJSampler>& sampler)//更新纹理和采样方式
     {
         if(HasTexture(id))
         {

@@ -6,6 +6,7 @@
 #include "Graphic/VulkanImageView.h"
 #include "Graphic/XJVulkanFrameBuffer.h"//获取帧缓冲信息
 #include "Render/XJRenderTarget.h"//获取渲染目标信息
+#include "Render/Resource/XJMaterialFactory.h"
 #include "Graphic/XJVulkanFrameBuffer.h"
 #include "XJApplication.h"
 

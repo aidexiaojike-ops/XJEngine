@@ -14,8 +14,14 @@
 #include "Render/XJRenderTarget.h"
 #include "Render/Resource/XJMesh.h"
 #include "Render/XJRenderer.h"
-#include "Render/XJMaterial.h"
+#include "Render/Resource/XJMaterial.h"
+#include "Render/Resource/XJMaterialFactory.h"
 
+#include "Asset/Importer/XJGltfImporter.h"
+#include "Render/Resource/XJMeshFactory.h"
+#include "Asset/Importer/XJTextureImporter.h"
+#include "Render/Resource/XJTextureFactory.h"
+#include "Asset/Serialization/XJSceneSerialization.h"
 
 #include "ECS/System/XJBaseMaterialSystem.h"
 #include "ECS/XJScene.h"
@@ -31,6 +37,7 @@
 
 #include <iostream>
 #include <chrono>
+
 
 
     
@@ -117,6 +124,14 @@ protected:
                 mCameraController->OnMouseScroll(event.mYOffset, kCameraEntity);
             }
         });
+        //导入模型
+        auto kImporter = std::make_shared<XJ::XJGltfImporter>();
+        if (kImporter->LoadMeshAsset("Resource/Mesh/Monkey.glb"))
+        {
+            // 保持 importer，在 OnSceneInit 中使用
+            mGltfImporter = kImporter;
+        }
+        
     
         //geometry util 
         std::vector<XJ::XJVulkanVertex> mVertices;
@@ -134,7 +149,8 @@ protected:
         mWhiteTexture = std::make_shared<XJ::XJTexture>(1,1, &kWhitePixel);//创建白色纹理
         mBlackTexture = std::make_shared<XJ::XJTexture>(1,1, &kBlackPixel);//创建黑色纹理
         mMultiPixelTexture = std::make_shared<XJ::XJTexture>(2,2, kMultiPixel);//创建多像素纹理
-        mFileTexture = std::make_shared<XJ::XJTexture>(XJ_RES_TEXTURE_DIR"R-C.jpeg");//创建文件纹理
+        auto kAsset = XJ::XJTextureImporter::ImportTexture(XJ_RES_TEXTURE_DIR"R-C.jpeg");
+        if (kAsset) mFileTexture = XJ::XJTextureFactory::CreateTextureFromAsset(*kAsset);//创建文件纹理
         // 创建默认采样器
         mDefaultSampler = std::make_shared<XJ::XJSampler>(VK_FILTER_NEAREST, VK_SAMPLER_ADDRESS_MODE_REPEAT);//创建默认采样器
 
@@ -172,10 +188,12 @@ protected:
     {
         XJ::XJEntity* kPreviewCam = scene->CreateEntity("PreviewCamera");
         kPreviewCam->AddComponent<XJ::XJCameraComponent>();
+        kPreviewCam->GetComponent<XJ::XJCameraComponent>().XJSetPosition(glm::vec3(0.0f, 1.5f, 3.0f));
         mScenePreview->SetCamera(kPreviewCam);
 
         XJ::XJEntity *kGameCam = scene->CreateEntity("CameraEntity");//创建一个实体
         kGameCam->AddComponent<XJ::XJCameraComponent>();//添加摄像机组件
+        kGameCam->GetComponent<XJ::XJCameraComponent>().XJSetPosition(glm::vec3(0.0f, 1.0f, 3.0f));
         mGamePreview->SetCamera(kGameCam);
         // kCameraEntity->AddComponent<XJ::XJTransformComponent>();  // 添加这行
         mRenderTarget->XJSetCamera(kGameCam);//将摄像机实体设置到渲染目标中，以便在渲染过程中使用摄像机信息
@@ -190,23 +208,31 @@ protected:
         float x = 0.f;
         for(int i = 0; i < mSmallCubeSize.x; ++i, x += 0.5f)
         {
-            float y = 0.f;
-            for(int j = 0; j < mSmallCubeSize.y; ++j, y += 0.5f)
-            {
-                float z = 0.f;
-                for(int k = 0; k < mSmallCubeSize.z; ++k, z += 0.5f)
-                {
-                    XJ::XJEntity* kCube = scene->CreateEntity("CubeEntityA");//创建一个实体
+          float y = 0.f;
+          for(int j = 0; j < mSmallCubeSize.y; ++j, y += 0.5f)
+          {
+              float z = 0.f;
+              for(int k = 0; k < mSmallCubeSize.z; ++k, z += 0.5f)
+              {
+                  XJ::XJEntity* kCube = scene->CreateEntity("CubeEntityA");//创建一个实体
 
-                    auto &kTransformComp = kCube->GetComponent<XJ::XJTransformComponent>();//添加变换组件
-                    kTransformComp.position = glm::vec3(x, y, z);
-                    kTransformComp.UpdateModelMatrix(); // 新增：立即更新模型矩阵
+                  auto &kTransformComp = kCube->GetComponent<XJ::XJTransformComponent>();//添加变换组件
+                  kTransformComp.position = glm::vec3(x, y, z);
+                  kTransformComp.UpdateModelMatrix(); // 新增：立即更新模型矩阵
 
-                    index = (index + 1) % 2;
-                    mSmallCubes.push_back(kCube);//将立方体实体添加到列表中
-                }
-            }
+                  index = (index + 1) % 2;
+                  mSmallCubes.push_back(kCube);//将立方体实体添加到列表中
+              }
+          }
         }
+        //添加模型
+        //资产导入
+        if (mGltfImporter)
+        {
+            XJ::XJSceneSerialization::InstantiateGltfScene(
+                scene, *mGltfImporter, mWhiteTexture, mDefaultSampler);
+        }
+        
 
     }
     void OnSceneDestroy(XJ::XJScene *scene) override
@@ -251,14 +277,14 @@ protected:
 
         uint64_t kFrameIndex = XJGetFrameIndex();
         //在这里可以添加每帧更新的代码，例如处理输入、更新游戏逻
-        XJ::XJTexture *kTextures[] = {mWhiteTexture.get(), mBlackTexture.get(), mMultiPixelTexture.get(), mFileTexture.get()};//纹理数组
+        std::shared_ptr<XJ::XJTexture> kTextures[] = {mWhiteTexture, mBlackTexture, mMultiPixelTexture, mFileTexture};//纹理数组
         if(kFrameIndex % 10 == 0 && mUnlitMaterials.size() < mSmallCubes.size()) // 每10帧创建一个新的材质，直到达到1000个
         {
             auto kMaterial = XJ::XJMaterialFactory::GetInstance()->CreateMaterial<XJ::XJUnlitMaterial>();//创建基础材质 
             kMaterial->XJSetBaseColorA(glm::linearRand(glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(1.0,1.0f,1.0f)));//随机颜色
             kMaterial->XJSetBaseColorB(glm::linearRand(glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(1.0,1.0f,1.0f)));//随机颜色
-            kMaterial->XJSetTextureView(XJ::UNLIT_MAT_BASE_COLOR_A,kTextures[glm::linearRand(0, (int)ARRAY_SIZE(kTextures)-1)], mDefaultSampler.get());//随机纹理
-            kMaterial->XJSetTextureView(XJ::UNLIT_MAT_BASE_COLOR_B,kTextures[glm::linearRand(0, (int)ARRAY_SIZE(kTextures)-1)], mDefaultSampler.get());//随机纹理
+            kMaterial->XJSetTextureView(XJ::UNLIT_MAT_BASE_COLOR_A,kTextures[glm::linearRand(0, (int)ARRAY_SIZE(kTextures)-1)], mDefaultSampler);//随机纹理
+            kMaterial->XJSetTextureView(XJ::UNLIT_MAT_BASE_COLOR_B,kTextures[glm::linearRand(0, (int)ARRAY_SIZE(kTextures)-1)], mDefaultSampler);//随机纹理
             kMaterial->UpdateTextureViewEnable(XJ::UNLIT_MAT_BASE_COLOR_A, glm::linearRand(0, 1) > 0.5f);//随机启用
             kMaterial->UpdateTextureViewEnable(XJ::UNLIT_MAT_BASE_COLOR_B, glm::linearRand(0, 1) > 0.5f);//随机启用
             kMaterial->XJSetMixValue(glm::linearRand(0.1f, 0.8f));//随机混合值
@@ -269,9 +295,9 @@ protected:
                 mSmallCubes[kCubeIndex]->AddComponent<XJ::XJUnlitMaterialComponent>();//添加基础材质组件
             }
             auto &kMatComp = mSmallCubes[kCubeIndex]->GetComponent<XJ::XJUnlitMaterialComponent>();//获取基础材质组件
-            kMatComp.AddMesh(mMesh.get(), kMaterial);//将材质与网格关联
+            kMatComp.AddMesh(mMesh.get(), kMaterial.get());//将材质与网格关联
 
-            mUnlitMaterials.push_back(kMaterial);//将材质添加到列表中
+            mUnlitMaterials.push_back(kMaterial.get());//将材质添加到列表中
 
             //spdlog::info("Unlit Material Count:{0}", mUnlitMaterials.size());
         }
@@ -408,11 +434,11 @@ protected:
 
    
 private:
+    //渲染准备
     std::shared_ptr<XJ::XJVulkanRenderPass>             mRenderPass;
     std::shared_ptr<XJ::XJRenderTarget>                 mRenderTarget;
     std::shared_ptr<XJ::XJRenderer>                     mRender;
-
-   
+    //渲染
     std::vector<VkCommandBuffer>                        mCommandBuffers;
     std::shared_ptr<XJ::XJVulkanGeometryUtil>           mGeometryUtil;
     std::shared_ptr<XJ::XJMesh>                         mMesh;
@@ -423,10 +449,10 @@ private:
     std::shared_ptr<XJ::XJSampler>                      mDefaultSampler;//默认采样器
 
     std::vector<XJ::XJUnlitMaterial*>                   mUnlitMaterials;//基础材质系统使用的无光照材质列表
-
+    //时间
     std::shared_ptr<XJ::XJEventTesting>                 mEventTesting;
     std::shared_ptr<XJ::XJEventObserver>                mOvserver;
-
+    //UI
     std::unique_ptr<XJ::XJUIContext>                    mUIContext;
     std::unique_ptr<XJ::XJEditorRenderer>               mEditorRenderer;
     std::unique_ptr<XJ::XJScenePreview>                 mScenePreview;
@@ -434,14 +460,14 @@ private:
 
     // 摄像机控制器
     std::unique_ptr<XJ::XJCameraControllerSystem>       mCameraController;
+    
+    std::shared_ptr<XJ::XJGltfImporter>                 mGltfImporter;
 
     VkSampleCountFlagBits mSampleCount = VK_SAMPLE_COUNT_1_BIT; // 多重采样数量
 
     glm::ivec3 mSmallCubeSize{10 ,10 ,10};//立方体尺寸
     std::vector<XJ::XJEntity*> mSmallCubes;//立方体实体列表
    
-    
-
 };
 
 XJ::XJApplication* CreateApplicationEntryPoint()
