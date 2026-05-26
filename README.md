@@ -27,7 +27,7 @@
 | **Depth Testing** | Complete depth buffer management |
 | **Shader Compilation** | Automatic GLSL to SPIR-V compilation at build time |
 | **Resource Management** | Automatic resource copying to runtime directory |
-| **Asset System** | Two-layer Asset/Resource architecture, glTF 2.0 importer, asset manager with handle-based caching |
+| **Asset System** | Two-layer Asset/Resource architecture, glTF 2.0 importer, scene assets, asset registry, JSON serialization |
 | **ImGui Editor UI** | In-engine editor with ImGui, Vulkan-accelerated rendering, docking, multi-viewport, Scene/Game preview panels |
 
 ## 📋 Table of Contents
@@ -144,12 +144,13 @@ Swapchain
 
 #### **Asset System**
 - **Two-Layer Architecture**: Assets (CPU-side pure data) separate from Render Resources (GPU-side Vulkan objects)
-- **Asset Manager**: Handle-based cache (`XJAssetManager`) for reuse across multiple render resources
-- **glTF 2.0 Importer**: `XJGltfImporter` parses `.glb`/`.gltf` via tinygltf, extracts vertices/indices/materials
-- **Texture Importer**: `XJTextureImporter` loads PNG/JPG/etc. via stb_image into `XJTextureAsset`
-- **Factories**: `XJMeshFactory` and `XJTextureFactory` convert Assets into GPU Render Resources
+- **Asset Registry**: Handle-based asset database (`XJAssetRegistry`) with JSON persistence
+- **Scene Assets**: Disk-side scene data (`XJSceneAsset`) with entities, transforms, meshes, cameras, lights
+- **Scene Instantiator**: `XJSceneInstantiator` converts scene assets into live ECS entities with hierarchy
+- **Scene Serializer**: `XJSceneAssetSerializer` reads/writes `.xjscene` files via nlohmann/json
+- **glTF 2.0 Importer**: `XJModelImporter` parses `.glb`/`.gltf` via tinygltf
+- **Factories**: `XJMeshFactory`, `XJTextureFactory`, `XJMaterialFactory` convert Assets into GPU Render Resources
 - **Data Flow**: `File → Importer → Asset → Factory → Render Resource → Renderer`
-- **Scene Serialization**: `XJSceneSerialization::LoadSceneFromGltf` loads full glTF scenes into ECS with entities, meshes, and materials
 
 #### **Event System**
 - **Event Types**: Window, keyboard, mouse, and custom events
@@ -186,6 +187,7 @@ Swapchain
 - **tinyobjloader**: OBJ model file loader
 - **tinygltf**: glTF 2.0 model file loader (header-only)
 - **Dear ImGui**: Editor UI framework with Vulkan backend
+- **nlohmann/json**: JSON serialization for assets and scenes
 
 ## 🚀 Building
 
@@ -273,15 +275,21 @@ XJEngine/
 │   │           └── XJMaterialFactory.h
 │   │   └── Asset/           # 资产管理（CPU 侧）
 │   │       ├── XJAsset.h
+│   │       ├── XJAssetRef.h
 │   │       ├── XJAssetManager.h
+│   │       ├── XJAssetRegistry.h
 │   │       ├── XJMeshAsset.h
 │   │       ├── XJTextureAsset.h
 │   │       ├── XJMaterialAsset.h
+│   │       ├── XJSceneAsset.h
 │   │       ├── Importer/    # 格式导入器
-│   │       │   ├── XJGltfImporter.h
+│   │       │   ├── XJModelImporter.h
 │   │       │   ├── XJTextureImporter.h
 │   │       │   └── XJMaterialImporter.h
-│   │       └── Serialization/ # 场景序列化
+│   │       ├── Serialization/ # 场景序列化
+│   │       │   └── XJSceneAssetSerializer.h
+│   │       └── Instantiation/ # 场景实例化
+│   │           └── XJSceneInstantiator.h
 │   └── Private/            # 私有实现
 │
 ├── Editor/                   # 编辑器模块（ImGui UI）
@@ -305,8 +313,9 @@ XJEngine/
 ├── Resource/               # 资源文件
 │   ├── Shader/             # GLSL 着色器 (BaseVertex, Descriptor, Unlit)
 │   ├── Texture/            # 纹理图像
-│   ├── Mesh/               # 网格数据
-│   └── Config/             # 配置文件
+│   ├── Mesh/               # 网格数据 (.glb)
+│   ├── Config/             # 配置文件 (AssetRegistry.json)
+│   └── Scenes/             # 场景文件 (.xjscene)
 │
 ├── bin/                    # 运行时输出目录（构建后生成）
 │   ├── Resource/           # 复制的资源文件
