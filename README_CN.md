@@ -81,11 +81,13 @@ File -> Importer -> Asset (CPU) -> Factory -> Resource (GPU) -> Renderer
 - **Resource 层**：GPU 资源，例如 `VkBuffer`、`VkImage`
 - **场景系统**：`.xjscene` -> `XJSceneAssetSerializer` -> `XJSceneInstantiator` -> ECS 实体
 - **注册表**：`XJAssetRegistry` 用于持久化资产句柄与元数据
+- **引导程序**：`XJAssetBootstrap` 管理默认资产注册和场景创建
+- **运行时工具**：`XJSceneRuntimeUtil` 提供主摄像机查找等运行时辅助功能
 
 ### 主要模块
 
 - **材质系统**：`XJBaseMaterialSystem`、`XJUnlitMaterialSystem`
-- **资产系统**：`XJModelImporter`、`XJTextureImporter`、`XJAssetRegistry`
+- **资产系统**：`XJModelImporter`、`XJTextureImporter`、`XJAssetRegistry`、`XJAssetBootstrap`、`XJSceneRuntimeUtil`
 - **编辑器系统**：`XJUIContext`、`XJEditorRenderer`、`XJScenePreview`、`XJGamePreview`
 
 ## 🛠️ 构建
@@ -116,6 +118,10 @@ make -j$(nproc)
 XJEngine/
 ├── Core/                    # 引擎核心：ECS、渲染、资产
 │   ├── Public/Asset/        # Asset 层（CPU）
+│   │   ├── Importer/        # 模型/纹理/材质导入器
+│   │   ├── Serialization/   # 场景序列化（.xjscene）
+│   │   ├── Instantiation/   # 场景实例化器
+│   │   └── Register/        # 资产引导注册
 │   ├── Public/Render/       # 渲染接口
 │   └── Public/Render/Resource/ # GPU 资源
 ├── Platform/                # Vulkan、GLFW、External
