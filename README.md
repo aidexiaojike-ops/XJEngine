@@ -1,9 +1,10 @@
 # XJEngine
 
-<p align="center">
-  <a href="?lang=en"><img src="https://img.shields.io/badge/Language-English-blue?style=for-the-badge" alt="English"></a>
-  <a href="?lang=zh"><img src="https://img.shields.io/badge/Language-中文-red?style=for-the-badge" alt="中文"></a>
-</p>
+<div align="center">
+
+**[🇺🇸 English](#-key-features--核心特性)** &nbsp;&nbsp;|&nbsp;&nbsp; **[🇨🇳 中文版本（点击展开）](#chinese)**
+
+</div>
 
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20Linux%20%7C%20macOS-brightgreen)](https://github.com/aidexiaojike-ops/XJEngine)
@@ -13,6 +14,80 @@
 
 > **EN:** XJEngine is a lightweight modern game engine built with Vulkan and ECS architecture.  
 > **CN:** XJEngine 是一个基于 Vulkan 和 ECS 架构的轻量级现代游戏引擎。
+
+<a id="chinese"></a>
+<details>
+<summary><b>📖 中文版本 / Chinese Version（点击展开）</b></summary>
+<br>
+
+## ✨ 核心特性
+
+| 特性 | 描述 |
+|------|------|
+| **Vulkan 渲染器** | 多平台现代图形 API，GPU 驱动渲染管线 |
+| **ECS 架构** | 基于 EnTT 的高性能实体组件系统 |
+| **事件驱动系统** | 完整的窗口、鼠标、键盘事件处理 |
+| **模块化材质系统** | 可扩展的纹理/采样器/UBO 管线 |
+| **Unlit 材质系统** | 完整无光照管线：Frame UBO + 材质参数 UBO + 纹理混合 |
+| **程序化纹理** | 从像素数据生成纹理，无需外部文件 |
+| **摄像机控制** | 轨道和自由摄像机模式（自由模式为默认） |
+| **资产系统** | 双层 Asset/Resource 架构，glTF 2.0 导入，场景资产，JSON 序列化 |
+| **ImGui 编辑器** | 内置编辑器，支持 Docking、多视口、场景/游戏预览面板 |
+| **Shader 编译** | 编译时自动 GLSL → SPIR-V |
+| **nlohmann/json** | JSON 序列化支持 |
+
+## 🚀 快速开始
+
+```bash
+git clone https://github.com/aidexiaojike-ops/XJEngine.git
+cd XJEngine
+mkdir build && cd build
+cmake .. -DCMAKE_BUILD_TYPE=Release
+cmake --build . --config Release
+cd ../bin && ./XJEngine
+```
+
+**前置要求：** Vulkan SDK、CMake 3.10+、C++17 编译器
+
+## 🏗️ 依赖库
+
+| 库 | 用途 |
+|----|------|
+| GLFW | 窗口和输入管理 |
+| EnTT | 高性能 ECS |
+| GLM | 图形数学库 |
+| spdlog | 日志库 |
+| stb_image | 图像加载 |
+| tinyobjloader | OBJ 模型加载 |
+| tinygltf | glTF 2.0 模型加载 |
+| Dear ImGui | 编辑器 UI |
+| nlohmann/json | JSON 序列化 |
+
+## 📁 项目架构
+
+```
+File → Importer → Asset (CPU) → Factory → Resource (GPU) → Renderer
+```
+
+- **Asset 层：** 纯数据（顶点、像素、材质参数），由 XJAssetRegistry 管理
+- **Resource 层：** GPU 对象（VkBuffer、VkImage），由 Factory 创建
+- **场景系统：** `.xjscene` JSON 文件 → XJSceneInstantiator → ECS 实体
+
+## 📂 核心目录
+
+```
+XJEngine/
+├── Core/          # 引擎核心（ECS、渲染、资产）
+├── Platform/      # 平台抽象（Vulkan、GLFW、External）
+├── Editor/        # 编辑器模块（ImGui UI、视口）
+├── Src/           # 应用入口（main.cpp）
+├── Resource/      # 资源文件（Shader、Mesh、Scenes、Config）
+└── bin/           # 运行时输出
+```
+
+---
+
+</details>
 
 ## ✨ Key Features / 核心特性
 
