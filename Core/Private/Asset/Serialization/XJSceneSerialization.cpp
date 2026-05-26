@@ -99,4 +99,5 @@ namespace XJ
                 ProcessNode(outScene, model, root, glm::mat4(1.0f), defaultTex, defaultSampler);
         return true;
     }
+    
 }

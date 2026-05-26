@@ -16,7 +16,8 @@ namespace XJ
     class XJTexture;
     class XJSampler;
     class XJGltfImporter;
-
+    class XJSceneAsset;
+    
     class XJSceneSerialization
     {
         public:
@@ -26,6 +27,7 @@ namespace XJ
                                          const std::shared_ptr<XJTexture>&  defaultTex,
                                          const std::shared_ptr<XJSampler>&  defaultSampler
                                          );
+            static std::shared_ptr<XJSceneAsset> CreateDefaultSceneAsset();
         private:
             // 递归处理一个 glTF node（包括子节点）
             static void ProcessNode(XJScene* scene,
@@ -34,7 +36,9 @@ namespace XJ
                                 const std::shared_ptr<XJTexture>& defaultTex,
                                 const std::shared_ptr<XJSampler>& defaultSampler);
                                 
-            static std::unordered_map<std::string, std::shared_ptr<XJMesh>> mMeshCache;        
+            static std::unordered_map<std::string, std::shared_ptr<XJMesh>> mMeshCache;  
+            
+            
             
     };
 }

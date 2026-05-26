@@ -26,15 +26,15 @@ namespace XJ
 
     class XJSceneInstantiator
     {
-    public:
-        static bool Instantiate(const XJSceneAsset& asset, XJScene& outScene, XJSceneInstantiateContext* context = nullptr);
-
-    private:
-        static XJEntity* CreateEntity(const XJSceneEntityData& data, XJScene& scene, XJSceneInstantiateContext& context);
-        static void ApplyTransform(const XJSceneEntityData& data, XJEntity& entity);
-        static void ApplyMeshRenderer(const XJSceneEntityData& data, XJEntity& entity, XJSceneInstantiateContext& context);
-        static void ApplyCamera(const XJSceneEntityData& data, XJEntity& entity);
-        static void ApplyHierarchy(const XJSceneAsset& asset, XJSceneInstantiateContext& context);
+        public:
+            static bool Instantiate(const XJSceneAsset& asset, XJScene& outScene, XJSceneInstantiateContext* context = nullptr);
+            static XJEntity* FindInstantiatedEntity(const XJSceneInstantiateContext& ctx, XJUUID id);
+        private:
+            static XJEntity* CreateEntity(const XJSceneEntityData& data, XJScene& scene, XJSceneInstantiateContext& context);
+            static void ApplyTransform(const XJSceneEntityData& data, XJEntity& entity);
+            static void ApplyMeshRenderer(const XJSceneEntityData& data, XJEntity& entity, XJSceneInstantiateContext& context);
+            static void ApplyCamera(const XJSceneEntityData& data, XJEntity& entity);
+            static void ApplyHierarchy(const XJSceneAsset& asset, XJSceneInstantiateContext& context);
     };
 }
 

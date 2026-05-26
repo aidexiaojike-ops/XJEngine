@@ -21,6 +21,8 @@
 #include "Asset/XJSceneAsset.h"
 #include "Asset/Instantiation/XJSceneInstantiator.h"
 #include "Asset/Serialization/XJSceneAssetSerializer.h"
+#include "Asset/Register/XJAssetBootstrap.h"
+#include "Asset/XJSceneRuntimeUtil.h"
 
 #include "ECS/System/XJBaseMaterialSystem.h"
 #include "ECS/XJScene.h"
@@ -36,8 +38,6 @@
 #include <iostream>
 #include <chrono>
 #include <filesystem>
-
-
 
     
 class XJEngineApp : public XJ::XJApplication
@@ -167,8 +167,9 @@ protected:
     // 场景
     void OnSceneInit(XJ::XJScene *scene) override
     {
-        LoadOrCreateAssetRegistry();
-        mSceneAsset = LoadOrCreateDefaultSceneAsset();
+        XJ::XJAssetBootstrap bootstrap(mAssetRegistry, kDefaultSceneHandle, kMonkeyMeshHandle);
+        bootstrap.LoadOrCreateAssetRegistry();
+        mSceneAsset = bootstrap.LoadOrCreateDefaultSceneAsset();
         if (!mSceneAsset)
         {
             spdlog::error("Default scene asset load failed");
@@ -181,8 +182,9 @@ protected:
         mSceneInstantiateContext.DefaultSampler = mDefaultSampler;
         XJ::XJSceneInstantiator::Instantiate(*mSceneAsset, *scene, &mSceneInstantiateContext);
 
-        XJ::XJEntity* previewCamera = FindInstantiatedEntity(kPreviewCameraEntityId);
-        XJ::XJEntity* gameCamera = FindPrimaryCameraEntity();
+        XJ::XJEntity* previewCamera = XJ::XJSceneInstantiator::FindInstantiatedEntity(
+            mSceneInstantiateContext, XJ::XJUUID(static_cast<uint32_t>(kPreviewCameraEntityId)));
+        XJ::XJEntity* gameCamera = XJ::XJSceneRuntimeUtil::FindPrimaryCameraEntity(*scene);
 
         if (mScenePreview) mScenePreview->SetCamera(previewCamera ? previewCamera : gameCamera);
         if (mGamePreview) mGamePreview->SetCamera(gameCamera ? gameCamera : previewCamera);
@@ -255,7 +257,7 @@ protected:
         {
             mRenderTarget->SetExtent({kSwapchain->XJGetWidth(),kSwapchain->XJGetHeight()});
         }
-       
+
         if (mScenePreview)
         {
             mScenePreview->PrepareBeforeRender();
@@ -263,8 +265,8 @@ protected:
         if (mGamePreview)
         {
           mGamePreview->PrepareBeforeRender();
-
-        } 
+        }
+       
         VkCommandBuffer kCommandBuffer = mCommandBuffers[imageIndex];// 取出当前命令缓冲区
         if (kCommandBuffer == VK_NULL_HANDLE) 
         {
@@ -289,12 +291,11 @@ protected:
                // spdlog::error("GamePreview render failed");
            }
         }
-
+        
         if (mScenePreview)
         {
            mScenePreview->PostRender();
         }
-
         if (mGamePreview)
         {
            mGamePreview->PostRender();
@@ -359,116 +360,7 @@ protected:
         mCameraController.reset();
     }
 
-    void RegisterBootstrapAssets()
-    {
-        mAssetRegistry.RegisterAsset({
-            kDefaultSceneHandle,
-            XJ::XJAssetType::Scene,
-            "DefaultScene",
-            "Resource/Scenes/Default.xjscene",
-            {}
-        });
-
-        mAssetRegistry.RegisterAsset({
-            kMonkeyMeshHandle,
-            XJ::XJAssetType::Mesh,
-            "Monkey",
-            "Resource/Mesh/Monkey.glb",
-            {}
-        });
-    }
-
-    void LoadOrCreateAssetRegistry()
-    {
-        const std::filesystem::path registryPath = "Resource/Config/AssetRegistry.json";
-        if (std::filesystem::exists(registryPath) && mAssetRegistry.Load(registryPath))
-            return;
-
-        RegisterBootstrapAssets();
-        mAssetRegistry.Save(registryPath);
-    }
-
-    std::shared_ptr<XJ::XJSceneAsset> LoadOrCreateDefaultSceneAsset()
-    {
-        const std::filesystem::path scenePath = "Resource/Scenes/Default.xjscene";
-        if (!std::filesystem::exists(scenePath))
-        {
-            auto defaultScene = CreateDefaultSceneAsset();
-            XJ::XJSceneAssetSerializer::SaveToFile(*defaultScene, scenePath);
-        }
-
-        auto loaded = XJ::XJSceneAssetSerializer::LoadFromFile(scenePath);
-        if (loaded)
-            return loaded;
-
-        return CreateDefaultSceneAsset();
-    }
-
-    std::shared_ptr<XJ::XJSceneAsset> CreateDefaultSceneAsset() const
-    {
-        auto sceneAsset = std::make_shared<XJ::XJSceneAsset>();
-        sceneAsset->mHandle = kDefaultSceneHandle;
-        sceneAsset->mName = "DefaultScene";
-        sceneAsset->mPath = "Resource/Scenes/Default.xjscene";
-
-        XJ::XJSceneEntityData previewCamera;
-        previewCamera.Id = kPreviewCameraEntityId;
-        previewCamera.Name = "PreviewCamera";
-        previewCamera.Transform.Position = glm::vec3(0.0f, 1.5f, 3.0f);
-        previewCamera.Camera.Enabled = true;
-        previewCamera.Camera.Fov = 65.0f;
-        previewCamera.Camera.NearClip = 0.1f;
-        previewCamera.Camera.FarClip = 100.0f;
-
-        XJ::XJSceneEntityData gameCamera;
-        gameCamera.Id = kGameCameraEntityId;
-        gameCamera.Name = "GameCamera";
-        gameCamera.Transform.Position = glm::vec3(0.0f, 1.0f, 3.0f);
-        gameCamera.Camera.Enabled = true;
-        gameCamera.Camera.Primary = true;
-        gameCamera.Camera.Fov = 65.0f;
-        gameCamera.Camera.NearClip = 0.1f;
-        gameCamera.Camera.FarClip = 100.0f;
-
-        XJ::XJSceneEntityData monkey;
-        monkey.Id = kMonkeyEntityId;
-        monkey.Name = "Monkey";
-        monkey.Transform.Position = glm::vec3(0.0f, 0.0f, 0.0f);
-        monkey.Transform.Scale = glm::vec3(1.0f);
-        monkey.MeshRenderer.Mesh = { kMonkeyMeshHandle, XJ::XJAssetType::Mesh };
-
-        sceneAsset->Entities = { previewCamera, gameCamera, monkey };
-        return sceneAsset;
-    }
-
-    XJ::XJEntity* FindInstantiatedEntity(XJ::XJUUID id) const
-    {
-        auto it = mSceneInstantiateContext.EntityMap.find(id);
-        if (it == mSceneInstantiateContext.EntityMap.end())
-            return nullptr;
-        return it->second;
-    }
-
-    XJ::XJEntity* FindPrimaryCameraEntity() const
-    {
-        if (!mSceneAsset)
-            return nullptr;
-
-        for (const auto& entityData : mSceneAsset->Entities)
-        {
-            if (entityData.Camera.Enabled && entityData.Camera.Primary)
-                return FindInstantiatedEntity(entityData.Id);
-        }
-
-        for (const auto& entityData : mSceneAsset->Entities)
-        {
-            if (entityData.Camera.Enabled)
-                return FindInstantiatedEntity(entityData.Id);
-        }
-
-        return nullptr;
-    }
-
+ 
    
 private:
     // 渲染准备

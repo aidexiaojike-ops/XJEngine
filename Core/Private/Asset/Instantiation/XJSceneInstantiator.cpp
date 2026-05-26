@@ -142,4 +142,10 @@ namespace XJ
                 parentIt->second->XJAddChild(childIt->second);
         }
     }
+
+    XJEntity* XJSceneInstantiator::FindInstantiatedEntity(const XJSceneInstantiateContext& ctx, XJUUID id) 
+    {
+        auto it = ctx.EntityMap.find(id);
+        return (it != ctx.EntityMap.end()) ? it->second : nullptr;
+    }
 }

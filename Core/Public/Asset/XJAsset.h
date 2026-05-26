@@ -13,7 +13,7 @@ namespace XJ
     enum class XJAssetType//资产种类
     {
         None = 0,//change to None to avoid confusion with 0-based index of asset array
-
+        
         Mesh,
         Texture,
         Material,
@@ -21,22 +21,18 @@ namespace XJ
     };
 
 
-    using XJAssetHandle = uint64_t;
+    using XJAssetHandle = uint64_t;//资产的唯一标识
 
-    class XJAsset
+    class XJAsset//保存资产的句柄、类型、名字和文件路径
     {
         public:
 
             virtual ~XJAsset() = default;
 
         public:
-
             XJAssetHandle mHandle = 0;
-
             XJAssetType mType = XJAssetType::None;
-
             std::string mName;
-
             std::filesystem::path mPath;
 
             static XJAssetHandle GenerateHandle()

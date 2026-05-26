@@ -54,10 +54,16 @@ namespace XJ
         j["children"] = children;
 
         j["transform"] = SerializeTransform(e.Transform);
+
+        nlohmann::json mats = nlohmann::json::array();
+        for (const auto& mat : e.MeshRenderer.Materials)
+            mats.push_back(mat.ToUri());
+
         j["meshRenderer"] = {
-            {"mesh", e.MeshRenderer.Mesh.ToUri()},
-            {"materials", SerializeAssetRefArray(e.MeshRenderer.Materials)}
+            {"mesh",   e.MeshRenderer.Mesh.ToUri()},
+            {"materials", mats}
         };
+
         j["camera"] = {
             {"enabled", e.Camera.Enabled},
             {"fov", e.Camera.Fov},
@@ -130,6 +136,9 @@ namespace XJ
             e.Light.Color = DeserializeVec3(l.value("color", nlohmann::json::array()), e.Light.Color);
             e.Light.Intensity = l.value("intensity", e.Light.Intensity);
         }
+        
+        for (const auto& mj : j["meshRenderer"]["materials"])
+            e.MeshRenderer.Materials.push_back(XJAssetRef::FromUri(mj.get<std::string>()));
 
         return e;
     }
@@ -199,7 +208,9 @@ namespace XJ
             auto* xjEntity = scene.XJGetEntities(e);
             if (!xjEntity)
                 continue;
-            asset->Entities.push_back(BuildEntityData(*xjEntity));
+
+            XJSceneEntityData data = BuildEntityData(*xjEntity);
+            asset->Entities.push_back(data);
         }
         return asset;
     }

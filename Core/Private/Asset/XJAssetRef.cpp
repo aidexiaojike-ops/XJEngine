@@ -2,17 +2,16 @@
 
 namespace XJ
 {
-    std::string XJAssetRef::ToUri() const
+    std::string XJAssetRef::ToUri() const//把资产序列化
     {
         if (!IsValid())
             return {};
-        return "asset://" + std::to_string(Handle);
+        return "asset://" + std::to_string(Handle);//序列化的格式
     }
 
-    XJAssetRef XJAssetRef::FromUri(const std::string& uri, XJAssetType expectedType)
+    XJAssetRef XJAssetRef::FromUri(const std::string& uri, XJAssetType expectedType)//读取序列 反序列化
     {
         XJAssetRef ref;
-
         try
         {
             if (uri.rfind("asset://", 0) == 0)
