@@ -8,9 +8,9 @@ namespace XJ
    
     const std::vector<XJNode *>& XJNode::XJGetChildren() const
     {
-
+        return mChildren;
     }
-    bool XJNode::HasParent()
+    bool XJNode::HasParent() const
     {
         return mParent != nullptr;
     }
@@ -42,6 +42,7 @@ namespace XJ
             if(node == *it)
             {
                 mChildren.erase(it);
+                node->mParent = nullptr;
                 break;
             }
         }

@@ -107,6 +107,9 @@ add_subdirectory(${STB_DIR})
 #6.entt
 set(ENTT_DIR ${CMAKE_CURRENT_SOURCE_DIR}/External/entt)
 add_subdirectory(${ENTT_DIR})
+#7.josn
+set(JSON_DIR ${CMAKE_CURRENT_SOURCE_DIR}/External/json)
+add_subdirectory(${JSON_DIR})
 
 # ----------- 链接第三方库 -----------
 # 所有依赖的目标都已经被定义，可以安全链接
@@ -121,6 +124,7 @@ target_link_libraries(Platform
         tinygltf
         stb
         EnTT::EnTT
+        nlohmann_json
 )
 
 set(SHADER_ROOT ${CMAKE_SOURCE_DIR}/Resource/Shader)

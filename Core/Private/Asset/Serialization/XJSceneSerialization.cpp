@@ -1,5 +1,5 @@
 #include "Asset/Serialization/XJSceneSerialization.h"
-#include "Asset/Importer/XJGltfImporter.h"
+#include "Asset/Importer/XJModelImporter.h"
 #include "ECS/XJScene.h"
 #include "ECS/XJEntity.h"
 #include "ECS/Component/XJTransformComponent.h"

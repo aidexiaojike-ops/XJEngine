@@ -147,6 +147,12 @@ add_custom_command(TARGET XJEngine POST_BUILD
 
 add_custom_command(TARGET XJEngine POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_directory
+        ${CMAKE_SOURCE_DIR}/Resource/Scenes
+        ${XJ_RESOURCE_DIR}/Scenes
+)
+
+add_custom_command(TARGET XJEngine POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
         ${CMAKE_SOURCE_DIR}/Resource/Config
         ${XJ_RESOURCE_DIR}/Config
 )

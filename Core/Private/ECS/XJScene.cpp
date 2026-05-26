@@ -42,7 +42,7 @@ namespace XJ
         mEntities.insert({ enttEntity, std::make_shared<XJEntity>(enttEntity, this) });
 
         // 设置该实体的父节点为场景的根节点
-        mEntities[enttEntity]->XJSetParent(mRootNode.get());
+        mRootNode->XJAddChild(mEntities[enttEntity].get());
 
         // 为实体设置唯一的 UUID（如果未提供名称则使用默认值）
         mEntities[enttEntity]->XJSetId(id);
@@ -91,7 +91,7 @@ namespace XJ
     }
 
     // GetEntity：根据实体 ID 获取对应的实体对象
-    XJEntity *XJScene::XJGetEntities(entt::entity enttEntity)
+    XJEntity *XJScene::XJGetEntities(entt::entity enttEntity) const
     {
         // 如果实体存在于列表中，返回该实体的指针
         if(mEntities.find(enttEntity) != mEntities.end())

@@ -25,7 +25,7 @@ namespace XJ
             
         public:
             entt::registry &XJGetEcsRegistry() {return mEcsRegistry;}
-            XJEntity *XJGetEntities(entt::entity enttEntity);
+            XJEntity *XJGetEntities(entt::entity enttEntity) const;
             XJNode *XJGetRootNode() const {return mRootNode.get();}
 
             XJScene();

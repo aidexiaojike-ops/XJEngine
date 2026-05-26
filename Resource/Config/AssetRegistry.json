@@ -1,0 +1,16 @@
+{
+  "268435457": {
+    "handle": 268435457,
+    "type": 4,
+    "name": "DefaultScene",
+    "source": "Resource/Scenes/Default.xjscene",
+    "imported": ""
+  },
+  "536870913": {
+    "handle": 536870913,
+    "type": 1,
+    "name": "Monkey",
+    "source": "Resource/Mesh/Monkey.glb",
+    "imported": ""
+  }
+}

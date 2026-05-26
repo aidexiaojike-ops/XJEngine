@@ -1,4 +1,4 @@
-#include "XJEntryPoint.h"
+﻿#include "XJEntryPoint.h"
 #include "Edit/FileUtil.h"
 #include "Edit/Mathinclude.h"
 #include "Edit/XJEventTesting.h"
@@ -6,28 +6,26 @@
 
 #include "Graphic/XJVulkanRenderPass.h"
 #include "Graphic/XJVulkanCommandBuffer.h"
-#include "Graphic/XJVulkanGeometryUtil.h"
 #include "Graphic/VulkanCommon.h"
 #include "Graphic/XJVulkanDescriptorSet.h"
 #include "Graphic/XJVulkanImage.h"
 
 #include "Render/XJRenderTarget.h"
-#include "Render/Resource/XJMesh.h"
 #include "Render/XJRenderer.h"
 #include "Render/Resource/XJMaterial.h"
 #include "Render/Resource/XJMaterialFactory.h"
 
-#include "Asset/Importer/XJGltfImporter.h"
-#include "Render/Resource/XJMeshFactory.h"
 #include "Asset/Importer/XJTextureImporter.h"
 #include "Render/Resource/XJTextureFactory.h"
-#include "Asset/Serialization/XJSceneSerialization.h"
+#include "Asset/XJAssetRegistry.h"
+#include "Asset/XJSceneAsset.h"
+#include "Asset/Instantiation/XJSceneInstantiator.h"
+#include "Asset/Serialization/XJSceneAssetSerializer.h"
 
 #include "ECS/System/XJBaseMaterialSystem.h"
 #include "ECS/XJScene.h"
 #include "ECS/Component/XJCameraComponent.h"
 #include "ECS/System/XJCameraControllerSystem.h"
-#include "ECS/Component/Material/XJUnlitMaterialComponent.h"
 #include "ECS/System/XJUnlitMaterialSystem.h"
 
 #include "UI/XJUIContext.h"
@@ -37,6 +35,7 @@
 
 #include <iostream>
 #include <chrono>
+#include <filesystem>
 
 
 
@@ -60,58 +59,58 @@ protected:
         XJ::VulkanPhysicalDevices* kPhysicalDevices = kRenderContext->XJGetPhysicalDevices();
         XJ::XJVulkanSwapchain* kSwapchain = kRenderContext->XJGetSwapchain();
       
-         //renderpass渲染通道配置
+         // 配置 RenderPass 附件
         std::vector<XJ::Attachment> attachments{};
         attachments.resize(2);
-        //颜色附件
+        // 颜色附件
         attachments[0].flags = 0;
-        attachments[0].format = kSwapchain->XJGetSurfaceInfo().surfaceFormat.format;//表面格式    颜色附加用surfaceFormat同样的格式
-        attachments[0].samples = mSampleCount;//采样数
-        attachments[0].loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;//加载操作 清除
-        attachments[0].storeOp = VK_ATTACHMENT_STORE_OP_STORE;//存储操作 存储
-        attachments[0].stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;//模板加载操作 不关心
-        attachments[0].stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;//模板存储操作 不关心
-        attachments[0].initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;//初始布局 未定义
-        //attachments[0].finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;//显示布局
-        attachments[0].finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;//显示布局
-        //深度附件
+        attachments[0].format = kSwapchain->XJGetSurfaceInfo().surfaceFormat.format;// 表面格式，颜色附件与交换链格式保持一致
+        attachments[0].samples = mSampleCount;// 采样数
+        attachments[0].loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;// 加载时清除
+        attachments[0].storeOp = VK_ATTACHMENT_STORE_OP_STORE;// 存储结果
+        attachments[0].stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;// 不关心模板加载
+        attachments[0].stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;// 不关心模板存储
+        attachments[0].initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;// 初始布局未定义
+        //attachments[0].finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;// 颜色附件布局
+        attachments[0].finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;// 最终用于显示
+        // 深度附件
         attachments[1].flags = 0;
-        attachments[1].format = kDevice->XJGetSettings().depthFormat;//深度格式
+        attachments[1].format = kDevice->XJGetSettings().depthFormat;// 深度格式
         attachments[1].samples = mSampleCount;
         attachments[1].loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
         attachments[1].storeOp = VK_ATTACHMENT_STORE_OP_STORE;
         attachments[1].stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
         attachments[1].stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
         attachments[1].initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-        attachments[1].finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;//深度附加布局
+        attachments[1].finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;// 深度附件布局
       
-        //子通道
-        std::vector<XJ::RenderSubPass> subpasses = //多重采样
+        // 子通道
+        std::vector<XJ::RenderSubPass> subpasses = // 多重采样配置
         {
             {
-                .colorAttachments = { 0 }, //颜色附件索引
-                .depthStencilAttachments = { 1 },//深度附件索引
+                .colorAttachments = { 0 }, // 颜色附件索引
+                .depthStencilAttachments = { 1 },// 深度附件索引
                 .resolveAttachments = {},   // 解析附件由渲染通道自动添加
-                .sampleCount = mSampleCount//采样数
-                // .sampleCount = VK_SAMPLE_COUNT_1_BIT//采样数
+                .sampleCount = mSampleCount// 采样数
+                // .sampleCount = VK_SAMPLE_COUNT_1_BIT// 采样数
             }
         };
 
-        mRenderPass = std::make_shared<XJ::XJVulkanRenderPass>(kDevice, kPhysicalDevices, attachments, subpasses);//创建渲染通道对象
+        mRenderPass = std::make_shared<XJ::XJVulkanRenderPass>(kDevice, kPhysicalDevices, attachments, subpasses);// 创建渲染通道对象
         spdlog::info("渲染通道创建成功");
         mRenderTarget = std::make_shared<XJ::XJRenderTarget>(mRenderPass.get());
 
-        mRenderTarget->SetColorClearValue(0, VkClearColorValue{0.1f, 0.1f, 0.1f, 1.0f});//设置颜色清除值
-        mRenderTarget->SetDepthClearValue(VkClearDepthStencilValue{1.0f, 0});//设置深度清除值
-        //添加材质系统
+        mRenderTarget->SetColorClearValue(0, VkClearColorValue{0.1f, 0.1f, 0.1f, 1.0f});// 设置颜色清除值
+        mRenderTarget->SetDepthClearValue(VkClearDepthStencilValue{1.0f, 0});// 设置深度清除值
+        // 添加材质系统
         mRenderTarget->AddMaterialSystem<XJ::XJBaseMaterialSystem>();
         mRenderTarget->AddMaterialSystem<XJ::XJUnlitMaterialSystem>();
 
         mRender = std::make_shared<XJ::XJRenderer>();
-         // 创建命令池
-        mCommandBuffers = kDevice->XJGetDefaultCmdPool()->AllocateCommandBuffer(static_cast<uint32_t>(kSwapchain->XJGetSwapchainImages().size()));//分配命令缓冲区
+         // 创建命令池缓冲区
+        mCommandBuffers = kDevice->XJGetDefaultCmdPool()->AllocateCommandBuffer(static_cast<uint32_t>(kSwapchain->XJGetSwapchainImages().size()));// 分配命令缓冲区
         spdlog::info("分配了 {} 个命令缓冲区", mCommandBuffers.size());
-        //摄像机初始化                                                    鼠标灵敏  平移    缩放   旋转
+        // 初始化摄像机控制器：鼠标灵敏度、平移、缩放、旋转
         mCameraController = std::make_unique<XJ::XJCameraControllerSystem>(0.25f, 0.05f, 0.3f, 0.25f);
         // 滚轮事件回调
         mEventTesting = std::make_shared<XJ::XJEventTesting>();
@@ -124,37 +123,19 @@ protected:
                 mCameraController->OnMouseScroll(event.mYOffset, kCameraEntity);
             }
         });
-        //导入模型
-        auto kImporter = std::make_shared<XJ::XJGltfImporter>();
-        if (kImporter->LoadMeshAsset("Resource/Mesh/Monkey.glb"))
-        {
-            // 保持 importer，在 OnSceneInit 中使用
-            mGltfImporter = kImporter;
-        }
-        
-    
-        //geometry util 
-        std::vector<XJ::XJVulkanVertex> mVertices;
-        std::vector<uint32_t> mIndices;
-        mGeometryUtil = std::make_unique<XJ::XJVulkanGeometryUtil>();
-        mGeometryUtil->CreateCube(-0.1f, 0.1f, -0.1f, 0.1f, -0.1f, 0.1f, mVertices, mIndices, true, true, glm::mat4(1.0f));
-        spdlog::info("创建立方体: {} 个顶点, {} 个索引", mVertices.size(), mIndices.size());
-        //创建网格对象
-        mMesh = std::make_shared<XJ::XJMesh>(mVertices, mIndices);
-
-        //纹理和采样器初始化
-        XJ::RGBAColor kWhitePixel{255, 255, 255, 255};//白色像素
-        XJ::RGBAColor kBlackPixel{0, 0, 0, 255};//黑色像素
-        XJ::RGBAColor kMultiPixel[4] = { {255, 0, 0, 255}, {0, 255, 0, 255}, {0, 0, 255, 255}, {255, 255, 0, 255} };//多像素数据
-        mWhiteTexture = std::make_shared<XJ::XJTexture>(1,1, &kWhitePixel);//创建白色纹理
-        mBlackTexture = std::make_shared<XJ::XJTexture>(1,1, &kBlackPixel);//创建黑色纹理
-        mMultiPixelTexture = std::make_shared<XJ::XJTexture>(2,2, kMultiPixel);//创建多像素纹理
+        // 初始化纹理和采样器
+        XJ::RGBAColor kWhitePixel{255, 255, 255, 255};// 白色像素
+        XJ::RGBAColor kBlackPixel{0, 0, 0, 255};// 黑色像素
+        XJ::RGBAColor kMultiPixel[4] = { {255, 0, 0, 255}, {0, 255, 0, 255}, {0, 0, 255, 255}, {255, 255, 0, 255} };// 多像素测试数据
+        mWhiteTexture = std::make_shared<XJ::XJTexture>(1,1, &kWhitePixel);// 创建白色纹理
+        mBlackTexture = std::make_shared<XJ::XJTexture>(1,1, &kBlackPixel);// 创建黑色纹理
+        mMultiPixelTexture = std::make_shared<XJ::XJTexture>(2,2, kMultiPixel);// 创建多像素纹理
         auto kAsset = XJ::XJTextureImporter::ImportTexture(XJ_RES_TEXTURE_DIR"R-C.jpeg");
-        if (kAsset) mFileTexture = XJ::XJTextureFactory::CreateTextureFromAsset(*kAsset);//创建文件纹理
+        if (kAsset) mFileTexture = XJ::XJTextureFactory::CreateTextureFromAsset(*kAsset);// 创建文件纹理
         // 创建默认采样器
-        mDefaultSampler = std::make_shared<XJ::XJSampler>(VK_FILTER_NEAREST, VK_SAMPLER_ADDRESS_MODE_REPEAT);//创建默认采样器
+        mDefaultSampler = std::make_shared<XJ::XJSampler>(VK_FILTER_NEAREST, VK_SAMPLER_ADDRESS_MODE_REPEAT);// 创建默认采样器
 
-        //UI初始化
+        // 初始化 UI
         XJ::XJEditorRendererInitInfo kUIRendererInfo = {};
         kUIRendererInfo.instance       = kRenderContext->XJGetInstance()->XJGetInstance();
         kUIRendererInfo.physicalDevice = kPhysicalDevices->XJGetPhysicalDevice();
@@ -169,8 +150,8 @@ protected:
         mEditorRenderer = std::make_unique<XJ::XJEditorRenderer>();
         mUIContext->Init(static_cast<GLFWwindow*>(XJGetWindow()->XJGetImplWindowPointer()));
         mEditorRenderer->Init(kUIRendererInfo);
-        // ── 场景预览初始化 ──  UI   
-        // 创建场景预览和游戏预览对象，并初始化它们
+        // 初始化场景预览和游戏预览 UI
+        // 创建场景预览和游戏预览对象，并完成初始化
         mScenePreview = std::make_unique<XJ::XJScenePreview>();
         mScenePreview->SetViewportName("Scene Preview");
         mScenePreview->Init(kRenderContext);
@@ -183,64 +164,36 @@ protected:
         mGamePreview->AddMaterialSystem<XJ::XJBaseMaterialSystem>();
         mGamePreview->AddMaterialSystem<XJ::XJUnlitMaterialSystem>();
     }
-    //场景
+    // 场景
     void OnSceneInit(XJ::XJScene *scene) override
     {
-        XJ::XJEntity* kPreviewCam = scene->CreateEntity("PreviewCamera");
-        kPreviewCam->AddComponent<XJ::XJCameraComponent>();
-        kPreviewCam->GetComponent<XJ::XJCameraComponent>().XJSetPosition(glm::vec3(0.0f, 1.5f, 3.0f));
-        mScenePreview->SetCamera(kPreviewCam);
-
-        XJ::XJEntity *kGameCam = scene->CreateEntity("CameraEntity");//创建一个实体
-        kGameCam->AddComponent<XJ::XJCameraComponent>();//添加摄像机组件
-        kGameCam->GetComponent<XJ::XJCameraComponent>().XJSetPosition(glm::vec3(0.0f, 1.0f, 3.0f));
-        mGamePreview->SetCamera(kGameCam);
-        // kCameraEntity->AddComponent<XJ::XJTransformComponent>();  // 添加这行
-        mRenderTarget->XJSetCamera(kGameCam);//将摄像机实体设置到渲染目标中，以便在渲染过程中使用摄像机信息
-        //
-        auto kBaseMaterialA = XJ::XJMaterialFactory::GetInstance()->CreateMaterial<XJ::XJBaseMaterial>();
-        auto kBaseMaterialB = XJ::XJMaterialFactory::GetInstance()->CreateMaterial<XJ::XJBaseMaterial>();
-        kBaseMaterialA->colorType = XJ::COLOR_TYPE_TEXCOOR;
-
-        //在这里可以添加场景初始化的代码，例如创建实体、添加组件等
-        spdlog::info("场景初始化");
-        uint32_t index = 0;
-        float x = 0.f;
-        for(int i = 0; i < mSmallCubeSize.x; ++i, x += 0.5f)
+        LoadOrCreateAssetRegistry();
+        mSceneAsset = LoadOrCreateDefaultSceneAsset();
+        if (!mSceneAsset)
         {
-          float y = 0.f;
-          for(int j = 0; j < mSmallCubeSize.y; ++j, y += 0.5f)
-          {
-              float z = 0.f;
-              for(int k = 0; k < mSmallCubeSize.z; ++k, z += 0.5f)
-              {
-                  XJ::XJEntity* kCube = scene->CreateEntity("CubeEntityA");//创建一个实体
-
-                  auto &kTransformComp = kCube->GetComponent<XJ::XJTransformComponent>();//添加变换组件
-                  kTransformComp.position = glm::vec3(x, y, z);
-                  kTransformComp.UpdateModelMatrix(); // 新增：立即更新模型矩阵
-
-                  index = (index + 1) % 2;
-                  mSmallCubes.push_back(kCube);//将立方体实体添加到列表中
-              }
-          }
+            spdlog::error("Default scene asset load failed");
+            return;
         }
-        //添加模型
-        //资产导入
-        if (mGltfImporter)
-        {
-            XJ::XJSceneSerialization::InstantiateGltfScene(
-                scene, *mGltfImporter, mWhiteTexture, mDefaultSampler);
-        }
-        
 
+        mSceneInstantiateContext.Registry = &mAssetRegistry;
+        mSceneInstantiateContext.SourceScene = { kDefaultSceneHandle, XJ::XJAssetType::Scene };
+        mSceneInstantiateContext.DefaultTexture = mWhiteTexture;
+        mSceneInstantiateContext.DefaultSampler = mDefaultSampler;
+        XJ::XJSceneInstantiator::Instantiate(*mSceneAsset, *scene, &mSceneInstantiateContext);
+
+        XJ::XJEntity* previewCamera = FindInstantiatedEntity(kPreviewCameraEntityId);
+        XJ::XJEntity* gameCamera = FindPrimaryCameraEntity();
+
+        if (mScenePreview) mScenePreview->SetCamera(previewCamera ? previewCamera : gameCamera);
+        if (mGamePreview) mGamePreview->SetCamera(gameCamera ? gameCamera : previewCamera);
+        mRenderTarget->XJSetCamera(gameCamera ? gameCamera : previewCamera);
     }
     void OnSceneDestroy(XJ::XJScene *scene) override
     {
-        //在这里可以添加场景销毁的代码，例如清理资源等
-        spdlog::info("场景销毁");
+        // 可以在这里补充场景销毁时的清理逻辑，例如释放资源等
+        spdlog::info("Scene destroyed");
     }
-    //UI
+    // UI
     void OnUIBegin() override 
     { 
         if (mUIContext)
@@ -266,49 +219,22 @@ protected:
 
     void OnUpdate(float deltaTime) override
     {
-         // ===== UI Begin =====
+         // ===== UI 开始 =====
         //mUIContext->BeginFrame();
         if (mScenePreview) 
-            mScenePreview->DrawUI(); // 绘制场景预览UI 
+            mScenePreview->DrawUI(); // 绘制场景预览 UI 
         
         if (mGamePreview) 
-           mGamePreview->DrawUI();// 绘制游戏预览UI
-        ImGui::ShowDemoWindow();     // 验证用，能跑通后删掉
-
-        uint64_t kFrameIndex = XJGetFrameIndex();
-        //在这里可以添加每帧更新的代码，例如处理输入、更新游戏逻
-        std::shared_ptr<XJ::XJTexture> kTextures[] = {mWhiteTexture, mBlackTexture, mMultiPixelTexture, mFileTexture};//纹理数组
-        if(kFrameIndex % 10 == 0 && mUnlitMaterials.size() < mSmallCubes.size()) // 每10帧创建一个新的材质，直到达到1000个
-        {
-            auto kMaterial = XJ::XJMaterialFactory::GetInstance()->CreateMaterial<XJ::XJUnlitMaterial>();//创建基础材质 
-            kMaterial->XJSetBaseColorA(glm::linearRand(glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(1.0,1.0f,1.0f)));//随机颜色
-            kMaterial->XJSetBaseColorB(glm::linearRand(glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(1.0,1.0f,1.0f)));//随机颜色
-            kMaterial->XJSetTextureView(XJ::UNLIT_MAT_BASE_COLOR_A,kTextures[glm::linearRand(0, (int)ARRAY_SIZE(kTextures)-1)], mDefaultSampler);//随机纹理
-            kMaterial->XJSetTextureView(XJ::UNLIT_MAT_BASE_COLOR_B,kTextures[glm::linearRand(0, (int)ARRAY_SIZE(kTextures)-1)], mDefaultSampler);//随机纹理
-            kMaterial->UpdateTextureViewEnable(XJ::UNLIT_MAT_BASE_COLOR_A, glm::linearRand(0, 1) > 0.5f);//随机启用
-            kMaterial->UpdateTextureViewEnable(XJ::UNLIT_MAT_BASE_COLOR_B, glm::linearRand(0, 1) > 0.5f);//随机启用
-            kMaterial->XJSetMixValue(glm::linearRand(0.1f, 0.8f));//随机混合值
-
-            uint32_t kCubeIndex = mUnlitMaterials.size();
-            if(!XJ::XJEntity::HasComponent<XJ::XJUnlitMaterialComponent>(mSmallCubes[kCubeIndex]))
-            {
-                mSmallCubes[kCubeIndex]->AddComponent<XJ::XJUnlitMaterialComponent>();//添加基础材质组件
-            }
-            auto &kMatComp = mSmallCubes[kCubeIndex]->GetComponent<XJ::XJUnlitMaterialComponent>();//获取基础材质组件
-            kMatComp.AddMesh(mMesh.get(), kMaterial.get());//将材质与网格关联
-
-            mUnlitMaterials.push_back(kMaterial.get());//将材质添加到列表中
-
-            //spdlog::info("Unlit Material Count:{0}", mUnlitMaterials.size());
-        }
+           mGamePreview->DrawUI();// 绘制游戏预览 UI
+        ImGui::ShowDemoWindow();     // 用于验证，确认稳定后可删除
        
-        XJ::XJEntity *kCameraEntity = mRenderTarget->XJGetCamera();//获取摄像机实体
+        XJ::XJEntity *kCameraEntity = mRenderTarget->XJGetCamera();// 获取摄像机实体
         if(kCameraEntity && XJ::XJEntity::HasComponent<XJ::XJCameraComponent>(kCameraEntity))
         {
             mCameraController->UpdateCameraControl(deltaTime, XJGetWindow(), kCameraEntity);
         }
 
-         // ===== UI End =====
+         // ===== UI 结束 =====
         //mUIContext->EndFrame();
     }
     
@@ -316,7 +242,7 @@ protected:
     {
         if (XJGetWindow()->IsWindowMinimized())
         {
-            // 窗口最小化，跳过渲染，但保留事件处理
+            // 窗口最小化时跳过渲染，但保留事件处理
             return;
         }   
         XJ::XJRenderContext *kRenderContext = XJApplication::XJGetAppContext()->renderContext;
@@ -324,7 +250,7 @@ protected:
         XJ::XJVulkanSwapchain* kSwapchain = kRenderContext->XJGetSwapchain();
 
     
-        int32_t imageIndex;//拿image
+        int32_t imageIndex;// 当前图像索引
         if(mRender->XJRendererBegin(&imageIndex, mCommandBuffers))
         {
             mRenderTarget->SetExtent({kSwapchain->XJGetWidth(),kSwapchain->XJGetHeight()});
@@ -339,15 +265,15 @@ protected:
           mGamePreview->PrepareBeforeRender();
 
         } 
-        VkCommandBuffer kCommandBuffer = mCommandBuffers[imageIndex];//拿到commandbuffer
+        VkCommandBuffer kCommandBuffer = mCommandBuffers[imageIndex];// 取出当前命令缓冲区
         if (kCommandBuffer == VK_NULL_HANDLE) 
         {
-            spdlog::error("命令缓冲区句柄为空");
+            spdlog::error("Command buffer is null");
             return;
         }
-        //启动命令缓冲 commandbuffer 
+        // 开始录制命令缓冲区
         XJ::XJVulkanCommandPool::BeginCommandBuffer(kCommandBuffer);
-        // ── 场景预览离屏渲染 ──
+        // 场景预览离屏渲染
         if (mScenePreview)
         {
             if (!mScenePreview->Render(kCommandBuffer))
@@ -374,31 +300,31 @@ protected:
            mGamePreview->PostRender();
         }
 
-        //正视图 RT
+        // 正式视图 RT
         if (mRenderTarget->BeginRenderTarget(kCommandBuffer))
         {
-            //// 改为（GLFW 窗口不再直接渲染方块）：
+            //// 改为由 GLFW 窗口统一处理，不再直接渲染方块：
             // mRenderTarget->RenderMaterialSystem(kCommandBuffer);
-            // ===== ↓ 新增 UI 渲染 =====
+            // ===== 新增 UI 渲染 =====
             if (mEditorRenderer && mUIContext)
                 mEditorRenderer->RenderDrawData(kCommandBuffer, mUIContext->XJGetDrawData());
-            // ===== 主Viewport Vulkan UI 已经画完 =====
+            // ===== Viewport Vulkan UI 已绘制完成 =====
             if (ImGui::GetIO().ConfigFlags & ImGuiConfigFlags_ViewportsEnable)
             {
-                GLFWwindow* backup = glfwGetCurrentContext();//备份当前上下文
+                GLFWwindow* backup = glfwGetCurrentContext();// 备份当前上下文
         
-                ImGui::UpdatePlatformWindows();//更新平台窗口，处理多视口的窗口创建、调整大小等平台相关操作
-                ImGui::RenderPlatformWindowsDefault();//渲染平台窗口，调用每个次级视口的渲染函数，默认实现会调用每个次级视口的RenderWindow/SwapBuffers平台函数进行渲染
+                ImGui::UpdatePlatformWindows();// 更新平台窗口，处理多视口窗口创建和尺寸变化
+                ImGui::RenderPlatformWindowsDefault();// 渲染平台窗口，调用各视口对应的平台渲染逻辑
         
-                glfwMakeContextCurrent(backup);//恢复之前的上下文
+                glfwMakeContextCurrent(backup);// 恢复之前的上下文
             }
              // ===== UI 渲染结束 =====
-            mRenderTarget->EndRenderTarget(kCommandBuffer);//结束渲染通道
+            mRenderTarget->EndRenderTarget(kCommandBuffer);// 结束渲染通道
         }
         
       
         XJ::XJVulkanCommandPool::EndCommandBuffer(kCommandBuffer);
-        //提交命令缓冲区 - 使用 mSubmitFences 作为提交围栏
+        // 提交命令缓冲区
         if(mRender->XJRendererEnd(imageIndex, {kCommandBuffer}))
         {
             mRenderTarget->SetExtent({kSwapchain->XJGetWidth(),kSwapchain->XJGetHeight()});
@@ -407,22 +333,23 @@ protected:
     }
     void OnDestroy() override
     {
-         // ===== ↓ 先关 UI =====
+         // ===== 先关闭 UI =====
         //mEditorRenderer->Shutdown();
         //mUIContext->Shutdown();
         
 
         XJ::XJRenderContext *kRenderContext = XJApplication::XJGetAppContext()->renderContext;
         XJ::XJVulkanDevice* kDevice = kRenderContext->XJGetDevice();
-        vkDeviceWaitIdle(kDevice->XJGetDevice());//等待设备空闲
-        mWhiteTexture.reset();//白色纹理
-        mBlackTexture.reset();//黑色纹理
-        mMultiPixelTexture.reset();//多像素纹理
-        mFileTexture.reset();//文件纹理
-        mDefaultSampler.reset();//默认采样器
+        vkDeviceWaitIdle(kDevice->XJGetDevice());// 等待设备空闲
+        mWhiteTexture.reset();// 白色纹理
+        mBlackTexture.reset();// 黑色纹理
+        mMultiPixelTexture.reset();// 多像素纹理
+        mFileTexture.reset();// 文件纹理
+        mDefaultSampler.reset();// 默认采样器
 
 
-        mMesh.reset();
+        mSceneInstantiateContext = {};
+        mSceneAsset.reset();
         mCommandBuffers.clear();
         
         mRenderTarget.reset();
@@ -432,27 +359,134 @@ protected:
         mCameraController.reset();
     }
 
+    void RegisterBootstrapAssets()
+    {
+        mAssetRegistry.RegisterAsset({
+            kDefaultSceneHandle,
+            XJ::XJAssetType::Scene,
+            "DefaultScene",
+            "Resource/Scenes/Default.xjscene",
+            {}
+        });
+
+        mAssetRegistry.RegisterAsset({
+            kMonkeyMeshHandle,
+            XJ::XJAssetType::Mesh,
+            "Monkey",
+            "Resource/Mesh/Monkey.glb",
+            {}
+        });
+    }
+
+    void LoadOrCreateAssetRegistry()
+    {
+        const std::filesystem::path registryPath = "Resource/Config/AssetRegistry.json";
+        if (std::filesystem::exists(registryPath) && mAssetRegistry.Load(registryPath))
+            return;
+
+        RegisterBootstrapAssets();
+        mAssetRegistry.Save(registryPath);
+    }
+
+    std::shared_ptr<XJ::XJSceneAsset> LoadOrCreateDefaultSceneAsset()
+    {
+        const std::filesystem::path scenePath = "Resource/Scenes/Default.xjscene";
+        if (!std::filesystem::exists(scenePath))
+        {
+            auto defaultScene = CreateDefaultSceneAsset();
+            XJ::XJSceneAssetSerializer::SaveToFile(*defaultScene, scenePath);
+        }
+
+        auto loaded = XJ::XJSceneAssetSerializer::LoadFromFile(scenePath);
+        if (loaded)
+            return loaded;
+
+        return CreateDefaultSceneAsset();
+    }
+
+    std::shared_ptr<XJ::XJSceneAsset> CreateDefaultSceneAsset() const
+    {
+        auto sceneAsset = std::make_shared<XJ::XJSceneAsset>();
+        sceneAsset->mHandle = kDefaultSceneHandle;
+        sceneAsset->mName = "DefaultScene";
+        sceneAsset->mPath = "Resource/Scenes/Default.xjscene";
+
+        XJ::XJSceneEntityData previewCamera;
+        previewCamera.Id = kPreviewCameraEntityId;
+        previewCamera.Name = "PreviewCamera";
+        previewCamera.Transform.Position = glm::vec3(0.0f, 1.5f, 3.0f);
+        previewCamera.Camera.Enabled = true;
+        previewCamera.Camera.Fov = 65.0f;
+        previewCamera.Camera.NearClip = 0.1f;
+        previewCamera.Camera.FarClip = 100.0f;
+
+        XJ::XJSceneEntityData gameCamera;
+        gameCamera.Id = kGameCameraEntityId;
+        gameCamera.Name = "GameCamera";
+        gameCamera.Transform.Position = glm::vec3(0.0f, 1.0f, 3.0f);
+        gameCamera.Camera.Enabled = true;
+        gameCamera.Camera.Primary = true;
+        gameCamera.Camera.Fov = 65.0f;
+        gameCamera.Camera.NearClip = 0.1f;
+        gameCamera.Camera.FarClip = 100.0f;
+
+        XJ::XJSceneEntityData monkey;
+        monkey.Id = kMonkeyEntityId;
+        monkey.Name = "Monkey";
+        monkey.Transform.Position = glm::vec3(0.0f, 0.0f, 0.0f);
+        monkey.Transform.Scale = glm::vec3(1.0f);
+        monkey.MeshRenderer.Mesh = { kMonkeyMeshHandle, XJ::XJAssetType::Mesh };
+
+        sceneAsset->Entities = { previewCamera, gameCamera, monkey };
+        return sceneAsset;
+    }
+
+    XJ::XJEntity* FindInstantiatedEntity(XJ::XJUUID id) const
+    {
+        auto it = mSceneInstantiateContext.EntityMap.find(id);
+        if (it == mSceneInstantiateContext.EntityMap.end())
+            return nullptr;
+        return it->second;
+    }
+
+    XJ::XJEntity* FindPrimaryCameraEntity() const
+    {
+        if (!mSceneAsset)
+            return nullptr;
+
+        for (const auto& entityData : mSceneAsset->Entities)
+        {
+            if (entityData.Camera.Enabled && entityData.Camera.Primary)
+                return FindInstantiatedEntity(entityData.Id);
+        }
+
+        for (const auto& entityData : mSceneAsset->Entities)
+        {
+            if (entityData.Camera.Enabled)
+                return FindInstantiatedEntity(entityData.Id);
+        }
+
+        return nullptr;
+    }
+
    
 private:
-    //渲染准备
+    // 渲染准备
     std::shared_ptr<XJ::XJVulkanRenderPass>             mRenderPass;
     std::shared_ptr<XJ::XJRenderTarget>                 mRenderTarget;
     std::shared_ptr<XJ::XJRenderer>                     mRender;
-    //渲染
+    // 渲染资源
     std::vector<VkCommandBuffer>                        mCommandBuffers;
-    std::shared_ptr<XJ::XJVulkanGeometryUtil>           mGeometryUtil;
-    std::shared_ptr<XJ::XJMesh>                         mMesh;
-    std::shared_ptr<XJ::XJTexture>                      mWhiteTexture;//白色纹理
-    std::shared_ptr<XJ::XJTexture>                      mBlackTexture;//黑色纹理
-    std::shared_ptr<XJ::XJTexture>                      mMultiPixelTexture;//多像素纹理
-    std::shared_ptr<XJ::XJTexture>                      mFileTexture;//文件纹理
-    std::shared_ptr<XJ::XJSampler>                      mDefaultSampler;//默认采样器
+    std::shared_ptr<XJ::XJTexture>                      mWhiteTexture;// 白色纹理
+    std::shared_ptr<XJ::XJTexture>                      mBlackTexture;// 黑色纹理
+    std::shared_ptr<XJ::XJTexture>                      mMultiPixelTexture;// 多像素纹理
+    std::shared_ptr<XJ::XJTexture>                      mFileTexture;// 文件纹理
+    std::shared_ptr<XJ::XJSampler>                      mDefaultSampler;// 默认采样器
 
-    std::vector<XJ::XJUnlitMaterial*>                   mUnlitMaterials;//基础材质系统使用的无光照材质列表
-    //时间
+    // 事件
     std::shared_ptr<XJ::XJEventTesting>                 mEventTesting;
     std::shared_ptr<XJ::XJEventObserver>                mOvserver;
-    //UI
+    // UI
     std::unique_ptr<XJ::XJUIContext>                    mUIContext;
     std::unique_ptr<XJ::XJEditorRenderer>               mEditorRenderer;
     std::unique_ptr<XJ::XJScenePreview>                 mScenePreview;
@@ -461,12 +495,17 @@ private:
     // 摄像机控制器
     std::unique_ptr<XJ::XJCameraControllerSystem>       mCameraController;
     
-    std::shared_ptr<XJ::XJGltfImporter>                 mGltfImporter;
-
     VkSampleCountFlagBits mSampleCount = VK_SAMPLE_COUNT_1_BIT; // 多重采样数量
 
-    glm::ivec3 mSmallCubeSize{10 ,10 ,10};//立方体尺寸
-    std::vector<XJ::XJEntity*> mSmallCubes;//立方体实体列表
+    static constexpr XJ::XJAssetHandle kDefaultSceneHandle = 0x10000001ull;
+    static constexpr XJ::XJAssetHandle kMonkeyMeshHandle = 0x20000001ull;
+    static constexpr uint64_t kPreviewCameraEntityId = 0x30000001ull;
+    static constexpr uint64_t kGameCameraEntityId = 0x30000002ull;
+    static constexpr uint64_t kMonkeyEntityId = 0x30000003ull;
+
+    XJ::XJAssetRegistry mAssetRegistry;
+    std::shared_ptr<XJ::XJSceneAsset> mSceneAsset;
+    XJ::XJSceneInstantiateContext mSceneInstantiateContext;
    
 };
 

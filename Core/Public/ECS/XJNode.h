@@ -25,7 +25,8 @@ namespace XJ
             void XJSetName(const std::string &name)  { mName = name;};
 
             const std::vector<XJNode *> &XJGetChildren() const;
-            bool HasParent();
+            // bool HasParent();
+            bool HasParent() const;
             bool HasChildren();
             void XJSetParent(XJNode *node) { mParent = node;};
             XJNode *XJGetParent() const {return mParent;};

@@ -52,7 +52,7 @@ namespace XJ
             }
 
             template<typename T>
-            bool HasComponent()//是否包含组件
+            bool HasComponent() const//是否包含组件
             {
                 return mScene->mEcsRegistry.any_of<T>(mEcsEntity);
             }
@@ -69,10 +69,18 @@ namespace XJ
                 return mScene->mEcsRegistry.all_of<T...>(mEcsEntity);
             }
 
+        
             template<typename T>
-            T& GetComponent()//获取组件
+            T& GetComponent() //获取组件
             {
                 assert(HasComponent<T>() && "Entity does not have component!");
+                return mScene->mEcsRegistry.get<T>(mEcsEntity);
+            }
+
+            template<typename T>
+            const T& GetComponent() const //获取组件
+            {
+                assert(HasComponent<T>()&& "Entity does not have component!");
                 return mScene->mEcsRegistry.get<T>(mEcsEntity);
             }
 

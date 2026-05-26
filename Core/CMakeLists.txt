@@ -40,6 +40,10 @@ if(CORE_SOURCES)
     
     # 设置C++标准
     target_compile_features(Core PUBLIC cxx_std_17)
+
+    if (CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+        target_compile_options(Core PRIVATE -Wa,-mbig-obj)
+    endif()
     
 else()
     # 如果没有源文件，创建接口库（仅头文件）

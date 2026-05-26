@@ -11,10 +11,10 @@ namespace XJ
             /* data */
         public:
             XJUUID(/* args */);
-            XJUUID(uint32_t uuid);
+            XJUUID(uint64_t uuid);
             XJUUID(const XJUUID&);
             ~XJUUID();
-            operator uint32_t() const{return mUUID;}
+            operator uint64_t() const{return mUUID;}
 
             uint64_t mUUID;
     };
@@ -32,7 +32,7 @@ namespace std
             {
                 return 0;
             }
-            return(uint32_t)uuid;
+            return static_cast<std::size_t>(static_cast<uint64_t>(uuid));
         }
         /* data */
     };

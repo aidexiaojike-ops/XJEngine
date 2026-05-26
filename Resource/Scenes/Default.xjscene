@@ -1,0 +1,94 @@
+{
+  "version": 1,
+  "asset": {
+    "handle": 268435457,
+    "type": 4,
+    "name": "DefaultScene"
+  },
+  "entities": [
+    {
+      "id": 805306369,
+      "name": "PreviewCamera",
+      "parent": 0,
+      "children": [],
+      "transform": {
+        "pos": [0.0, 1.5, 3.0],
+        "rot": [0.0, 0.0, 0.0],
+        "scale": [1.0, 1.0, 1.0]
+      },
+      "meshRenderer": {
+        "mesh": "",
+        "materials": []
+      },
+      "camera": {
+        "enabled": true,
+        "fov": 65.0,
+        "near": 0.1,
+        "far": 100.0,
+        "primary": false
+      },
+      "light": {
+        "enabled": false,
+        "type": 0,
+        "color": [1.0, 1.0, 1.0],
+        "intensity": 1.0
+      }
+    },
+    {
+      "id": 805306370,
+      "name": "GameCamera",
+      "parent": 0,
+      "children": [],
+      "transform": {
+        "pos": [0.0, 1.0, 3.0],
+        "rot": [0.0, 0.0, 0.0],
+        "scale": [1.0, 1.0, 1.0]
+      },
+      "meshRenderer": {
+        "mesh": "",
+        "materials": []
+      },
+      "camera": {
+        "enabled": true,
+        "fov": 65.0,
+        "near": 0.1,
+        "far": 100.0,
+        "primary": true
+      },
+      "light": {
+        "enabled": false,
+        "type": 0,
+        "color": [1.0, 1.0, 1.0],
+        "intensity": 1.0
+      }
+    },
+    {
+      "id": 805306371,
+      "name": "Monkey",
+      "parent": 0,
+      "children": [],
+      "transform": {
+        "pos": [0.0, 0.0, 0.0],
+        "rot": [0.0, 0.0, 0.0],
+        "scale": [1.0, 1.0, 1.0]
+      },
+      "meshRenderer": {
+        "mesh": "asset://536870913",
+        "materials": []
+      },
+      "camera": {
+        "enabled": false,
+        "fov": 60.0,
+        "near": 0.1,
+        "far": 1000.0,
+        "primary": false
+      },
+      "light": {
+        "enabled": false,
+        "type": 0,
+        "color": [1.0, 1.0, 1.0],
+        "intensity": 1.0
+      }
+    }
+  ]
+}
