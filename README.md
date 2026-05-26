@@ -1,50 +1,56 @@
 # XJEngine
 
+<p align="center">
+  <a href="?lang=en"><img src="https://img.shields.io/badge/Language-English-blue?style=for-the-badge" alt="English"></a>
+  <a href="?lang=zh"><img src="https://img.shields.io/badge/Language-中文-red?style=for-the-badge" alt="中文"></a>
+</p>
+
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20Linux%20%7C%20macOS-brightgreen)](https://github.com/aidexiaojike-ops/XJEngine)
 [![C++](https://img.shields.io/badge/C++-17-blue.svg)](https://en.cppreference.com/w/cpp/17)
 [![Vulkan](https://img.shields.io/badge/Vulkan-1.2+-orange.svg)](https://www.vulkan.org/)
 [![CMake](https://img.shields.io/badge/CMake-3.10+-yellow.svg)](https://cmake.org/)
 
-**XJEngine** is a lightweight modern game engine built with Vulkan and ECS architecture. The engine focuses on high-performance graphics rendering, providing a flexible material system, event-driven architecture, and modular rendering pipeline.
+> **EN:** XJEngine is a lightweight modern game engine built with Vulkan and ECS architecture.  
+> **CN:** XJEngine 是一个基于 Vulkan 和 ECS 架构的轻量级现代游戏引擎。
 
-**XJEngine** 是一个基于 Vulkan 的现代化实时渲染引擎，采用实体组件系统（ECS）架构设计。引擎专注于高性能图形渲染，提供灵活的材质系统、事件驱动架构和模块化的渲染管线。
-
-## ✨ Key Features
+## ✨ Key Features / 核心特性
 
 | Feature | Description |
 |---------|-------------|
-| **Vulkan Renderer** | Modern graphics API with multi-platform support, GPU-driven rendering pipeline |
-| **ECS Architecture** | High-performance Entity Component System using EnTT library |
-| **Event Driven System** | Complete input handling for window, mouse, keyboard events |
-| **Modular Material System** | Extensible material pipeline with textures, samplers and uniform buffers |
-| **Unlit Material System** | Complete unlit pipeline with Frame UBO, material parameter UBO, texture blending, and dynamic descriptor pool expansion |
-| **Runtime Material Generation** | Programmatic material creation with random colors, textures, and UV transforms at runtime |
-| **Procedural Textures** | Generate textures from pixel data (single color or multi-pixel arrays) without external files |
-| **Dynamic Instancing** | Support for large-scale entity rendering with dynamic uniform buffers |
-| **Camera Controller** | Orbit and free camera modes (Free as default) with intuitive mouse interaction |
-| **Multisampling Anti-aliasing** | MSAA support for improved visual quality |
-| **Depth Testing** | Complete depth buffer management |
-| **Shader Compilation** | Automatic GLSL to SPIR-V compilation at build time |
-| **Resource Management** | Automatic resource copying to runtime directory |
+| **Vulkan Renderer / Vulkan 渲染器** | Modern graphics API with multi-platform support, GPU-driven rendering pipeline / 多平台支持的现代图形 API |
+| **ECS Architecture / ECS 架构** | High-performance Entity Component System using EnTT library / 基于 EnTT 的高性能实体组件系统 |
+| **Event Driven System / 事件驱动** | Complete input handling for window, mouse, keyboard events / 完整的窗口/鼠标/键盘事件处理 |
+| **Modular Material System / 模块化材质** | Extensible material pipeline with textures, samplers and uniform buffers / 可扩展的纹理/采样器/UBO 管线 |
+| **Unlit Material System / Unlit 材质** | Complete unlit pipeline with Frame UBO, material parameter UBO, texture blending, and dynamic descriptor pool expansion / 完整的无光照管线 |
+| **Runtime Material Generation / 运行时材质生成** | Programmatic material creation with random colors, textures, and UV transforms at runtime / 随机颜色/纹理/UV 变换的程序化材质创建 |
+| **Procedural Textures / 程序化纹理** | Generate textures from pixel data (single color or multi-pixel arrays) without external files / 从像素数据生成纹理 |
+| **Dynamic Instancing / 动态实例化** | Support for large-scale entity rendering with dynamic uniform buffers / 大规模实体渲染 |
+| **Camera Controller / 摄像机控制** | Orbit and free camera modes (Free as default) with intuitive mouse interaction / 轨道和自由摄像机模式 |
+| **Asset System / 资产系统** | Two-layer Asset/Resource architecture, glTF 2.0 importer, scene assets, asset registry, JSON serialization / 双层架构 + glTF 导入 + 场景资产 |
+| **ImGui Editor UI / ImGui 编辑器** | In-engine editor with ImGui, Vulkan-accelerated rendering, docking, multi-viewport, Scene/Game preview panels / 内置编辑器面板 |
+| **Multisampling Anti-aliasing / 多重采样抗锯齿** | MSAA support for improved visual quality / MSAA 支持 |
+| **Depth Testing / 深度测试** | Complete depth buffer management / 完整的深度缓冲管理 |
+| **Shader Compilation / 着色器编译** | Automatic GLSL to SPIR-V compilation at build time / 编译时自动 GLSL → SPIR-V |
+| **Resource Management / 资源管理** | Automatic resource copying to runtime directory / 自动资源复制 |
 | **Asset System** | Two-layer Asset/Resource architecture, glTF 2.0 importer, scene assets, asset registry, JSON serialization |
 | **ImGui Editor UI** | In-engine editor with ImGui, Vulkan-accelerated rendering, docking, multi-viewport, Scene/Game preview panels |
 
-## 📋 Table of Contents
-- [Features](#-key-features)
-- [Architecture](#-engine-architecture)
-- [Quick Start](#-quick-start)
-- [Building](#-building)
-- [Project Structure](#-project-structure)
-- [Usage](#-usage)
-- [Development](#-development)
-- [Performance](#-performance)
-- [Known Issues](#-known-issues)
-- [Roadmap](#-roadmap)
-- [Contributing](#-contributing)
-- [License](#-license)
+## 📋 Table of Contents / 目录
+- [Features / 特性](#-key-features--核心特性)
+- [Architecture / 架构](#-engine-architecture--引擎架构)
+- [Quick Start / 快速开始](#-quick-start--快速开始)
+- [Building / 构建](#-building--构建)
+- [Project Structure / 项目结构](#-project-structure--项目结构)
+- [Usage / 使用](#-usage--使用)
+- [Development / 开发](#-development--开发)
+- [Performance / 性能](#-performance-characteristics--性能)
+- [Known Issues / 已知问题](#-known-issues--已知问题)
+- [Roadmap / 路线图](#-roadmap--路线图)
+- [Contributing / 贡献](#-contributing--贡献)
+- [License / 许可证](#-license--许可证)
 
-## 🚀 Quick Start
+## 🚀 Quick Start / 快速开始
 
 Get XJEngine running in under 5 minutes:
 
@@ -69,7 +75,7 @@ cd ../bin
 - [Vulkan SDK](https://vulkan.lunarg.com/) installed
 - CMake 3.10+ and C++17 compatible compiler
 
-## 🏗️ Engine Architecture
+## 🏗️ Engine Architecture / 引擎架构
 
 ```
 +-------------------+
@@ -116,7 +122,7 @@ CommandBuffer
 Swapchain
 ```
 
-### 🏛️ Technical Architecture Details
+### 🏛️ Technical Architecture Details / 技术架构详情
 
 #### **Vulkan Rendering Pipeline**
 - **Swapchain Management**: Automatic recreation on window resize
@@ -166,7 +172,7 @@ Swapchain
 - **Viewport System**: `XJViewport` base class with off-screen render target, descriptor set, and ImGui texture display
 - **Scene/Game Preview**: `XJScenePreview` and `XJGamePreview` panels for separate scene and game camera views
 
-## 🛠️ System Requirements
+## 🛠️ System Requirements / 系统要求
 
 ### Development Environment
 - **CMake** 3.10 or higher
@@ -189,7 +195,7 @@ Swapchain
 - **Dear ImGui**: Editor UI framework with Vulkan backend
 - **nlohmann/json**: JSON serialization for assets and scenes
 
-## 🚀 Building
+## 🚀 Building / 构建
 
 ### Windows
 ```bash
@@ -324,7 +330,7 @@ XJEngine/
 └── build/                  # 构建目录（临时）
 ```
 
-## ⚡ Performance Characteristics
+## ⚡ Performance / 性能
 
 XJEngine is designed for high-performance real-time rendering with the following optimizations:
 
@@ -345,7 +351,7 @@ XJEngine is designed for high-performance real-time rendering with the following
 - **Memory Coalescing**: Optimal buffer and image memory allocation
 - **Synchronization Minimization**: Careful use of barriers and synchronization primitives
 
-## 🎮 Usage
+## 🎮 Usage / 使用
 
 ### Basic Example
 Check the `XJEngineApp` class in `Src/main.cpp` to learn how to:
@@ -473,7 +479,7 @@ mEditorRenderer->Shutdown();
 mUIContext->Shutdown();
 ```
 
-## 🔧 Development
+## 🔧 Development / 开发
 
 ### Adding New Components
 1. Create component header file in `Core/Public/ECS/Component/`
@@ -505,13 +511,13 @@ mUIContext->Shutdown();
 3. Link against XJEngine libraries (Platform and Core)
 4. Use CMake to integrate with the engine build system
 
-## 🐛 Known Issues
+## 🐛 Known Issues / 已知问题
 
 1. **Memory Management**: Some resource cleanup logic needs improvement
 2. **Platform Support**: Limited testing on macOS with MoltenVK
 3. **Editor Panels**: Editor panel implementations (Viewport, Hierarchy, Inspector, Stats) are pending
 
-## 🗺️ Roadmap
+## 🗺️ Roadmap / 路线图
 
 ### Short-term (Next 3 months)
 - [x] ~~Fix Vulkan validation layer errors~~
@@ -535,11 +541,11 @@ mUIContext->Shutdown();
 - [ ] VR/AR support
 - [ ] Mobile platform support (Android/iOS)
 
-## 📝 License
+## 📝 License / 许可证
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
-## 🤝 Contributing
+## 🤝 Contributing / 贡献
 
 We welcome contributions! Please see our [Contributing Guidelines](CONTRIBUTING.md) for details.
 
