@@ -6,6 +6,8 @@
 #include  <memory>
 #include  <cstdint>
 #include  <string>
+#include <vector>
+
 
 //XJMesh 是 GPU Resource
 namespace XJ

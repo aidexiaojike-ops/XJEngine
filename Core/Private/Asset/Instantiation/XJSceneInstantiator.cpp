@@ -1,7 +1,5 @@
 #include "Asset/Instantiation/XJSceneInstantiator.h"
 
-#include "Asset/Importer/XJModelImporter.h"
-#include "Asset/XJAssetRegistry.h"
 #include "ECS/Component/Material/XJUnlitMaterialComponent.h"
 #include "ECS/Component/XJCameraComponent.h"
 #include "ECS/Component/XJSceneAssetComponents.h"
@@ -9,7 +7,8 @@
 #include "ECS/XJEntity.h"
 #include "ECS/XJScene.h"
 #include "Render/Resource/XJMaterialFactory.h"
-#include "Render/Resource/XJMeshFactory.h"
+#include "Asset/Loader/XJMeshAssetLoader.h"
+
 
 namespace XJ
 {
@@ -77,35 +76,16 @@ namespace XJ
         if (!data.MeshRenderer.Mesh.IsValid())
             return;
 
-        XJAssetHandle meshHandle = data.MeshRenderer.Mesh.Handle;
-        std::shared_ptr<XJMesh> gpuMesh;
-
-        auto cacheIt = ctx.MeshCache.find(meshHandle);
-        if (cacheIt != ctx.MeshCache.end())
-        {
-            gpuMesh = cacheIt->second;
-        }
-        else if (ctx.Registry && ctx.Registry->Contains(meshHandle))
-        {
-            auto meta = ctx.Registry->GetMeta(meshHandle);
-            if (meta.has_value())
-            {
-                XJGltfImporter importer;
-                if (importer.LoadMeshAsset(meta->SourcePath.string()))
-                {
-                    auto meshAsset = importer.ExtractMesh(0);
-                    if (meshAsset && !meshAsset->mVertices.empty())
-                        gpuMesh = XJMeshFactory::CreateFromAsset(*meshAsset);
-                }
-            }
-            ctx.MeshCache[meshHandle] = gpuMesh;
-        }
+        XJMeshAssetLoadContext loadContext;//加载网格资源需要的上下文，包含注册表和缓存等
+        loadContext.Registry = ctx.Registry;
+        loadContext.MeshCache = &ctx.MeshCache;
+        std::shared_ptr<XJMesh> gpuMesh = XJMeshAssetLoader::LoadMesh(data.MeshRenderer.Mesh.Handle, loadContext);
 
         if (!gpuMesh || !ctx.DefaultTexture || !ctx.DefaultSampler)
             return;
 
         auto& comp = entity.AddComponent<XJUnlitMaterialComponent>();
-        auto mat = XJMaterialFactory::GetInstance()->CreateMaterial<XJUnlitMaterial>();
+        auto mat = XJMaterialFactory::GetInstance()->CreateMaterial<XJUnlitMaterial>();//创建一个基础的 Unlit 材质
         mat->XJSetBaseColorA(glm::vec3(0.8f, 0.6f, 0.2f));
         mat->XJSetBaseColorB(glm::vec3(0.8f, 0.6f, 0.2f));
         mat->XJSetTextureView(UNLIT_MAT_BASE_COLOR_A, ctx.DefaultTexture, ctx.DefaultSampler);

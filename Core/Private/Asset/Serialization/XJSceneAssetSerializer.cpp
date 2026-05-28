@@ -9,6 +9,7 @@
 
 #include <fstream>
 #include <nlohmann/json.hpp>
+#include <string>
 
 namespace XJ
 {

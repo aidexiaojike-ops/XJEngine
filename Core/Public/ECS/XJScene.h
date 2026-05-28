@@ -45,7 +45,7 @@ namespace XJ
             void DestroyEntity(const XJEntity *entity);//销毁指定的实体。
             void DestroyAllEntity();//销毁场景中所有的实体。
 
-
+            const std::unordered_map<entt::entity, std::shared_ptr<XJEntity>>& GetEntities() const;
     };
     
     

@@ -6,7 +6,7 @@
 #include "Asset/XJSceneAsset.h"
 #include <memory>
 #include <filesystem>
-
+//引导资产注册和默认场景创建。确保在引擎启动时，注册表中至少有一个默认场景资产可用。
 
 namespace XJ
 {

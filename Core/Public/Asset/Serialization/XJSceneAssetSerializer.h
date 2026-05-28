@@ -16,7 +16,6 @@ namespace XJ
         public:
            
             static bool SaveToFile(const XJSceneAsset& sceneAsset, const std::filesystem::path& path); //将一个 XJSceneAsset（场景资产数据）写入磁盘文件（.xjscene）
-           
             static std::shared_ptr<XJSceneAsset> LoadFromFile(const std::filesystem::path& path); //从磁盘读取 .xjscene 文件，返回一个 XJSceneAsset 对象
 
             

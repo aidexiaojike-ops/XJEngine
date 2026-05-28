@@ -1,0 +1,41 @@
+{
+  "version": 1,
+  "layout": {
+    "dockspace": true,
+    "saveImguiIni": true,
+    "imguiIniPath": "Resource/Config/imgui.ini"
+  },
+  "panels": {
+    "contentBrowser": {
+      "visible": true,
+      "title": "Content Browser",
+      "rootPath": "Resource",
+      "showAssetType": true,
+      "showHandle": true,
+      "filter": ""
+    },
+    "hierarchy": {
+      "visible": true,
+      "title": "World Outliner",
+      "showEntityId": true,
+      "showAssetSource": false
+    },
+    "inspector": {
+      "visible": true,
+      "title": "Details",
+      "showTransform": true,
+      "showMeshRenderer": true,
+      "showCamera": true,
+      "showAssetRefs": true
+    },
+    "debugConsole": {
+      "visible": true,
+      "title": "Output Log",
+      "maxLines": 1000,
+      "showInfo": true,
+      "showWarning": true,
+      "showError": true,
+      "autoScroll": true
+    }
+  }
+}

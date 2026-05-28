@@ -34,10 +34,13 @@
 #include "UI/XJEditorRenderer.h"
 #include "UI/Viewports/XJScenePreview.h" 
 #include "UI/Viewports/XJGamePreview.h"
+#include "UI/XJEditorUILayer.h"
 
 #include <iostream>
 #include <chrono>
 #include <filesystem>
+
+
 
     
 class XJEngineApp : public XJ::XJApplication
@@ -223,12 +226,7 @@ protected:
     {
          // ===== UI 开始 =====
         //mUIContext->BeginFrame();
-        if (mScenePreview) 
-            mScenePreview->DrawUI(); // 绘制场景预览 UI 
-        
-        if (mGamePreview) 
-           mGamePreview->DrawUI();// 绘制游戏预览 UI
-        ImGui::ShowDemoWindow();     // 用于验证，确认稳定后可删除
+        mEditorUILayer->DrawUI();
        
         XJ::XJEntity *kCameraEntity = mRenderTarget->XJGetCamera();// 获取摄像机实体
         if(kCameraEntity && XJ::XJEntity::HasComponent<XJ::XJCameraComponent>(kCameraEntity))
@@ -383,6 +381,7 @@ private:
     std::unique_ptr<XJ::XJEditorRenderer>               mEditorRenderer;
     std::unique_ptr<XJ::XJScenePreview>                 mScenePreview;
     std::unique_ptr<XJ::XJGamePreview>                  mGamePreview;
+    std::unique_ptr<XJ::XJEditorUILayer>                mEditorUILayer;
 
     // 摄像机控制器
     std::unique_ptr<XJ::XJCameraControllerSystem>       mCameraController;
