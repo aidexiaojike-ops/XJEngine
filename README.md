@@ -27,8 +27,8 @@ XJEngine is a lightweight modern game engine built with Vulkan and ECS architect
 | **Procedural Textures** | Generate textures from pixel data (single color or multi-pixel arrays) without external files |
 | **Dynamic Instancing** | Support for large-scale entity rendering with dynamic uniform buffers |
 | **Camera Controller** | Orbit and free camera modes (Free as default) with intuitive mouse interaction |
-| **Asset System** | Two-layer Asset/Resource architecture, glTF 2.0 importer, scene assets, asset registry, JSON serialization |
-| **ImGui Editor UI** | In-engine editor with ImGui, Vulkan-accelerated rendering, docking, multi-viewport, Scene/Game preview panels |
+| **Asset System** | Two-layer Asset/Resource architecture, glTF 2.0 importer, asset registry & bootstrap, scene instantiator, mesh/texture/material loaders |
+| **ImGui Editor UI** | In-engine editor with ImGui, docking, multi-viewport, panels (Hierarchy, Inspector, Content Browser, Console, Scene/Game Preview) |
 | **Multisampling Anti-aliasing** | MSAA support for improved visual quality |
 | **Depth Testing** | Complete depth buffer management |
 | **Shader Compilation** | Automatic GLSL to SPIR-V compilation at build time |
@@ -166,8 +166,10 @@ Swapchain
 - **XJUIContext**: ImGui context management with GLFW backend, docking, and multi-viewport support
 - **XJEditorRenderer**: Vulkan-accelerated ImGui draw data rendering with descriptor pool management
 - **Multi-Viewport**: Support for floating/detached editor windows via ImGui platform windows
+- **XJEditorUILayer**: Orchestrates editor panels (Hierarchy, Inspector, Content Browser, Debug Console)
 - **Viewport System**: `XJViewport` base class with off-screen render target, descriptor set, and ImGui texture display
 - **Scene/Game Preview**: `XJScenePreview` and `XJGamePreview` panels for separate scene and game camera views
+- **UI Config**: `XJEditorUIConfig` reads/writes `EditorUI.json` for per-panel visibility and layout persistence
 
 ## 🛠️ System Requirements
 
@@ -279,27 +281,31 @@ XJEngine/
 │   │   └── Asset/           # 资产管理（CPU 侧）
 │   │       ├── XJAsset.h
 │   │       ├── XJAssetRef.h
-│   │       ├── XJAssetManager.h
 │   │       ├── XJAssetRegistry.h
 │   │       ├── XJMeshAsset.h
 │   │       ├── XJTextureAsset.h
 │   │       ├── XJMaterialAsset.h
 │   │       ├── XJSceneAsset.h
+│   │       ├── XJSceneRuntimeUtil.h
 │   │       ├── Importer/    # 格式导入器
 │   │       │   ├── XJModelImporter.h
 │   │       │   ├── XJTextureImporter.h
 │   │       │   └── XJMaterialImporter.h
+│   │       ├── Loader/      # 资产加载器
+│   │       │   └── XJMeshAssetLoader.h
 │   │       ├── Serialization/ # 场景序列化
 │   │       │   └── XJSceneAssetSerializer.h
-│   │       └── Instantiation/ # 场景实例化
-│   │           └── XJSceneInstantiator.h
+│   │       ├── Instantiation/ # 场景实例化
+│   │       │   └── XJSceneInstantiator.h
+│   │       └── Register/    # 资产引导注册
+│   │           └── XJAssetBootstrap.h
 │   └── Private/            # 私有实现
 │
 ├── Editor/                   # 编辑器模块（ImGui UI）
 │   ├── Public/UI/            # UI 上下文、渲染器、编辑器层
-│   │   ├── Panels/           # 编辑器面板（视口、层级、检查器、统计）
+│   │   ├── Panels/           # 编辑器面板（Hierarchy, Inspector, Content Browser, Debug Console）
 │   │   └── Viewports/        # 视口系统（场景预览、游戏预览）
-│   ├── Private/UI/           # UI 实现及视口实现
+│   ├── Private/UI/           # UI 实现及视口/面板实现
 │   └── cmake/                # SPIR-V 编译和 Vulkan DLL 部署
 │
 ├── Platform/               # 平台相关代码
@@ -317,7 +323,7 @@ XJEngine/
 │   ├── Shader/             # GLSL 着色器 (BaseVertex, Descriptor, Unlit)
 │   ├── Texture/            # 纹理图像
 │   ├── Mesh/               # 网格数据 (.glb)
-│   ├── Config/             # 配置文件 (AssetRegistry.json)
+│   ├── Config/             # 配置文件 (AssetRegistry.json, EditorUI.json)
 │   └── Scenes/             # 场景文件 (.xjscene)
 │
 ├── bin/                    # 运行时输出目录（构建后生成）
