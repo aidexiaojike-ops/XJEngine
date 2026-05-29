@@ -2,6 +2,8 @@
 #ifndef XJ_INSPECTOR_PANEL_H
 #define XJ_INSPECTOR_PANEL_H
 
+#include "UI/XJEditorUIConfig.h"
+
 namespace XJ
 {
     class XJEditorUIState;
@@ -10,10 +12,10 @@ namespace XJ
     class XJInspectorPanel
     {
         public:
-            XJInspectorPanel(XJEditorUIState& state);
+            XJInspectorPanel(XJEditorUIState& state, XJEditorPanelConfig_Inspector* config);
             ~XJInspectorPanel();
 
-            void SetState(XJEditorUIState* state) const { if (state) mState = *state;};
+      
             void DrawUI();
 
         private:
@@ -23,6 +25,7 @@ namespace XJ
             void DrawAssetRefComponent(XJEntity* entity);//显示 AssetRef 组件的 UI，允许用户查看和修改实体引用的资产（如场景、网格等）
 
             XJEditorUIState& mState;
+            XJEditorPanelConfig_Inspector* mConfig = nullptr;
     };
 }
 #endif

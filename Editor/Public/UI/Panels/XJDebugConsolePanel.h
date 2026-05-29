@@ -2,6 +2,7 @@
 #ifndef XJ_DEBUG_CONSOLE_PANEL_H
 #define XJ_DEBUG_CONSOLE_PANEL_H
 
+#include "UI/XJEditorUIConfig.h"
 
 namespace XJ
 {
@@ -10,14 +11,17 @@ namespace XJ
     class XJDebugConsolePanel
     {
         public:
-            XJDebugConsolePanel(XJEditorUIState& state);
+            XJDebugConsolePanel(XJEditorUIState& state, XJEditorPanelConfig_DebugConsole* config);
             ~XJDebugConsolePanel();
 
-            void SetState(XJEditorUIState* state) const { if (state) mState = *state;};
             void DrawUI();
 
         private:
             XJEditorUIState& mState;
+            XJEditorPanelConfig_DebugConsole* mConfig = nullptr;
+            bool mShowTrace = true;
+            bool mShowCritical = true;
+            char mSearchBuffer[256] = {};
     };
 }
 

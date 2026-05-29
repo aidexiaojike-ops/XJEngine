@@ -30,10 +30,25 @@ namespace XJ
         mState.ShowInspector = mConfig.panels.inspector.visible;
         mState.ShowDebugConsole = mConfig.panels.debugConsole.visible;
         // 创建面板实例
-        mContentBrowser  = std::make_unique<XJContentBrowserPanel>(mState);
-        mHierarchy       = std::make_unique<XJHierarchyPanel>(mState);
-        mInspector       = std::make_unique<XJInspectorPanel>(mState);
-        mDebugConsole    = std::make_unique<XJDebugConsolePanel>(mState);
+        mContentBrowser = std::make_unique<XJContentBrowserPanel>(
+            mState,
+            &mConfig.panels.contentBrowser
+        );
+        
+        mHierarchy = std::make_unique<XJHierarchyPanel>(
+            mState,
+            &mConfig.panels.hierarchy
+        );
+        
+        mInspector = std::make_unique<XJInspectorPanel>(
+            mState,
+            &mConfig.panels.inspector
+        );
+        
+        mDebugConsole = std::make_unique<XJDebugConsolePanel>(
+            mState,
+            &mConfig.panels.debugConsole
+        );
     }
 
     void XJEditorUILayer::DrawUI()

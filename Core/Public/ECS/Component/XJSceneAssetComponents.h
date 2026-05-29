@@ -24,8 +24,8 @@ namespace XJ
 
     class XJMaterialAssetRefComponent : public XJComponent
     {
-    public:
-        std::vector<XJAssetRef> Materials;
+        public:
+            std::vector<XJAssetRef> Materials;
     };
 }
 

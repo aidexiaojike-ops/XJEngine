@@ -155,6 +155,7 @@ protected:
         mEditorRenderer->Init(kUIRendererInfo);
         // 初始化场景预览和游戏预览 UI
         // 创建场景预览和游戏预览对象，并完成初始化
+
         mScenePreview = std::make_unique<XJ::XJScenePreview>();
         mScenePreview->SetViewportName("Scene Preview");
         mScenePreview->Init(kRenderContext);
@@ -166,6 +167,9 @@ protected:
         mGamePreview->Init(kRenderContext);
         mGamePreview->AddMaterialSystem<XJ::XJBaseMaterialSystem>();
         mGamePreview->AddMaterialSystem<XJ::XJUnlitMaterialSystem>();
+
+        mEditorUILayer = std::make_unique<XJ::XJEditorUILayer>(mEditorUIState);
+        mEditorUILayer->Init("Resource/Config/EditorUI.json");
     }
     // 场景
     void OnSceneInit(XJ::XJScene *scene) override
@@ -192,11 +196,16 @@ protected:
         if (mScenePreview) mScenePreview->SetCamera(previewCamera ? previewCamera : gameCamera);
         if (mGamePreview) mGamePreview->SetCamera(gameCamera ? gameCamera : previewCamera);
         mRenderTarget->XJSetCamera(gameCamera ? gameCamera : previewCamera);
+
+        mEditorUIState.Scene = scene;
+        mEditorUIState.AssetRegistry = &mAssetRegistry;
     }
     void OnSceneDestroy(XJ::XJScene *scene) override
     {
         // 可以在这里补充场景销毁时的清理逻辑，例如释放资源等
         spdlog::info("Scene destroyed");
+        mEditorUIState.SelectedEntity = nullptr;
+        mEditorUIState.Scene = nullptr;
     }
     // UI
     void OnUIBegin() override 
@@ -204,7 +213,6 @@ protected:
         if (mUIContext)
         {
             mUIContext->BeginFrame();
-            ImGui::DockSpaceOverViewport(ImGui::GetMainViewport()->ID);
         }
     }
     void OnUIEnd() override 
@@ -215,6 +223,13 @@ protected:
     
     void OnUIDestroy() override
     {
+        if (mEditorUILayer)
+        {
+            mEditorUILayer->SaveConfig();
+            mEditorUILayer->Shutdown();
+            mEditorUILayer.reset();
+        }
+
         if (mScenePreview) mScenePreview->Shutdown();
         if (mGamePreview) mGamePreview->Shutdown();
 
@@ -226,7 +241,14 @@ protected:
     {
          // ===== UI 开始 =====
         //mUIContext->BeginFrame();
-        mEditorUILayer->DrawUI();
+        if (mEditorUILayer)
+            mEditorUILayer->DrawUI();
+
+        if (mScenePreview)
+            mScenePreview->DrawUI();
+
+        if (mGamePreview)
+            mGamePreview->DrawUI();
        
         XJ::XJEntity *kCameraEntity = mRenderTarget->XJGetCamera();// 获取摄像机实体
         if(kCameraEntity && XJ::XJEntity::HasComponent<XJ::XJCameraComponent>(kCameraEntity))
@@ -381,6 +403,7 @@ private:
     std::unique_ptr<XJ::XJEditorRenderer>               mEditorRenderer;
     std::unique_ptr<XJ::XJScenePreview>                 mScenePreview;
     std::unique_ptr<XJ::XJGamePreview>                  mGamePreview;
+    XJ::XJEditorUIState                                 mEditorUIState;
     std::unique_ptr<XJ::XJEditorUILayer>                mEditorUILayer;
 
     // 摄像机控制器

@@ -29,6 +29,8 @@ namespace XJ
 
             bool Save(const std::filesystem::path& path) const;//将整个注册表的元数据序列化到文件（例如保存为 JSON 或二进制），用于持久化
             bool Load(const std::filesystem::path& path);//从文件反序列化恢复注册表状态
+
+            const std::unordered_map<XJAssetHandle, XJAssetMeta>& XJGetAllMetas() const { return mMetas; }//获取注册表中所有资产的元数据，供场景加载或编辑器 UI 使用
         private:
             std::unordered_map<XJAssetHandle, XJAssetMeta> mMetas;
     };

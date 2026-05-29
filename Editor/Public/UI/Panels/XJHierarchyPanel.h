@@ -2,6 +2,8 @@
 #ifndef XJ_HIERARCHY_PANEL_H
 #define XJ_HIERARCHY_PANEL_H
 
+#include "UI/XJEditorUIConfig.h"
+
 namespace XJ
 {
     class XJEditorUIState;
@@ -10,16 +12,15 @@ namespace XJ
     class XJHierarchyPanel
     {
         public:
-            XJHierarchyPanel(XJEditorUIState& state);
+            XJHierarchyPanel(XJEditorUIState& state, XJEditorPanelConfig_Hierarchy* config);
             ~XJHierarchyPanel();
-
-            void SetState(XJEditorUIState* state) const { if (state) mState = *state;};
 
             void DrawUI();
 
         private:
             void DrawEntityNode(XJEntity* entity);
             XJEditorUIState& mState;
+            XJEditorPanelConfig_Hierarchy* mConfig = nullptr;
     };
 }
 

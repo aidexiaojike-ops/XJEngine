@@ -16,8 +16,8 @@
 
 namespace XJ
 {
-    XJHierarchyPanel::XJHierarchyPanel(XJEditorUIState& state)
-        : mState(state)
+    XJHierarchyPanel::XJHierarchyPanel(XJEditorUIState& state, XJEditorPanelConfig_Hierarchy* config)
+        : mState(state), mConfig(config)
     {
     }
 
@@ -29,7 +29,8 @@ namespace XJ
     {
         if(!mState.ShowHierarchy)return;
 
-        ImGui::Begin(mState.Scene ? "World Outliner" : "World Outliner");
+        const char* title = mConfig ? mConfig->title.c_str() : "World Outliner";
+        ImGui::Begin(title);
 
         if(!mState.Scene)
         {
@@ -67,7 +68,7 @@ namespace XJ
         bool hasChildren = !childrenEntities.empty();//检查实体是否有子实体
 
         ImGuiTreeNodeFlags flags = ImGuiTreeNodeFlags_OpenOnArrow | ImGuiTreeNodeFlags_OpenOnDoubleClick;//默认展开/收起行为
-        if (!hasChildren)
+        if (hasChildren)
             flags |= ImGuiTreeNodeFlags_DefaultOpen;//如果有子实体，默认展开
         else
             flags |= ImGuiTreeNodeFlags_Leaf;//如果没有子实体，标记为叶节点
@@ -79,10 +80,18 @@ namespace XJ
         std::string label = entity->XJGetName().empty() ? "XJUnnamed" : entity->XJGetName();
 
         // UUID suffix 如果启用显示 UUID，则在标签后添加实体的 UUID 后缀
-        std::stringstream ss;
         uint64_t uuid = static_cast<uint64_t>(entity->XJGetId());
-        ss << "##" << std::hex << uuid;
-        label += ss.str();
+
+        if (mConfig && mConfig->showEntityId)
+        {
+            std::stringstream visibleId;
+            visibleId << " [0x" << std::hex << uuid << "]";
+            label += visibleId.str();
+        }
+
+        std::stringstream imguiId;
+        imguiId << "##" << std::hex << uuid;
+        label += imguiId.str();
 
         bool opened = ImGui::TreeNodeEx(label.c_str(), flags);//创建树节点
         //chick to select 点击节点以选择实体
@@ -91,58 +100,54 @@ namespace XJ
             mState.SelectedEntity = entity;
         }
         // right-click context menu 右键点击打开上下文菜单
-        if(ImGui::BeginPopupContextItem())
+        if (ImGui::IsItemHovered())
         {
-            if(ImGui::MenuItem("Select"))
+            ImGui::BeginTooltip();
+            ImGui::Text("Name: %s", entity->XJGetName().c_str());
+            ImGui::Text("UUID: 0x%016llX", uuid);
+
+            bool hasMesh = entity->HasComponent<XJMeshAssetRefComponent>();
+            bool hasCamera = entity->HasComponent<XJCameraComponent>();
+            bool hasTransform = entity->HasComponent<XJTransformComponent>();
+            bool hasSceneRef = entity->HasComponent<XJSceneAssetRefComponent>();
+
+            ImGui::Text("Components:");
+            ImGui::BulletText("Transform: %s", hasTransform ? "Yes" : "No");
+            ImGui::BulletText("Mesh:      %s", hasMesh ? "Yes" : "No");
+            ImGui::BulletText("Camera:    %s", hasCamera ? "Yes" : "No");
+            ImGui::BulletText("SceneRef:  %s", hasSceneRef ? "Yes" : "No");
+            if (mConfig && mConfig->showAssetSource && hasSceneRef)
             {
-                mState.SelectedEntity = entity;
+                const auto& ref = entity->GetComponent<XJSceneAssetRefComponent>();
+                ImGui::Text("Source Scene: %s", ref.SourceScene.ToUri().c_str());
             }
+
+            ImGui::EndTooltip();
+        }
+        if (ImGui::BeginPopupContextItem())
+        {
+            if (ImGui::MenuItem("Select"))
+                mState.SelectedEntity = entity;
 
             ImGui::Separator();
 
-            if(ImGui::MenuItem("Delete"))
+            if (ImGui::MenuItem("Delete"))
             {
-                //TODO: deferred deletion or immediate删除实体的逻辑，可能需要考虑延迟删除以避免在遍历时修改场景
+                // TODO: deferred deletion
             }
 
-            ImGui::EndPopup();//结束上下文菜单
+            ImGui::EndPopup();
+        }
 
-            // tooltip on hover with details 当鼠标悬停时显示工具提示，包含实体的详细信息
-            if(ImGui::IsItemHovered())
+        if (opened)
+        {
+            for (XJNode* child : childrenEntities)
             {
-                ImGui::BeginTooltip();
-                ImGui::Text("Name: %s", entity->XJGetName().c_str());//显示实体名称
-
-                uint64_t uid = static_cast<uint64_t>(entity->XJGetId());
-                ImGui::Text("UUID:  0x%016llX", uid);//显示实体 UUID
-                // 显示实体的组件信息，例如是否有 Mesh、Camera、Transform 等组件
-                bool hasMesh = entity->HasComponent<XJMeshAssetRefComponent>();
-                bool hasCamera = entity->HasComponent<XJCameraComponent>();
-                bool hasTransform = entity->HasComponent<XJTransformComponent>();
-                bool hasSceneRef = entity->HasComponent<XJSceneAssetRefComponent>();
-                // 可以根据需要添加更多组件类型的检查
-                ImGui::Text("Components:");
-                ImGui::BulletText("Transform: %s", hasTransform ? "Yes" : "No");
-                ImGui::BulletText("Mesh:      %s", hasMesh    ? "Yes" : "No");
-                ImGui::BulletText("Camera:    %s", hasCamera  ? "Yes" : "No");
-                ImGui::BulletText("SceneRef:  %s", hasSceneRef ? "Yes" : "No");
-                // 可以根据需要添加更多组件信息
-                ImGui::EndTooltip();
+                if (XJEntity* childEntity = dynamic_cast<XJEntity*>(child))
+                    DrawEntityNode(childEntity);
             }
 
-            if(opened)
-            {
-                //recurse children递归绘制子实体
-                for(XJNode* child : childrenEntities)
-                {
-                    if(XJEntity* childEntity = dynamic_cast<XJEntity*>(child))
-                    {
-                        DrawEntityNode(childEntity);
-                    }
-                }
-
-                ImGui::TreePop();//结束树节点
-            }
+            ImGui::TreePop();
         }
     }
 }
