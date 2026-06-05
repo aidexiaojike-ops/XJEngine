@@ -27,8 +27,8 @@ XJEngine is a lightweight modern game engine built with Vulkan and ECS architect
 | **Procedural Textures** | Generate textures from pixel data (single color or multi-pixel arrays) without external files |
 | **Dynamic Instancing** | Support for large-scale entity rendering with dynamic uniform buffers |
 | **Camera Controller** | Orbit and free camera modes (Free as default) with intuitive mouse interaction |
-| **Asset System** | Two-layer Asset/Resource architecture, glTF 2.0 importer, asset registry & bootstrap, scene instantiator, mesh/texture/material loaders |
-| **ImGui Editor UI** | In-engine editor with ImGui, docking, multi-viewport, panels (Hierarchy, Inspector, Content Browser, Console, Scene/Game Preview) |
+| **Asset System** | Two-layer Asset/Resource architecture, glTF 2.0 importer, asset registry scanner, bootstrap, scene instantiator, mesh/texture/material loaders |
+| **ImGui Editor UI** | In-engine editor with ImGui, docking, multi-viewport, drag-drop, panels (Hierarchy, Inspector, Content Browser, Console, Scene/Game Preview) |
 | **Multisampling Anti-aliasing** | MSAA support for improved visual quality |
 | **Depth Testing** | Complete depth buffer management |
 | **Shader Compilation** | Automatic GLSL to SPIR-V compilation at build time |
@@ -148,12 +148,14 @@ Swapchain
 #### **Asset System**
 - **Two-Layer Architecture**: Assets (CPU-side pure data) separate from Render Resources (GPU-side Vulkan objects)
 - **Asset Registry**: Handle-based asset database (`XJAssetRegistry`) with JSON persistence
+- **Asset Registry Scanner**: `XJAssetRegistryScanner` auto-scans Resource directories by extension to register assets
 - **Scene Assets**: Disk-side scene data (`XJSceneAsset`) with entities, transforms, meshes, cameras, lights
+- **Scene Switching**: Create/destroy entities via ECS lifecycle, support for multiple `.xjscene` files
 - **Scene Instantiator**: `XJSceneInstantiator` converts scene assets into live ECS entities with hierarchy
 - **Scene Serializer**: `XJSceneAssetSerializer` reads/writes `.xjscene` files via nlohmann/json
 - **glTF 2.0 Importer**: `XJModelImporter` parses `.glb`/`.gltf` via tinygltf
 - **Factories**: `XJMeshFactory`, `XJTextureFactory`, `XJMaterialFactory` convert Assets into GPU Render Resources
-- **Data Flow**: `File → Importer → Asset → Factory → Render Resource → Renderer`
+- **Data Flow**: `File → Scanner/Importer → Asset → Factory → Render Resource → Renderer`
 
 #### **Event System**
 - **Event Types**: Window, keyboard, mouse, and custom events
@@ -166,7 +168,7 @@ Swapchain
 - **XJUIContext**: ImGui context management with GLFW backend, docking, and multi-viewport support
 - **XJEditorRenderer**: Vulkan-accelerated ImGui draw data rendering with descriptor pool management
 - **Multi-Viewport**: Support for floating/detached editor windows via ImGui platform windows
-- **XJEditorUILayer**: Orchestrates editor panels (Hierarchy, Inspector, Content Browser, Debug Console)
+- **XJEditorUILayer**: Orchestrates editor panels (Hierarchy, Inspector, Content Browser, Debug Console) with drag-drop support
 - **Viewport System**: `XJViewport` base class with off-screen render target, descriptor set, and ImGui texture display
 - **Scene/Game Preview**: `XJScenePreview` and `XJGamePreview` panels for separate scene and game camera views
 - **UI Config**: `XJEditorUIConfig` reads/writes `EditorUI.json` for per-panel visibility and layout persistence
@@ -297,8 +299,9 @@ XJEngine/
 │   │       │   └── XJSceneAssetSerializer.h
 │   │       ├── Instantiation/ # 场景实例化
 │   │       │   └── XJSceneInstantiator.h
-│   │       └── Register/    # 资产引导注册
-│   │           └── XJAssetBootstrap.h
+│   │       └── Register/    # 资产引导注册/扫描
+│   │           ├── XJAssetBootstrap.h
+│   │           └── XJAssetRegistryScanner.h
 │   └── Private/            # 私有实现
 │
 ├── Editor/                   # 编辑器模块（ImGui UI）
