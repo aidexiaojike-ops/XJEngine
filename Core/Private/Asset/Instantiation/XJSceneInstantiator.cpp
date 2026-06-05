@@ -24,7 +24,7 @@ namespace XJ
         {
             auto* entity = CreateEntity(ed, outScene, *ctx);
             if (entity)
-                ctx->EntityMap[ed.Id] = entity;
+                ctx->EntityMap[ed.UUID] = entity;
         }
 
         ApplyHierarchy(asset, *ctx);
@@ -33,7 +33,7 @@ namespace XJ
 
     XJEntity* XJSceneInstantiator::CreateEntity(const XJSceneEntityData& data, XJScene& scene, XJSceneInstantiateContext& ctx)
     {
-        auto* entity = scene.CreateEntityWithUUID(data.Id, data.Name);
+        auto* entity = scene.CreateEntityWithUUID(data.UUID, data.Name);
         if (!entity)
             return nullptr;
 
@@ -41,18 +41,29 @@ namespace XJ
         {
             auto& source = entity->AddComponent<XJSceneAssetRefComponent>();
             source.SourceScene = ctx.SourceScene;
-            source.SourceEntity = data.Id;
+            source.SourceEntity = data.UUID;
         }
 
-        ApplyTransform(data, *entity);
-        ApplyMeshRenderer(data, *entity, ctx);
-        ApplyCamera(data, *entity);
+        if(data.HasTransform)
+            ApplyTransform(data, *entity);
+
+        if(data.HasMeshRenderer)
+            ApplyMeshRenderer(data, *entity, ctx);
+
+        if(data.HasCamera)    
+            ApplyCamera(data, *entity);
         return entity;
     }
+
+    //添加组件
 
     void XJSceneInstantiator::ApplyTransform(const XJSceneEntityData& data, XJEntity& entity)
     {
         auto& t = entity.GetComponent<XJTransformComponent>();
+
+        if (data.Transform.UUID != 0)
+            t.XJSetUUID(data.Transform.UUID);
+
         t.position = data.Transform.Position;
         t.rotation = data.Transform.Rotation;
         t.scale = data.Transform.Scale;
@@ -64,6 +75,10 @@ namespace XJ
         if (data.MeshRenderer.Mesh.IsValid())
         {
             auto& meshRef = entity.AddComponent<XJMeshAssetRefComponent>();
+            
+            if (data.MeshRenderer.UUID != 0)
+                meshRef.XJSetUUID(data.MeshRenderer.UUID);
+
             meshRef.Mesh = data.MeshRenderer.Mesh;
         }
 
@@ -85,13 +100,13 @@ namespace XJ
             return;
 
         auto& comp = entity.AddComponent<XJUnlitMaterialComponent>();
-        auto mat = XJMaterialFactory::GetInstance()->CreateMaterial<XJUnlitMaterial>();//创建一个基础的 Unlit 材质
-        mat->XJSetBaseColorA(glm::vec3(0.8f, 0.6f, 0.2f));
-        mat->XJSetBaseColorB(glm::vec3(0.8f, 0.6f, 0.2f));
-        mat->XJSetTextureView(UNLIT_MAT_BASE_COLOR_A, ctx.DefaultTexture, ctx.DefaultSampler);
-        mat->UpdateTextureViewEnable(UNLIT_MAT_BASE_COLOR_A, false);
-        mat->XJSetTextureView(UNLIT_MAT_BASE_COLOR_B, ctx.DefaultTexture, ctx.DefaultSampler);
-        mat->UpdateTextureViewEnable(UNLIT_MAT_BASE_COLOR_B, false);
+        auto mat = XJMaterialFactory::GetInstance()->CreateDefaultMaterial(ctx.DefaultTexture, ctx.DefaultSampler);//创建一个基础的 Unlit 材质
+        //mat->XJSetBaseColorA(glm::vec3(0.8f, 0.6f, 0.2f));
+        //mat->XJSetBaseColorB(glm::vec3(0.8f, 0.6f, 0.2f));
+        //mat->XJSetTextureView(UNLIT_MAT_BASE_COLOR_A, ctx.DefaultTexture, ctx.DefaultSampler);
+        //mat->UpdateTextureViewEnable(UNLIT_MAT_BASE_COLOR_A, false);
+        //mat->XJSetTextureView(UNLIT_MAT_BASE_COLOR_B, ctx.DefaultTexture, ctx.DefaultSampler);
+        //mat->UpdateTextureViewEnable(UNLIT_MAT_BASE_COLOR_B, false);
         comp.AddMesh(gpuMesh.get(), mat.get());
     }
 
@@ -101,6 +116,9 @@ namespace XJ
             return;
 
         auto& cam = entity.AddComponent<XJCameraComponent>();
+        if (data.Camera.UUID != 0)
+            cam.XJSetUUID(data.Camera.UUID);
+
         cam.XJSetFov(data.Camera.Fov);
         cam.XJSetNear(data.Camera.NearClip);
         cam.XJSetFar(data.Camera.FarClip);
@@ -114,7 +132,7 @@ namespace XJ
                 continue;
 
             auto parentIt = ctx.EntityMap.find(ed.Parent);
-            auto childIt = ctx.EntityMap.find(ed.Id);
+            auto childIt = ctx.EntityMap.find(ed.UUID);
             if (parentIt == ctx.EntityMap.end() || childIt == ctx.EntityMap.end())
                 continue;
 

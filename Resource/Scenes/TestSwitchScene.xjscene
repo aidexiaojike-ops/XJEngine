@@ -1,0 +1,101 @@
+{
+  "version": 2,
+  "asset": {
+    "handle": "268435458",
+    "type": "Scene",
+    "name": "TestSwitchScene"
+  },
+  "objects": [
+    {
+      "uuid": "805306401",
+      "type": "Entity",
+      "name": "SwitchSceneCamera",
+      "parent": null,
+      "children": [],
+      "components": {
+        "transform": {
+          "uuid": "0xc100001",
+          "type": "TransformComponent",
+          "pos": [2.5, 2.0, 5.0],
+          "rot": [-70.0, 20.0, 0.0],
+          "scale": [1.0, 1.0, 1.0]
+        },
+        "camera": {
+          "uuid": "0xc100002",
+          "type": "CameraComponent",
+          "enabled": true,
+          "fov": 60.0,
+          "near": 0.1,
+          "far": 150.0,
+          "primary": true
+        }
+      }
+    },
+    {
+      "uuid": "805306402",
+      "type": "Entity",
+      "name": "CenterMonkey",
+      "parent": null,
+      "children": [],
+      "components": {
+        "transform": {
+          "uuid": "0xc100003",
+          "type": "TransformComponent",
+          "pos": [0.0, 0.0, 0.0],
+          "rot": [0.0, 25.0, 0.0],
+          "scale": [1.2, 1.2, 1.2]
+        },
+        "meshRenderer": {
+          "uuid": "0xc100004",
+          "type": "MeshRendererComponent",
+          "mesh": "asset://536870913",
+          "materials": []
+        }
+      }
+    },
+    {
+      "uuid": "805306403",
+      "type": "Entity",
+      "name": "LeftMonkey",
+      "parent": null,
+      "children": [],
+      "components": {
+        "transform": {
+          "uuid": "0xc100005",
+          "type": "TransformComponent",
+          "pos": [-2.0, 0.0, 0.0],
+          "rot": [0.0, -35.0, 0.0],
+          "scale": [0.8, 0.8, 0.8]
+        },
+        "meshRenderer": {
+          "uuid": "0xc100006",
+          "type": "MeshRendererComponent",
+          "mesh": "asset://536870913",
+          "materials": []
+        }
+      }
+    },
+    {
+      "uuid": "805306404",
+      "type": "Entity",
+      "name": "RightMonkey",
+      "parent": null,
+      "children": [],
+      "components": {
+        "transform": {
+          "uuid": "0xc100007",
+          "type": "TransformComponent",
+          "pos": [2.0, 0.0, 0.0],
+          "rot": [0.0, 35.0, 0.0],
+          "scale": [0.8, 0.8, 0.8]
+        },
+        "meshRenderer": {
+          "uuid": "0xc100008",
+          "type": "MeshRendererComponent",
+          "mesh": "asset://536870913",
+          "materials": []
+        }
+      }
+    }
+  ]
+}

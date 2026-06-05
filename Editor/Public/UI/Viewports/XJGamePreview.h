@@ -13,7 +13,7 @@ namespace XJ
     {
         public:
 
-            virtual bool Render(VkCommandBuffer cmd) override;
+            virtual bool Render(VkCommandBuffer cmd) override;//游戏窗口渲染
             
 
              void SetCamera(XJEntity* camera)

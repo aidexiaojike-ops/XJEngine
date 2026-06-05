@@ -23,10 +23,14 @@
 #include "Asset/Serialization/XJSceneAssetSerializer.h"
 #include "Asset/Register/XJAssetBootstrap.h"
 #include "Asset/XJSceneRuntimeUtil.h"
+#include "Asset/Loader/XJMeshAssetLoader.h"
 
 #include "ECS/System/XJBaseMaterialSystem.h"
 #include "ECS/XJScene.h"
 #include "ECS/Component/XJCameraComponent.h"
+#include "ECS/Component/XJSceneAssetComponents.h"
+#include "ECS/Component/Material/XJUnlitMaterialComponent.h"
+#include "ECS/Component/XJTransformComponent.h"
 #include "ECS/System/XJCameraControllerSystem.h"
 #include "ECS/System/XJUnlitMaterialSystem.h"
 
@@ -35,17 +39,43 @@
 #include "UI/Viewports/XJScenePreview.h" 
 #include "UI/Viewports/XJGamePreview.h"
 #include "UI/XJEditorUILayer.h"
+#include "UI/XJEditorDragPayload.h"
 
 #include <iostream>
 #include <chrono>
 #include <filesystem>
-
-
+#include <algorithm>
+#include <cmath>
 
     
 class XJEngineApp : public XJ::XJApplication
 {
+  
 protected:
+
+    void OnExternalFilesDropped(GLFWwindow* window, int count, const char** paths)
+    {
+        mEditorUIState.PendingExternalDroppedFiles.clear();
+
+        for(int i = 0; i < count; ++i)
+        {
+            if(paths[i]){
+                mEditorUIState.PendingExternalDroppedFiles.emplace_back(paths[i]);
+            }
+        }
+
+        double mouseX = 0.0;
+        double mouseY = 0.0;
+        glfwGetCursorPos(window, &mouseX, &mouseY);
+
+        int windowX = 0;
+        int windowY = 0;
+        glfwGetWindowPos(window, &windowX, &windowY);
+
+        mEditorUIState.PendingExternalDropMousePos = glm::vec2(static_cast<float>(windowX + mouseX), static_cast<float>(windowY + mouseY));
+
+        mEditorUIState.HasPendingExternalDrop = !mEditorUIState.PendingExternalDroppedFiles.empty();
+    }
 
     void  OnConfiguration(XJ::AppSettings *appSettings) override
     {
@@ -53,6 +83,63 @@ protected:
         appSettings->windowWidth = 1600;
         appSettings->windowHeight = 1200;
         appSettings->title = "XJEngine Application";
+    }
+    //临时的碰撞球
+    bool IntersectRaySphere(const glm::vec3& rayOrigin,const glm::vec3& rayDir,const glm::vec3& center,float radius,float maxDistance,float& outT)
+    {
+        glm::vec3 oc = rayOrigin - center;
+
+        float b = glm::dot(oc, rayDir);
+        float c = glm::dot(oc, oc) - radius * radius;
+        float h = b * b - c;
+
+        if (h < 0.0f)
+            return false;
+
+        h = std::sqrt(h);
+
+        float t = -b - h;
+        if (t < 0.0f)
+            t = -b + h;
+
+        if (t < 0.0f || t > maxDistance)
+            return false;
+
+        outT = t;
+        return true;
+    }
+    //射线距离
+    bool RaycastSceneWithinDistance(XJ::XJScene* scene, const glm::vec3& rayOrigin, const glm::vec3& rayDir, float maxDistance, glm::vec3& outSpawnPosition)
+    {
+        if (!scene)
+        return false;
+
+        float closestT = maxDistance;
+        bool hit = false;
+
+        auto& registry = scene->XJGetEcsRegistry();
+        auto view = registry.view<XJ::XJTransformComponent, XJ::XJMeshAssetRefComponent>();
+
+        view.each([&](auto entity, XJ::XJTransformComponent& transform, XJ::XJMeshAssetRefComponent& meshRef)
+        {
+            float radius = std::max(transform.scale.x, std::max(transform.scale.y, transform.scale.z));
+            radius = std::max(radius, 0.5f);
+
+            float t = 0.0f;
+            if (!IntersectRaySphere(rayOrigin, rayDir, transform.position, radius, maxDistance, t))
+                return;
+
+            if (t < closestT)
+            {
+                closestT = t;
+                hit = true;
+
+                outSpawnPosition = transform.position;
+                outSpawnPosition.y += radius + 0.05f;
+            }
+        });
+
+        return hit;
     }
     void OnInit() override
     {
@@ -118,10 +205,11 @@ protected:
         // 滚轮事件回调
         mEventTesting = std::make_shared<XJ::XJEventTesting>();
         mOvserver = std::make_shared<XJ::XJEventObserver>();
-        mOvserver ->OnEvent<XJ::XJMouseScrollEvent>([this](const XJ::XJMouseScrollEvent &event)
+        mOvserver->OnEvent<XJ::XJMouseScrollEvent>([this](const XJ::XJMouseScrollEvent& event)
         {
-            XJ::XJEntity *kCameraEntity = mRenderTarget->XJGetCamera();
-            if(XJ::XJEntity::HasComponent<XJ::XJCameraComponent>(kCameraEntity))
+            XJ::XJEntity* kCameraEntity = mPreviewCameraEntity;
+        
+            if (mScenePreview && mScenePreview->IsHovered() && kCameraEntity && XJ::XJEntity::HasComponent<XJ::XJCameraComponent>(kCameraEntity))
             {
                 mCameraController->OnMouseScroll(event.mYOffset, kCameraEntity);
             }
@@ -153,6 +241,18 @@ protected:
         mEditorRenderer = std::make_unique<XJ::XJEditorRenderer>();
         mUIContext->Init(static_cast<GLFWwindow*>(XJGetWindow()->XJGetImplWindowPointer()));
         mEditorRenderer->Init(kUIRendererInfo);
+        ///拖拽资产到UI 生成json文件和UUID
+        GLFWwindow* glfwWindow = static_cast<GLFWwindow*>(XJGetWindow()->XJGetImplWindowPointer());
+
+        glfwSetWindowUserPointer(glfwWindow, this);
+        glfwSetDropCallback(glfwWindow,[](GLFWwindow* window, int count, const char** paths)
+        {
+            auto* app = static_cast<XJEngineApp*>(glfwGetWindowUserPointer(window));
+            if (!app)
+                return;
+
+            app->OnExternalFilesDropped(window, count, paths);
+        });
         // 初始化场景预览和游戏预览 UI
         // 创建场景预览和游戏预览对象，并完成初始化
 
@@ -171,6 +271,35 @@ protected:
         mEditorUILayer = std::make_unique<XJ::XJEditorUILayer>(mEditorUIState);
         mEditorUILayer->Init("Resource/Config/EditorUI.json");
     }
+    XJ::XJEntity* EnsurePreviewCamera(XJ::XJScene* scene)//默认编辑器相机设置
+    {
+        if(!scene)
+            return nullptr;
+
+        for(const auto& [enttEntity, entity] : scene->GetEntities())
+        {
+            if(entity && entity->XJGetUUID() == XJ::XJUUID(static_cast<uint64_t> (kPreviewCameraEntityId)))
+                return entity.get();
+        }
+
+        XJ::XJEntity* previewCamera = scene->CreateEntityWithUUID(
+                                    XJ::XJUUID(static_cast<uint64_t>(kPreviewCameraEntityId)),
+                                    "PreviewCamera");
+
+        auto& transform =  previewCamera->GetComponent<XJ::XJTransformComponent>();
+        transform.position = glm::vec3(0.0f, 1.5f, 3.0f);
+        transform.rotation = glm::vec3(-90.0f, 0.0f, 0.0f);
+        transform.scale = glm::vec3(1.0f);
+        transform.UpdateModelMatrix();
+
+        auto& camera = previewCamera->AddComponent<XJ::XJCameraComponent>();
+        camera.XJSetFov(65.0f);
+        camera.XJSetNear(0.1f);
+        camera.XJSetFar(100.0f);
+
+        return previewCamera;
+    }
+
     // 场景
     void OnSceneInit(XJ::XJScene *scene) override
     {
@@ -189,16 +318,35 @@ protected:
         mSceneInstantiateContext.DefaultSampler = mDefaultSampler;
         XJ::XJSceneInstantiator::Instantiate(*mSceneAsset, *scene, &mSceneInstantiateContext);
 
-        XJ::XJEntity* previewCamera = XJ::XJSceneInstantiator::FindInstantiatedEntity(
-            mSceneInstantiateContext, XJ::XJUUID(static_cast<uint32_t>(kPreviewCameraEntityId)));
-        XJ::XJEntity* gameCamera = XJ::XJSceneRuntimeUtil::FindPrimaryCameraEntity(*scene);
+        //XJ::XJEntity* previewCamera = XJ::XJSceneInstantiator::FindInstantiatedEntity(
+        //    mSceneInstantiateContext, XJ::XJUUID(static_cast<uint32_t>(kPreviewCameraEntityId)));
+        //XJ::XJEntity* gameCamera = XJ::XJSceneRuntimeUtil::FindPrimaryCameraEntity(*scene);
 
-        if (mScenePreview) mScenePreview->SetCamera(previewCamera ? previewCamera : gameCamera);
-        if (mGamePreview) mGamePreview->SetCamera(gameCamera ? gameCamera : previewCamera);
-        mRenderTarget->XJSetCamera(gameCamera ? gameCamera : previewCamera);
+        mGameCameraEntity = XJ::XJSceneRuntimeUtil::FindPrimaryCameraEntity(*scene);
+        mPreviewCameraEntity = EnsurePreviewCamera(scene);
+
+        if (mScenePreview)
+            mScenePreview->SetCamera(mPreviewCameraEntity);
+
+        if (mGamePreview)
+            mGamePreview->SetCamera(mGameCameraEntity);
+
+        if (mRenderTarget)
+            mRenderTarget->XJSetCamera(mGameCameraEntity);
+        
 
         mEditorUIState.Scene = scene;
         mEditorUIState.AssetRegistry = &mAssetRegistry;
+
+        if(mScenePreview)
+        {
+            mScenePreview->SetAssetDropCallback([this, scene](const XJ::XJAssetDragPayload& payload)
+            {
+                CreateEntityFromDroppedAsset(scene, payload);
+                MarkSceneDirty();
+                SaveCurrentScene();
+            });
+        }
     }
     void OnSceneDestroy(XJ::XJScene *scene) override
     {
@@ -206,7 +354,13 @@ protected:
         spdlog::info("Scene destroyed");
         mEditorUIState.SelectedEntity = nullptr;
         mEditorUIState.Scene = nullptr;
+
+        mPreviewCameraEntity = nullptr;
+        mGameCameraEntity = nullptr;
     }
+
+  
+
     // UI
     void OnUIBegin() override 
     { 
@@ -223,6 +377,8 @@ protected:
     
     void OnUIDestroy() override
     {
+        if (ImGui::GetCurrentContext())//退出的时候保存UI
+            ImGui::SaveIniSettingsToDisk(ImGui::GetIO().IniFilename);
         if (mEditorUILayer)
         {
             mEditorUILayer->SaveConfig();
@@ -236,6 +392,139 @@ protected:
         mEditorRenderer.reset();
         mUIContext.reset();
     }
+    void CreateEntityFromDroppedAsset(XJ::XJScene* scene, const XJ::XJAssetDragPayload& payload)// 处理从资源浏览器拖放到场景预览的资产，创建对应的实体
+    {
+        if (!scene || payload.Type != XJ::XJAssetType::Mesh || payload.Handle == 0)
+            return;
+
+        auto metaOpt = mAssetRegistry.GetMeta(payload.Handle);
+        if (!metaOpt)
+        {
+            spdlog::error("Asset meta not found for handle: 0x{:016X}", payload.Handle);
+            return;
+        }
+
+        XJ::XJEntity* entity = scene->CreateEntity(metaOpt->Name);
+        if (!entity)
+            return;
+
+        auto& transform = entity->GetComponent<XJ::XJTransformComponent>();
+        transform.position = CalculateSpawnPositionFromDropRay(scene, payload);
+        transform.UpdateModelMatrix();// 更新模型矩阵以应用位置
+
+        auto& meshRef = entity->AddComponent<XJ::XJMeshAssetRefComponent>();
+        meshRef.Mesh = { payload.Handle, XJ::XJAssetType::Mesh };
+
+        XJ::XJMeshAssetLoadContext loadContext;
+        loadContext.Registry = &mAssetRegistry;
+        loadContext.MeshCache = &mSceneInstantiateContext.MeshCache;
+
+        std::shared_ptr<XJ::XJMesh> gpuMesh = XJ::XJMeshAssetLoader::LoadMesh(payload.Handle, loadContext);
+
+        if(gpuMesh)
+        {
+            auto& comp = entity->AddComponent<XJ::XJUnlitMaterialComponent>();
+            auto mat = XJ::XJMaterialFactory::GetInstance()->CreateDefaultMaterial(
+                mWhiteTexture,
+                mDefaultSampler);
+
+            if (mat)
+                comp.AddMesh(gpuMesh.get(), mat.get());
+        } 
+
+        mEditorUIState.SelectedEntity = entity;
+        mEditorUIState.SelectedAsset = 0;
+    }
+
+    glm::vec3 CalculateSpawnPositionFromDropRay(XJ::XJScene* scene, const XJ::XJAssetDragPayload& payload)//拖拽资产 生成位置
+    {
+        if (!payload.HasViewportRay)
+            return glm::vec3(0.0f);
+
+        glm::vec3 spawnPosition{0.0f};
+
+        if(RaycastSceneWithinDistance(scene, payload.RayOrigin, payload.RayDirection, 5.0f, spawnPosition))
+        {
+            return spawnPosition;
+        }
+
+
+        return payload.RayOrigin + payload.RayDirection * 5.0f;
+    }
+
+    void MarkSceneDirty()//
+    {
+        mSceneDirty = true;
+    }
+
+    bool SaveCurrentScene()
+    {
+        if(!mEditorUIState.Scene)
+            return false;
+
+        auto sceneAsset  =  XJ::XJSceneAssetSerializer::BuildFromScene(*mEditorUIState.Scene);
+        if(!sceneAsset)
+            return false;
+
+        sceneAsset->mHandle = mSceneInstantiateContext.SourceScene.Handle;
+        sceneAsset->mName = mCurrentScenePath.stem().string();
+
+        bool saved = XJ::XJSceneAssetSerializer::SaveToFile(*sceneAsset, mCurrentScenePath);
+        if(saved)
+        {
+            mSceneDirty = false;
+        }
+
+        return saved;
+    }
+
+    bool OpenSceneAsset(const std::filesystem::path& scenePath, XJ::XJAssetHandle sceneHandle)//打开场景资产
+    {
+        if(!mEditorUIState.Scene)
+            return false;
+
+        auto sceneAsset = XJ::XJSceneAssetSerializer::LoadFromFile(scenePath);//获取路径
+        if(!sceneAsset)
+        {
+            spdlog::error("Failed to load scene: {}", scenePath.string());
+            return false;
+        }
+
+        mEditorUIState.Scene -> DestroyAllEntity();
+
+        mSceneInstantiateContext = {};
+        mSceneInstantiateContext.Registry = &mAssetRegistry;
+        mSceneInstantiateContext.SourceScene = { sceneHandle, XJ::XJAssetType::Scene };
+        mSceneInstantiateContext.DefaultTexture = mWhiteTexture;
+        mSceneInstantiateContext.DefaultSampler = mDefaultSampler;
+
+        XJ::XJSceneInstantiator::Instantiate(*sceneAsset, *mEditorUIState.Scene, &mSceneInstantiateContext);
+
+        //XJ::XJEntity* previewCamera = XJ::XJSceneInstantiator::FindInstantiatedEntity(
+        //    mSceneInstantiateContext, XJ::XJUUID(static_cast<uint32_t>(kPreviewCameraEntityId)));
+        //XJ::XJEntity* gameCamera = XJ::XJSceneRuntimeUtil::FindPrimaryCameraEntity(*mEditorUIState.Scene);
+
+        mGameCameraEntity = XJ::XJSceneRuntimeUtil::FindPrimaryCameraEntity(*mEditorUIState.Scene); 
+        mPreviewCameraEntity = EnsurePreviewCamera(mEditorUIState.Scene);
+
+        if (mScenePreview)
+        mScenePreview->SetCamera(mPreviewCameraEntity);
+
+        if (mGamePreview)
+            mGamePreview->SetCamera(mGameCameraEntity);
+
+        if (mRenderTarget)
+            mRenderTarget->XJSetCamera(mGameCameraEntity);
+
+        mEditorUIState.SelectedEntity = nullptr;    
+        mEditorUIState.SelectedAsset = sceneHandle;    
+
+        mSceneAsset = sceneAsset;
+        mCurrentScenePath = scenePath;
+        mSceneDirty = false;
+
+        return true;
+    }
 
     void OnUpdate(float deltaTime) override
     {
@@ -244,14 +533,26 @@ protected:
         if (mEditorUILayer)
             mEditorUILayer->DrawUI();
 
+        if(mEditorUIState.RequestOpenScene)
+        {
+            const std::filesystem::path scenePath = mEditorUIState.RequestedScenePath;
+            const XJ::XJAssetHandle sceneHandle = mEditorUIState.RequestedSceneHandle;
+
+            mEditorUIState.RequestOpenScene = false;
+            mEditorUIState.RequestedScenePath.clear();
+            mEditorUIState.RequestedSceneHandle = 0;
+
+            OpenSceneAsset(scenePath, sceneHandle);
+        }
+
         if (mScenePreview)
             mScenePreview->DrawUI();
 
         if (mGamePreview)
             mGamePreview->DrawUI();
        
-        XJ::XJEntity *kCameraEntity = mRenderTarget->XJGetCamera();// 获取摄像机实体
-        if(kCameraEntity && XJ::XJEntity::HasComponent<XJ::XJCameraComponent>(kCameraEntity))
+        XJ::XJEntity *kCameraEntity = mPreviewCameraEntity;// 获取摄像机实体
+        if(mScenePreview && mScenePreview->ShouldControlCamera() && kCameraEntity && XJ::XJEntity::HasComponent<XJ::XJCameraComponent>(kCameraEntity))
         {
             mCameraController->UpdateCameraControl(deltaTime, XJGetWindow(), kCameraEntity);
         }
@@ -420,6 +721,12 @@ private:
     XJ::XJAssetRegistry mAssetRegistry;
     std::shared_ptr<XJ::XJSceneAsset> mSceneAsset;
     XJ::XJSceneInstantiateContext mSceneInstantiateContext;
+    
+    bool mSceneDirty = false;
+    std::filesystem::path mCurrentScenePath = "Resource/Scenes/Default.xjscene";
+
+    XJ::XJEntity* mPreviewCameraEntity = nullptr;
+    XJ::XJEntity* mGameCameraEntity = nullptr;
    
 };
 

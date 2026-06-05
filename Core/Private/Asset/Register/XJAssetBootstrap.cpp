@@ -2,6 +2,7 @@
 #include "Asset/Serialization/XJSceneAssetSerializer.h"
 #include <filesystem>
 #include "spdlog/spdlog.h"
+#include "Asset/Register/XJAssetRegistryScanner.h"
 
 namespace XJ
 {
@@ -29,11 +30,28 @@ namespace XJ
     void XJAssetBootstrap::LoadOrCreateAssetRegistry()
     {
         const std::filesystem::path registryPath = "Resource/Config/AssetRegistry.json";
-        if (std::filesystem::exists(registryPath) && mAssetRegistry.Load(registryPath))
-            return;
 
-        RegisterBootstrapAssets();
-        mAssetRegistry.Save(registryPath);
+        if(std::filesystem::exists(registryPath))
+        {
+            if(mAssetRegistry.Load(registryPath))
+            {
+                spdlog::info("Loaded asset registry from {}", registryPath.string());
+            }
+            else
+            {
+                spdlog::error("Failed to load asset registry from {}, starting with empty registry", registryPath.string());
+                RegisterBootstrapAssets();
+            }
+        }
+        else
+        {
+            RegisterBootstrapAssets();
+        }
+
+        int addedCount = XJAssetRegistryScanner::ScanResourceAssets(mAssetRegistry, "Resource");
+
+        if (addedCount > 0 || !std::filesystem::exists(registryPath))
+            mAssetRegistry.Save(registryPath);
     }
     std::shared_ptr<XJ::XJSceneAsset> XJAssetBootstrap::LoadOrCreateDefaultSceneAsset()
     {

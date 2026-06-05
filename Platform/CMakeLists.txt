@@ -95,6 +95,7 @@ add_subdirectory(${TINYOBJLOADER_DIR})
 # 6. tinygltf
 set(TINYGLTF_DIR ${CMAKE_CURRENT_SOURCE_DIR}/External/tinygltf)
 set(TINYGLTF_HEADER_ONLY OFF CACHE BOOL "Use tinygltf as header-only")
+set(TINYGLTF_BUILD_LOADER_EXAMPLE OFF CACHE BOOL "" FORCE)
 add_subdirectory(${TINYGLTF_DIR})
 
 # 4. spdlog

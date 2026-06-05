@@ -10,13 +10,13 @@ namespace XJ
     bool XJGamePreview::Render(VkCommandBuffer cmd)
     {
         // ★ 先设摄像机，再 Begin（Begin 需要用它更新 aspect ratio）
-        if (mGameCamera)
-            mRenderTarget->XJSetCamera(mGameCamera);
+        mRenderTarget->XJSetCamera(mGameCamera);
+
         if (!BeginViewportRender(cmd))
             return false;
+        if (mGameCamera)
+            mRenderTarget->RenderMaterialSystem(cmd);
 
-
-        mRenderTarget->RenderMaterialSystem(cmd);
         EndViewportRender(cmd);
         return true;
     }

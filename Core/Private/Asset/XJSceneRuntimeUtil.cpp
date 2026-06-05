@@ -9,6 +9,8 @@ namespace XJ
     
     XJEntity* XJSceneRuntimeUtil::FindPrimaryCameraEntity(XJScene& scene) 
     {
+        static constexpr uint64_t PreviewCameraUUID = 0x30000001ull;
+
         auto& reg = scene.XJGetEcsRegistry();
         auto view = reg.view<XJCameraComponent>();
 
@@ -16,8 +18,13 @@ namespace XJ
         for (auto e : view)
         {
             auto* entity = scene.XJGetEntities(e);
-            if (entity)
-                return entity;
+            if (!entity)
+                continue;
+            
+            if (entity->XJGetUUID() == XJUUID(PreviewCameraUUID))
+                continue;
+            
+            return entity;
         }
 
         return nullptr;

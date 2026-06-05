@@ -14,6 +14,7 @@ namespace XJ
 {
     struct XJSceneTransformData
     {
+        XJUUID UUID = 0;
         glm::vec3 Position {0.0f};
         glm::vec3 Rotation {0.0f};
         glm::vec3 Scale {1.0f};
@@ -21,12 +22,14 @@ namespace XJ
 
     struct XJSceneMeshRendererData
     {
+        XJUUID UUID = 0;
         XJAssetRef Mesh;
         std::vector<XJAssetRef> Materials;
     };
 
     struct XJSceneCameraData
     {
+        XJUUID UUID = 0;
         bool Enabled = false;
         float Fov = 60.0f;
         float NearClip = 0.1f;
@@ -36,6 +39,7 @@ namespace XJ
 
     struct XJSceneLightData
     {
+        XJUUID UUID = 0;
         bool Enabled = false;
         int Type = 0; // 0 directional, 1 point, 2 spot
         glm::vec3 Color {1.0f};
@@ -44,11 +48,17 @@ namespace XJ
 
     struct XJSceneEntityData//场景 资产的entity
     {
-        XJUUID Id = 0;
+        XJUUID UUID = 0;
+        std::string Type = "Entity";
         std::string Name;
 
         XJUUID Parent = 0;
         std::vector<XJUUID> Children;
+
+        bool HasTransform = false;
+        bool HasMeshRenderer = false;
+        bool HasCamera = false;
+        bool HasLight = false;
 
         XJSceneTransformData Transform;
         XJSceneMeshRendererData MeshRenderer;
@@ -63,8 +73,8 @@ namespace XJ
 
             std::vector<XJSceneEntityData> Entities;//场景里面所有的资产
 
-            XJSceneEntityData* FindEntity(XJUUID id);//根据 UUID 查找实体
-            const XJSceneEntityData* FindEntity(XJUUID id) const;
+            XJSceneEntityData* FindEntity(XJUUID uuid);//根据 UUID 查找实体
+            const XJSceneEntityData* FindEntity(XJUUID uuid) const;
     };
     
 }

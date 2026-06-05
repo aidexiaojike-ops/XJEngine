@@ -12,8 +12,12 @@ namespace XJ
         bool visible = true;//是否显示内容浏览器面板
         std::string title = "Content Browser";//面板标题
         std::string rootPath = "Resource";//内容浏览器的根目录，默认为 Resource 文件夹
+        std::string currentPath = "Resource";//内容浏览器当前浏览的路径，默认为根目录
+
+        bool showFolders = true;//是否在内容浏览器中显示文件夹
         bool showAssetType = true;//是否在内容浏览器中显示资产类型标签
         bool showHandle = true;//是否在内容浏览器中显示资产句柄
+        
         std::string filter;//内容浏览器的过滤器字符串，用于搜索和筛选资产，例如 "Mesh" 或 "Texture"
     };
     struct XJEditorPanelConfig_Hierarchy//层级面板的配置项

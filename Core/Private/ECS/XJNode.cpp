@@ -47,4 +47,17 @@ namespace XJ
             }
         }
     }
+
+    void XJNode::XJClearChildren()
+    {
+        for(auto* child : mChildren)
+        {
+            if(child)
+            {
+                child->mParent = nullptr;
+            }
+        }
+
+        mChildren.clear();
+    }
 }

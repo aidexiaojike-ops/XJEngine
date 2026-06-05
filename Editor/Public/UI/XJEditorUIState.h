@@ -1,7 +1,10 @@
 #ifndef XJ_EDITOR_UI_STATE_H
 #define XJ_EDITOR_UI_STATE_H
 
+#include "Edit/Mathinclude.h"
 #include "Asset/XJAsset.h"
+#include <filesystem>
+#include <vector>
 
 namespace XJ
 {
@@ -16,11 +19,19 @@ namespace XJ
 
         XJEntity* SelectedEntity = nullptr;
         XJAssetHandle SelectedAsset = 0;
-
+        //四个功能UI
         bool ShowContentBrowser = true;
         bool ShowHierarchy = true;
         bool ShowInspector = true;
         bool ShowDebugConsole = true;
+        //打开场景请求
+        bool RequestOpenScene = false;
+        std::filesystem::path RequestedScenePath;
+        XJAssetHandle RequestedSceneHandle = 0;
+        //拖动外部资产
+        std::vector<std::filesystem::path> PendingExternalDroppedFiles;
+        glm::vec2 PendingExternalDropMousePos{0.0f};
+        bool HasPendingExternalDrop = false;
     };
 }
 

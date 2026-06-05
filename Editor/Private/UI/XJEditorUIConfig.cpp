@@ -40,6 +40,8 @@ namespace XJ
                 panels.contentBrowser.visible = cb.value("visible", true);
                 panels.contentBrowser.title = cb.value("title", "Content Browser");
                 panels.contentBrowser.rootPath = cb.value("rootPath", "Resource");
+                panels.contentBrowser.currentPath = cb.value("currentPath", "Resource");
+                panels.contentBrowser.showFolders = cb.value("showFolders", true);
                 panels.contentBrowser.showAssetType = cb.value("showAssetType", true);
                 panels.contentBrowser.showHandle = cb.value("showHandle", true);
                 panels.contentBrowser.filter = cb.value("filter", "");
@@ -95,6 +97,8 @@ namespace XJ
         j["panels"]["contentBrowser"]["visible"] = panels.contentBrowser.visible;
         j["panels"]["contentBrowser"]["title"] = panels.contentBrowser.title;
         j["panels"]["contentBrowser"]["rootPath"] = panels.contentBrowser.rootPath;
+        j["panels"]["contentBrowser"]["currentPath"] = panels.contentBrowser.currentPath;
+        j["panels"]["contentBrowser"]["showFolders"] = panels.contentBrowser.showFolders;
         j["panels"]["contentBrowser"]["showAssetType"] = panels.contentBrowser.showAssetType;
         j["panels"]["contentBrowser"]["showHandle"] = panels.contentBrowser.showHandle;
         j["panels"]["contentBrowser"]["filter"] = panels.contentBrowser.filter;

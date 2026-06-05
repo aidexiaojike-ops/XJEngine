@@ -27,6 +27,9 @@ namespace XJ
             bool Contains(XJAssetHandle handle) const;//检查某个 handle 是否存在于注册表中
             std::optional<XJAssetMeta> GetMeta(XJAssetHandle handle) const;//根据 handle 查询对应的元数据
 
+            bool ContainsSourcePath(const std::filesystem::path& sourcePath) const;//检查是否已经有资产使用了这个源文件路径，避免重复导入
+            XJAssetHandle FindHandleBySourcePath(const std::filesystem::path& sourcePath) const;//根据源文件路径查找对应的 handle，支持场景加载时根据路径恢复资产引用
+
             bool Save(const std::filesystem::path& path) const;//将整个注册表的元数据序列化到文件（例如保存为 JSON 或二进制），用于持久化
             bool Load(const std::filesystem::path& path);//从文件反序列化恢复注册表状态
 

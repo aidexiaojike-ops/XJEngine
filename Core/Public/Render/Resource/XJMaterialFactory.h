@@ -29,6 +29,11 @@ namespace XJ
                 mMaterials.clear();
             }
 
+            std::shared_ptr<XJUnlitMaterial> CreateDefaultMaterial(
+                                            const std::shared_ptr<XJTexture>& defaultTexture,
+                                            const std::shared_ptr<XJSampler>& defaultSampler);
+
+
             template<typename T>
             size_t GetMaterialSize()
             {

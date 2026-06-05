@@ -1,4 +1,6 @@
 #include "UI/Panels/XJInspectorPanel.h"
+#include "Asset/XJAssetRegistry.h"
+
 
 #include "UI/XJEditorUILayer.h"
 #include "ECS/XJEntity.h"
@@ -14,6 +16,18 @@
 
 namespace XJ
 {
+    static const char* AssetTypeToString(XJAssetType type)
+    {
+        switch (type)
+        {
+            case XJAssetType::None: return "None";
+            case XJAssetType::Mesh: return "Mesh";
+            case XJAssetType::Texture: return "Texture";
+            case XJAssetType::Material: return "Material";
+            case XJAssetType::Scene: return "Scene";
+            default: return "Unknown";
+        }
+    }
     XJInspectorPanel::XJInspectorPanel(XJEditorUIState& state, XJEditorPanelConfig_Inspector* config)
         : mState(state), mConfig(config)
     {
@@ -32,18 +46,30 @@ namespace XJ
 
         XJEntity* entity = mState.SelectedEntity;
 
-        if(!entity)
+        if(entity)
+        {
+            if(!entity->IsValid())
+            {
+                ImGui::Text("Selected entity is not valid");
+                ImGui::End();
+                return;
+            }
+           
+        }
+        else if(mState.SelectedAsset != 0)
+        {
+            DrawAssetDetails(mState.SelectedAsset);
+            ImGui::End();
+            return;
+        }
+        else
         {
             ImGui::Text("No entity selected");
             ImGui::End();
             return;
         }
-        if(!entity->IsValid())
-        {
-            ImGui::Text("Selected entity is not valid");
-            ImGui::End();
-            return;
-        }
+         
+      
         // === Entity Header === 显示实体名称和 UUID
         if(ImGui::CollapsingHeader("Entity", ImGuiTreeNodeFlags_DefaultOpen))
         {
@@ -56,7 +82,7 @@ namespace XJ
             {
                 entity->XJSetName(nameBuffer);
             }
-            uint64_t uuid = static_cast<uint64_t>(entity->XJGetId());
+            uint64_t uuid = static_cast<uint64_t>(entity->XJGetUUID());
 
             ImGui::LabelText("UUID",  "0x%016llX", uuid);//显示实体的 UUID，格式化为 16 位十六进制数
         }
@@ -219,4 +245,39 @@ namespace XJ
         uint64_t srcEntity = static_cast<uint64_t>(sceneRef.SourceEntity);
         ImGui::LabelText("Source Entity UUID", "0x%016llX", srcEntity);
     }
+
+    void XJInspectorPanel::DrawAssetDetails(XJAssetHandle handle)
+    {
+        if(!mState.AssetRegistry)
+        {
+            ImGui::Text("No Asset Registry");
+            return;
+        }
+
+        auto metaOpt = mState.AssetRegistry->GetMeta(handle);
+        if(!metaOpt.has_value())
+        {
+            ImGui::Text("Asset not found: 0x%016llX", static_cast<uint64_t>(handle));
+            return;
+        }   
+
+        const auto& meta = metaOpt.value();
+
+        if(ImGui::CollapsingHeader("Asset", ImGuiTreeNodeFlags_DefaultOpen))
+        {
+            //ImGui::LabelText("Name", "%s", meta.Name.c_str());
+            //ImGui::LabelText("Handle", "0x%016llX", static_cast<uint64_t>(meta.Handle));
+            //ImGui::LabelText("Type", "%d", static_cast<int>(meta.Type));
+            //ImGui::LabelText("Source", "%s", meta.SourcePath.string().c_str());
+            //ImGui::LabelText("Imported", "%s", meta.ImportedPath.string().c_str());
+
+            ImGui::LabelText("Name", "%s", meta.Name.c_str());
+            ImGui::LabelText("Handle", "0x%016llX", static_cast<uint64_t>(meta.Handle));
+            ImGui::LabelText("Type", "%s", AssetTypeToString(meta.Type));
+            ImGui::LabelText("Source", "%s", meta.SourcePath.string().c_str());
+            ImGui::LabelText("Imported", "%s", meta.ImportedPath.string().c_str());
+        }
+    }
+
+  
 }

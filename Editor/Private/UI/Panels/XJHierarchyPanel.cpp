@@ -80,7 +80,7 @@ namespace XJ
         std::string label = entity->XJGetName().empty() ? "XJUnnamed" : entity->XJGetName();
 
         // UUID suffix 如果启用显示 UUID，则在标签后添加实体的 UUID 后缀
-        uint64_t uuid = static_cast<uint64_t>(entity->XJGetId());
+        uint64_t uuid = static_cast<uint64_t>(entity->XJGetUUID());
 
         if (mConfig && mConfig->showEntityId)
         {
@@ -98,6 +98,7 @@ namespace XJ
         if(ImGui::IsItemClicked())
         {
             mState.SelectedEntity = entity;
+            mState.SelectedAsset = 0;
         }
         // right-click context menu 右键点击打开上下文菜单
         if (ImGui::IsItemHovered())
@@ -127,7 +128,10 @@ namespace XJ
         if (ImGui::BeginPopupContextItem())
         {
             if (ImGui::MenuItem("Select"))
-                mState.SelectedEntity = entity;
+            {
+                mState.SelectedEntity = entity;//选择菜单项以选择实体
+                mState.SelectedAsset  = 0;
+            }
 
             ImGui::Separator();
 

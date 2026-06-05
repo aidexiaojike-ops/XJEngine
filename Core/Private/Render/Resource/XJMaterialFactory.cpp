@@ -48,4 +48,24 @@ namespace XJ
         return kMat;
         
     }
+
+    std::shared_ptr<XJUnlitMaterial> XJMaterialFactory::CreateDefaultMaterial(
+                const std::shared_ptr<XJTexture>& defaultTexture,
+                const std::shared_ptr<XJSampler>& defaultSampler)
+    {
+        auto mat = CreateMaterial<XJUnlitMaterial>();
+
+        mat->XJSetBaseColorA(glm::vec3(0.8f, 0.6f, 0.2f));
+        mat->XJSetBaseColorB(glm::vec3(0.8f, 0.6f, 0.2f));
+
+        if(defaultTexture && defaultSampler)
+        {
+            mat->XJSetTextureView(UNLIT_MAT_BASE_COLOR_A, defaultTexture, defaultSampler);
+            mat->UpdateTextureViewEnable(UNLIT_MAT_BASE_COLOR_A, false);
+
+            mat->XJSetTextureView(UNLIT_MAT_BASE_COLOR_B, defaultTexture, defaultSampler);
+            mat->UpdateTextureViewEnable(UNLIT_MAT_BASE_COLOR_B, false);
+        }
+        return mat;
+    }
 }

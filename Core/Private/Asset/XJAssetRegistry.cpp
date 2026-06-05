@@ -73,4 +73,24 @@ namespace XJ
         }
         return true;
     }
+    static std::filesystem::path NormalizeAssetPath(const std::filesystem::path& path)//规范化路径，去除冗余的 "." 和 ".." 以及多余的分隔符，确保路径的一致性和可比较性
+    {
+        return path.lexically_normal().generic_string();
+    }
+
+    bool XJAssetRegistry::ContainsSourcePath(const std::filesystem::path& sourcePath) const
+    {
+        return FindHandleBySourcePath(sourcePath) != 0;
+    }
+
+    XJAssetHandle XJAssetRegistry::FindHandleBySourcePath(const std::filesystem::path& sourcePath) const
+    {
+        const auto normalizedPath = NormalizeAssetPath(sourcePath);
+        for(const auto& [handle, meta] : mMetas)
+        {
+            if(NormalizeAssetPath(meta.SourcePath) == normalizedPath)
+                return handle;
+        }
+        return 0;
+    }
 }

@@ -45,7 +45,7 @@ namespace XJ
         mRootNode->XJAddChild(mEntities[enttEntity].get());
 
         // 为实体设置唯一的 UUID（如果未提供名称则使用默认值）
-        mEntities[enttEntity]->XJSetId(id);
+        mEntities[enttEntity]->XJSetUUID(id);
         mEntities[enttEntity]->XJSetName(name.empty() ? "Entity" : name);
 
         // 给实体添加默认的 Transform 组件
@@ -80,9 +80,12 @@ namespace XJ
         }
     }
 
-     // DestroyAllEntity：销毁场景中的所有实体
-    void XJScene::DestroyAllEntity() 
+     
+    void XJScene::DestroyAllEntity() // DestroyAllEntity：销毁场景中的所有实体
     {
+
+        if(mRootNode)
+            mRootNode->XJClearChildren();
         // 清空 ECS 注册表中的所有实体
         mEcsRegistry.clear();
 
@@ -100,5 +103,10 @@ namespace XJ
         }
          // 如果实体不存在，返回空指针
         return nullptr;
+    }
+
+    const std::unordered_map<entt::entity, std::shared_ptr<XJEntity>>& XJScene::GetEntities() const
+    {
+        return mEntities;
     }
 }
