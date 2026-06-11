@@ -26,7 +26,7 @@ XJEngine is a lightweight modern game engine built with Vulkan and ECS architect
 | **Runtime Material Generation** | Programmatic material creation with random colors, textures, and UV transforms at runtime |
 | **Procedural Textures** | Generate textures from pixel data (single color or multi-pixel arrays) without external files |
 | **Dynamic Instancing** | Support for large-scale entity rendering with dynamic uniform buffers |
-| **Camera Controller** | Orbit and free camera modes (Free as default) with intuitive mouse interaction |
+| **Camera Controller / 摄像机控制** | Shared camera module with orbit/free modes, editor camera manager, ECS camera system |
 | **Asset System** | Two-layer Asset/Resource architecture, glTF 2.0 importer, asset registry scanner, bootstrap, scene instantiator, mesh/texture/material loaders |
 | **ImGui Editor UI** | In-engine editor with ImGui, docking, multi-viewport, drag-drop, panels (Hierarchy, Inspector, Content Browser, Console, Scene/Game Preview) |
 | **Multisampling Anti-aliasing** | MSAA support for improved visual quality |
@@ -165,10 +165,13 @@ Swapchain
 
 #### **Editor UI System**
 - **Lifecycle Hooks**: `OnUIBegin`/`OnUIEnd`/`OnUIRender`/`OnUIDestroy` virtual methods in XJApplication base class
+- **MVVM Architecture**: Controllers (camera, scene), Services, ViewModels decouple UI from ECS
+- **XJEditorSceneController**: Scene load/save/open, dirty tracking, entity mutation requests
+- **XJEditorCameraManager**: Viewport camera binding and editor camera lifecycle
 - **XJUIContext**: ImGui context management with GLFW backend, docking, and multi-viewport support
 - **XJEditorRenderer**: Vulkan-accelerated ImGui draw data rendering with descriptor pool management
 - **Multi-Viewport**: Support for floating/detached editor windows via ImGui platform windows
-- **XJEditorUILayer**: Orchestrates editor panels (Hierarchy, Inspector, Content Browser, Debug Console) with drag-drop support
+- **XJEditorUILayer**: Orchestrates editor panels with drag-drop support
 - **Viewport System**: `XJViewport` base class with off-screen render target, descriptor set, and ImGui texture display
 - **Scene/Game Preview**: `XJScenePreview` and `XJGamePreview` panels for separate scene and game camera views
 - **UI Config**: `XJEditorUIConfig` reads/writes `EditorUI.json` for per-panel visibility and layout persistence
@@ -268,7 +271,9 @@ XJEngine/
 │   │   │       ├── XJMaterialSystem.h       # 材质系统基类
 │   │   │       ├── XJBaseMaterialSystem.h
 │   │   │       ├── XJUnlitMaterialSystem.h
-│   │   │       └── XJCameraControllerSystem.h
+│   │   │       └── XJCameraSystem.h
+│   │   ├── Camera/          # 摄像机模块（独立于 ECS）
+│   │   │   └── XJCameraController.h
 │   │   └── Render/         # 渲染相关
 │   │       ├── XJSampler.h
 │   │       ├── XJRenderTarget.h
@@ -304,12 +309,11 @@ XJEngine/
 │   │           └── XJAssetRegistryScanner.h
 │   └── Private/            # 私有实现
 │
-├── Editor/                   # 编辑器模块（ImGui UI）
-│   ├── Public/UI/            # UI 上下文、渲染器、编辑器层
-│   │   ├── Panels/           # 编辑器面板（Hierarchy, Inspector, Content Browser, Debug Console）
-│   │   └── Viewports/        # 视口系统（场景预览、游戏预览）
-│   ├── Private/UI/           # UI 实现及视口/面板实现
-│   └── cmake/                # SPIR-V 编译和 Vulkan DLL 部署
+├── Editor/                   # 编辑器模块（ImGui UI, MVVM）
+│   ├── Public/               # 公共接口
+│   │   ├── UI/               # UI 上下文、渲染器、编辑器层、面板
+│   │   ├── Controllers/      # 编辑器控制器（Camera、Scene）
+│   │   └── Services/         # 编辑器服务层
 │
 ├── Platform/               # 平台相关代码
 │   ├── External/           # 第三方库
