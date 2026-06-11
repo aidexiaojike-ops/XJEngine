@@ -1,17 +1,11 @@
 #include "UI/Panels/XJHierarchyPanel.h"
 
-#include "UI/XJEditorUILayer.h"
-#include "ECS/XJScene.h"
-#include "ECS/XJEntity.h"
-#include "ECS/XJNode.h"
-#include "ECS/Component/XJCameraComponent.h"
-#include "ECS/Component/XJSceneAssetComponents.h"
-#include "ECS/Component/XJTransformComponent.h"
-#include "ECS/XJUUID.h"
+#include "UI/XJEditorUIState.h"
 
 #include <imgui.h>
-#include <sstream>
 #include <iomanip>
+#include <sstream>
+
 
 
 namespace XJ
@@ -32,40 +26,25 @@ namespace XJ
         const char* title = mConfig ? mConfig->title.c_str() : "World Outliner";
         ImGui::Begin(title);
 
-        if(!mState.Scene)
+        if(mState.SceneView.RootEntities.empty())
         {
             ImGui::Text("No scene loaded");
             ImGui::End();
             return;
         }
 
-        XJNode* root = mState.Scene->XJGetRootNode();//获取场景根节点
-        if(!root)
-        {
-            ImGui::Text("Scene has no root node");
-            ImGui::End();
-            return;
-        }
-
-        const auto& children = root->XJGetChildren();//获取根节点的子节点，这些子节点通常是场景中的实体
-        for(XJNode* child : children)
-        {
-            if(XJEntity* entity = dynamic_cast<XJEntity*>(child))
-            {
-                DrawEntityNode(entity);
-            }
-        }
+        for (const XJEditorEntityView& entity : mState.SceneView.RootEntities)
+            DrawEntityNode(entity);
 
         ImGui::End();
     }
 
-    void XJHierarchyPanel::DrawEntityNode(XJEntity* entity)
+    void XJHierarchyPanel::DrawEntityNode(const XJEditorEntityView& entity)
     {
-        if(!entity)return;
+        if (entity.Id == XJ_INVALID_EDITOR_ENTITY_ID)
+            return;
 
-        // build flags and label  生成标签和节点状态标志
-        const auto& childrenEntities = entity->XJGetChildren();
-        bool hasChildren = !childrenEntities.empty();//检查实体是否有子实体
+        bool hasChildren = !entity.Children.empty();//检查实体是否有子实体
 
         ImGuiTreeNodeFlags flags = ImGuiTreeNodeFlags_OpenOnArrow | ImGuiTreeNodeFlags_OpenOnDoubleClick;//默认展开/收起行为
         if (hasChildren)
@@ -73,71 +52,77 @@ namespace XJ
         else
             flags |= ImGuiTreeNodeFlags_Leaf;//如果没有子实体，标记为叶节点
 
-        if(mState.SelectedEntity == entity)
+
+        bool selected = mState.Selection.SelectedEntity == entity.Id;
+        bool highlighted = mState.Selection.HighlightedEntities.count(entity.Id) > 0;
+
+        if(selected || highlighted)
             flags |= ImGuiTreeNodeFlags_Selected;//如果当前实体被选中，标记为选中状态
         
         // build label with optional info 构建显示标签，包含实体名称和可选的 ID/资源来源信息
-        std::string label = entity->XJGetName().empty() ? "XJUnnamed" : entity->XJGetName();
-
-        // UUID suffix 如果启用显示 UUID，则在标签后添加实体的 UUID 后缀
-        uint64_t uuid = static_cast<uint64_t>(entity->XJGetUUID());
+        std::string label = entity.Name.empty() ? "XJUnnamed" : entity.Name;
 
         if (mConfig && mConfig->showEntityId)
         {
             std::stringstream visibleId;
-            visibleId << " [0x" << std::hex << uuid << "]";
+            visibleId << " [0x" << std::hex << entity.Id << "]";
             label += visibleId.str();
         }
 
         std::stringstream imguiId;
-        imguiId << "##" << std::hex << uuid;
+        imguiId << "##" << std::hex << entity.Id;
         label += imguiId.str();
+
 
         bool opened = ImGui::TreeNodeEx(label.c_str(), flags);//创建树节点
         //chick to select 点击节点以选择实体
-        if(ImGui::IsItemClicked())
+        if (ImGui::IsItemClicked())
         {
-            mState.SelectedEntity = entity;
-            mState.SelectedAsset = 0;
+            mState.Selection.SelectedEntity = entity.Id;
+            mState.Selection.SelectedAsset = 0;
+            mState.Selection.HighlightedEntities.clear();
         }
         // right-click context menu 右键点击打开上下文菜单
-        if (ImGui::IsItemHovered())
+         if (ImGui::IsItemHovered())
         {
             ImGui::BeginTooltip();
-            ImGui::Text("Name: %s", entity->XJGetName().c_str());
-            ImGui::Text("UUID: 0x%016llX", uuid);
-
-            bool hasMesh = entity->HasComponent<XJMeshAssetRefComponent>();
-            bool hasCamera = entity->HasComponent<XJCameraComponent>();
-            bool hasTransform = entity->HasComponent<XJTransformComponent>();
-            bool hasSceneRef = entity->HasComponent<XJSceneAssetRefComponent>();
+            ImGui::Text("Name: %s", entity.Name.c_str());
+            ImGui::Text("UUID: 0x%016llX", static_cast<uint64_t>(entity.Id));
 
             ImGui::Text("Components:");
-            ImGui::BulletText("Transform: %s", hasTransform ? "Yes" : "No");
-            ImGui::BulletText("Mesh:      %s", hasMesh ? "Yes" : "No");
-            ImGui::BulletText("Camera:    %s", hasCamera ? "Yes" : "No");
-            ImGui::BulletText("SceneRef:  %s", hasSceneRef ? "Yes" : "No");
-            if (mConfig && mConfig->showAssetSource && hasSceneRef)
-            {
-                const auto& ref = entity->GetComponent<XJSceneAssetRefComponent>();
-                ImGui::Text("Source Scene: %s", ref.SourceScene.ToUri().c_str());
-            }
+            ImGui::BulletText("Transform: %s", entity.HasTransform ? "Yes" : "No");
+            ImGui::BulletText("Mesh:      %s", entity.HasMesh ? "Yes" : "No");
+            ImGui::BulletText("Camera:    %s", entity.HasCamera ? "Yes" : "No");
+            ImGui::BulletText("SceneRef:  %s", entity.HasSceneRef ? "Yes" : "No");
+
+            if (mConfig && mConfig->showAssetSource && entity.HasSceneRef)
+                ImGui::Text("Source Scene: %s", entity.SourceSceneUri.c_str());
 
             ImGui::EndTooltip();
         }
         if (ImGui::BeginPopupContextItem())
         {
-            if (ImGui::MenuItem("Select"))
+            if (ImGui::MenuItem("Select Mesh Asset", nullptr, false, entity.MeshAsset != 0))
             {
-                mState.SelectedEntity = entity;//选择菜单项以选择实体
-                mState.SelectedAsset  = 0;
+                mState.Selection.SelectedAsset = entity.MeshAsset;
+                mState.Selection.SelectedEntity = XJ_INVALID_EDITOR_ENTITY_ID;
+                mState.Selection.HighlightedEntities.clear();
             }
 
             ImGui::Separator();
 
-            if (ImGui::MenuItem("Delete"))
+            if (ImGui::MenuItem("Delete From Scene"))
             {
-                // TODO: deferred deletion
+                if (!mState.Selection.HighlightedEntities.empty() &&
+                    mState.Selection.HighlightedEntities.count(entity.Id) > 0)
+                {
+                    for (XJEditorEntityId highlightedId : mState.Selection.HighlightedEntities)
+                        mState.SceneRequests.RequestDeleteEntities.push_back(highlightedId);
+                }
+                else
+                {
+                    mState.SceneRequests.RequestDeleteEntities.push_back(entity.Id);
+                }
             }
 
             ImGui::EndPopup();
@@ -145,13 +130,12 @@ namespace XJ
 
         if (opened)
         {
-            for (XJNode* child : childrenEntities)
-            {
-                if (XJEntity* childEntity = dynamic_cast<XJEntity*>(child))
-                    DrawEntityNode(childEntity);
-            }
+            for (const XJEditorEntityView& child : entity.Children)
+                DrawEntityNode(child);
 
             ImGui::TreePop();
         }
     }
+
+
 }

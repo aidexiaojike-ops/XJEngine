@@ -16,8 +16,8 @@ namespace XJ
 
     struct XJSceneInstantiateContext//场景实例化上下文，包含加载场景时需要的各种资源和缓存
     {
-        XJAssetRegistry* Registry = nullptr;
-        XJAssetRef SourceScene;
+        XJAssetRegistry* Registry = nullptr;//列表
+        XJAssetRef SourceScene;//序列
         std::shared_ptr<XJTexture> DefaultTexture;
         std::shared_ptr<XJSampler> DefaultSampler;
         std::unordered_map<XJAssetHandle, std::shared_ptr<XJMesh>> MeshCache;

@@ -1,10 +1,15 @@
 #添加文件
 file(GLOB_RECURSE EDITOR_SOURCES CONFIGURE_DEPENDS
     ${CMAKE_CURRENT_SOURCE_DIR}/Private/UI/*.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/Private/Services/*.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/Private/Controllers/*.cpp
 )
 
 file(GLOB_RECURSE EDITOR_HEADERS CONFIGURE_DEPENDS
     ${CMAKE_CURRENT_SOURCE_DIR}/Public/UI/*.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/Public/Services/*.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/Public/Controllers/*.h
+
 )
 
 #add_library(Editor STATIC ${EDITOR_SOURCES} ${EDITOR_HEADERS})

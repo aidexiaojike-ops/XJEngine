@@ -2,25 +2,27 @@
 #ifndef XJ_HIERARCHY_PANEL_H
 #define XJ_HIERARCHY_PANEL_H
 
+#include "UI/XJEditorSceneViewModel.h"
+#include "UI/XJEditorSelection.h"
 #include "UI/XJEditorUIConfig.h"
 
 namespace XJ
 {
     class XJEditorUIState;
-    class XJEntity;
 
     class XJHierarchyPanel
     {
-        public:
-            XJHierarchyPanel(XJEditorUIState& state, XJEditorPanelConfig_Hierarchy* config);
-            ~XJHierarchyPanel();
+    public:
+        XJHierarchyPanel(XJEditorUIState& state, XJEditorPanelConfig_Hierarchy* config);
+        ~XJHierarchyPanel();
 
-            void DrawUI();
+        void DrawUI();
 
-        private:
-            void DrawEntityNode(XJEntity* entity);
-            XJEditorUIState& mState;
-            XJEditorPanelConfig_Hierarchy* mConfig = nullptr;
+    private:
+        void DrawEntityNode(const XJEditorEntityView& entity);
+
+        XJEditorUIState& mState;
+        XJEditorPanelConfig_Hierarchy* mConfig = nullptr;
     };
 }
 

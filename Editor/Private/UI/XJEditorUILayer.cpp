@@ -81,10 +81,6 @@ namespace XJ
         mDebugConsole.reset();
     }
 
-    void XJEditorUILayer::SetScene(XJScene* scene)
-    {
-        mState.Scene = scene;//更新场景
-    }
 
     void XJEditorUILayer::SetAssetRegistry(XJAssetRegistry* registry)
     {

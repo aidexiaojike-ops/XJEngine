@@ -31,8 +31,13 @@
 #include "ECS/Component/XJSceneAssetComponents.h"
 #include "ECS/Component/Material/XJUnlitMaterialComponent.h"
 #include "ECS/Component/XJTransformComponent.h"
-#include "ECS/System/XJCameraControllerSystem.h"
+#include "Controllers/XJEditorCameraController.h"
 #include "ECS/System/XJUnlitMaterialSystem.h"
+
+#include "Services/XJEditorSceneService.h"
+#include "Controllers/XJEditorSceneController.h"
+#include "Controllers/XJEditorCameraManager.h"
+
 
 #include "UI/XJUIContext.h"
 #include "UI/XJEditorRenderer.h"
@@ -201,18 +206,13 @@ protected:
         mCommandBuffers = kDevice->XJGetDefaultCmdPool()->AllocateCommandBuffer(static_cast<uint32_t>(kSwapchain->XJGetSwapchainImages().size()));// 分配命令缓冲区
         spdlog::info("分配了 {} 个命令缓冲区", mCommandBuffers.size());
         // 初始化摄像机控制器：鼠标灵敏度、平移、缩放、旋转
-        mCameraController = std::make_unique<XJ::XJCameraControllerSystem>(0.25f, 0.05f, 0.3f, 0.25f);
+        mCameraController = std::make_unique<XJ::XJEditorCameraController>(0.25f, 0.05f, 0.3f, 0.25f);
         // 滚轮事件回调
         mEventTesting = std::make_shared<XJ::XJEventTesting>();
         mOvserver = std::make_shared<XJ::XJEventObserver>();
         mOvserver->OnEvent<XJ::XJMouseScrollEvent>([this](const XJ::XJMouseScrollEvent& event)
         {
-            XJ::XJEntity* kCameraEntity = mPreviewCameraEntity;
-        
-            if (mScenePreview && mScenePreview->IsHovered() && kCameraEntity && XJ::XJEntity::HasComponent<XJ::XJCameraComponent>(kCameraEntity))
-            {
-                mCameraController->OnMouseScroll(event.mYOffset, kCameraEntity);
-            }
+            mEditorCameraManager.OnMouseScroll(event.mYOffset);
         });
         // 初始化纹理和采样器
         XJ::RGBAColor kWhitePixel{255, 255, 255, 255};// 白色像素
@@ -268,83 +268,64 @@ protected:
         mGamePreview->AddMaterialSystem<XJ::XJBaseMaterialSystem>();
         mGamePreview->AddMaterialSystem<XJ::XJUnlitMaterialSystem>();
 
+        mEditorCameraManager.BindViewports(mScenePreview.get(),mGamePreview.get(),mRenderTarget.get());
+        mEditorCameraManager.BindCameraController(mCameraController.get());
+
         mEditorUILayer = std::make_unique<XJ::XJEditorUILayer>(mEditorUIState);
         mEditorUILayer->Init("Resource/Config/EditorUI.json");
     }
-    XJ::XJEntity* EnsurePreviewCamera(XJ::XJScene* scene)//默认编辑器相机设置
-    {
-        if(!scene)
-            return nullptr;
 
-        for(const auto& [enttEntity, entity] : scene->GetEntities())
-        {
-            if(entity && entity->XJGetUUID() == XJ::XJUUID(static_cast<uint64_t> (kPreviewCameraEntityId)))
-                return entity.get();
-        }
-
-        XJ::XJEntity* previewCamera = scene->CreateEntityWithUUID(
-                                    XJ::XJUUID(static_cast<uint64_t>(kPreviewCameraEntityId)),
-                                    "PreviewCamera");
-
-        auto& transform =  previewCamera->GetComponent<XJ::XJTransformComponent>();
-        transform.position = glm::vec3(0.0f, 1.5f, 3.0f);
-        transform.rotation = glm::vec3(-90.0f, 0.0f, 0.0f);
-        transform.scale = glm::vec3(1.0f);
-        transform.UpdateModelMatrix();
-
-        auto& camera = previewCamera->AddComponent<XJ::XJCameraComponent>();
-        camera.XJSetFov(65.0f);
-        camera.XJSetNear(0.1f);
-        camera.XJSetFar(100.0f);
-
-        return previewCamera;
-    }
 
     // 场景
     void OnSceneInit(XJ::XJScene *scene) override
     {
-        XJ::XJAssetBootstrap bootstrap(mAssetRegistry, kDefaultSceneHandle, kMonkeyMeshHandle);
-        bootstrap.LoadOrCreateAssetRegistry();
-        mSceneAsset = bootstrap.LoadOrCreateDefaultSceneAsset();
-        if (!mSceneAsset)
+        //初始化设置
+        mRuntimeScene = scene;
+        mEditorUIState.AssetRegistry = &mAssetRegistry;
+
+        mEditorSceneController.SetScene(scene);
+        mEditorSceneController.SetAssetRegistry(&mAssetRegistry);
+        mEditorSceneController.SetDefaultResources(mWhiteTexture, mDefaultSampler);
+        mEditorSceneController.SetCurrentScenePath("Resource/Scenes/Default.xjscene");
+        //打开前准备
+        mEditorSceneController.SetBeforeDeleteCallback(
+            [this](XJ::XJScene& scene, const std::vector<XJ::XJEditorEntityId>& ids)
+            {
+                mEditorCameraManager.ClearIfDeleted(scene, ids);
+            });
+
+        mEditorSceneController.SetBeforeOpenSceneCallback(
+            [this]()
+            {
+                mEditorCameraManager.ClearAllCameraReferences();
+            });
+        //打开后
+        mEditorSceneController.SetAfterOpenSceneCallback(
+            [this](XJ::XJScene& scene)
+            {
+                mEditorCameraManager.SetupCamerasForScene(&scene, kPreviewCameraEntityId);
+            });
+
+        mEditorSceneController.SetAfterMutationCallback(
+            []()
+            {
+                // 预留扩展点：以后可以在这里刷新日志、通知 UI 等。
+            });
+        //加载默认场景
+        if (!mEditorSceneController.LoadOrCreateDefaultScene(mEditorUIState, kDefaultSceneHandle, kMonkeyMeshHandle,
+                "Resource/Scenes/Default.xjscene"))
         {
-            spdlog::error("Default scene asset load failed");
+            spdlog::error("Default scene initialization failed");
             return;
         }
 
-        mSceneInstantiateContext.Registry = &mAssetRegistry;
-        mSceneInstantiateContext.SourceScene = { kDefaultSceneHandle, XJ::XJAssetType::Scene };
-        mSceneInstantiateContext.DefaultTexture = mWhiteTexture;
-        mSceneInstantiateContext.DefaultSampler = mDefaultSampler;
-        XJ::XJSceneInstantiator::Instantiate(*mSceneAsset, *scene, &mSceneInstantiateContext);
-
-        //XJ::XJEntity* previewCamera = XJ::XJSceneInstantiator::FindInstantiatedEntity(
-        //    mSceneInstantiateContext, XJ::XJUUID(static_cast<uint32_t>(kPreviewCameraEntityId)));
-        //XJ::XJEntity* gameCamera = XJ::XJSceneRuntimeUtil::FindPrimaryCameraEntity(*scene);
-
-        mGameCameraEntity = XJ::XJSceneRuntimeUtil::FindPrimaryCameraEntity(*scene);
-        mPreviewCameraEntity = EnsurePreviewCamera(scene);
-
         if (mScenePreview)
-            mScenePreview->SetCamera(mPreviewCameraEntity);
-
-        if (mGamePreview)
-            mGamePreview->SetCamera(mGameCameraEntity);
-
-        if (mRenderTarget)
-            mRenderTarget->XJSetCamera(mGameCameraEntity);
-        
-
-        mEditorUIState.Scene = scene;
-        mEditorUIState.AssetRegistry = &mAssetRegistry;
-
-        if(mScenePreview)
         {
             mScenePreview->SetAssetDropCallback([this, scene](const XJ::XJAssetDragPayload& payload)
             {
                 CreateEntityFromDroppedAsset(scene, payload);
-                MarkSceneDirty();
-                SaveCurrentScene();
+                mEditorSceneController.MarkSceneDirty();
+                mEditorSceneController.SaveCurrentScene();
             });
         }
     }
@@ -352,11 +333,19 @@ protected:
     {
         // 可以在这里补充场景销毁时的清理逻辑，例如释放资源等
         spdlog::info("Scene destroyed");
-        mEditorUIState.SelectedEntity = nullptr;
-        mEditorUIState.Scene = nullptr;
 
-        mPreviewCameraEntity = nullptr;
-        mGameCameraEntity = nullptr;
+        mRuntimeScene = nullptr;
+        mEditorSceneController.SetScene(nullptr);
+
+        mEditorUIState.Selection.SelectedEntity = XJ::XJ_INVALID_EDITOR_ENTITY_ID;
+        mEditorUIState.Selection.SelectedAsset = 0;
+        mEditorUIState.Selection.HighlightedEntities.clear();
+
+        mEditorUIState.SceneRequests = {};
+        mEditorUIState.SceneView = {};
+        mEditorUIState.SelectedEntityDetails = {};
+
+        mEditorCameraManager.ClearAllCameraReferences();
     }
 
   
@@ -417,7 +406,7 @@ protected:
 
         XJ::XJMeshAssetLoadContext loadContext;
         loadContext.Registry = &mAssetRegistry;
-        loadContext.MeshCache = &mSceneInstantiateContext.MeshCache;
+        loadContext.MeshCache = &mEditorSceneController.GetInstantiateContext().MeshCache;
 
         std::shared_ptr<XJ::XJMesh> gpuMesh = XJ::XJMeshAssetLoader::LoadMesh(payload.Handle, loadContext);
 
@@ -432,8 +421,8 @@ protected:
                 comp.AddMesh(gpuMesh.get(), mat.get());
         } 
 
-        mEditorUIState.SelectedEntity = entity;
-        mEditorUIState.SelectedAsset = 0;
+        mEditorUIState.Selection.SelectedEntity = static_cast<XJ::XJEditorEntityId>(entity->XJGetUUID());
+        mEditorUIState.Selection.SelectedAsset = 0;
     }
 
     glm::vec3 CalculateSpawnPositionFromDropRay(XJ::XJScene* scene, const XJ::XJAssetDragPayload& payload)//拖拽资产 生成位置
@@ -452,97 +441,28 @@ protected:
         return payload.RayOrigin + payload.RayDirection * 5.0f;
     }
 
-    void MarkSceneDirty()//
-    {
-        mSceneDirty = true;
-    }
-
-    bool SaveCurrentScene()
-    {
-        if(!mEditorUIState.Scene)
-            return false;
-
-        auto sceneAsset  =  XJ::XJSceneAssetSerializer::BuildFromScene(*mEditorUIState.Scene);
-        if(!sceneAsset)
-            return false;
-
-        sceneAsset->mHandle = mSceneInstantiateContext.SourceScene.Handle;
-        sceneAsset->mName = mCurrentScenePath.stem().string();
-
-        bool saved = XJ::XJSceneAssetSerializer::SaveToFile(*sceneAsset, mCurrentScenePath);
-        if(saved)
-        {
-            mSceneDirty = false;
-        }
-
-        return saved;
-    }
-
-    bool OpenSceneAsset(const std::filesystem::path& scenePath, XJ::XJAssetHandle sceneHandle)//打开场景资产
-    {
-        if(!mEditorUIState.Scene)
-            return false;
-
-        auto sceneAsset = XJ::XJSceneAssetSerializer::LoadFromFile(scenePath);//获取路径
-        if(!sceneAsset)
-        {
-            spdlog::error("Failed to load scene: {}", scenePath.string());
-            return false;
-        }
-
-        mEditorUIState.Scene -> DestroyAllEntity();
-
-        mSceneInstantiateContext = {};
-        mSceneInstantiateContext.Registry = &mAssetRegistry;
-        mSceneInstantiateContext.SourceScene = { sceneHandle, XJ::XJAssetType::Scene };
-        mSceneInstantiateContext.DefaultTexture = mWhiteTexture;
-        mSceneInstantiateContext.DefaultSampler = mDefaultSampler;
-
-        XJ::XJSceneInstantiator::Instantiate(*sceneAsset, *mEditorUIState.Scene, &mSceneInstantiateContext);
-
-        //XJ::XJEntity* previewCamera = XJ::XJSceneInstantiator::FindInstantiatedEntity(
-        //    mSceneInstantiateContext, XJ::XJUUID(static_cast<uint32_t>(kPreviewCameraEntityId)));
-        //XJ::XJEntity* gameCamera = XJ::XJSceneRuntimeUtil::FindPrimaryCameraEntity(*mEditorUIState.Scene);
-
-        mGameCameraEntity = XJ::XJSceneRuntimeUtil::FindPrimaryCameraEntity(*mEditorUIState.Scene); 
-        mPreviewCameraEntity = EnsurePreviewCamera(mEditorUIState.Scene);
-
-        if (mScenePreview)
-        mScenePreview->SetCamera(mPreviewCameraEntity);
-
-        if (mGamePreview)
-            mGamePreview->SetCamera(mGameCameraEntity);
-
-        if (mRenderTarget)
-            mRenderTarget->XJSetCamera(mGameCameraEntity);
-
-        mEditorUIState.SelectedEntity = nullptr;    
-        mEditorUIState.SelectedAsset = sceneHandle;    
-
-        mSceneAsset = sceneAsset;
-        mCurrentScenePath = scenePath;
-        mSceneDirty = false;
-
-        return true;
-    }
 
     void OnUpdate(float deltaTime) override
     {
          // ===== UI 开始 =====
         //mUIContext->BeginFrame();
+        mEditorCameraManager.ValidateCameraPointers();
+
+        mEditorSceneController.RefreshViewModels(mEditorUIState);
+
         if (mEditorUILayer)
             mEditorUILayer->DrawUI();
 
-        if(mEditorUIState.RequestOpenScene)
+        if (mEditorUIState.SceneRequests.RequestOpenScene)
         {
-            const std::filesystem::path scenePath = mEditorUIState.RequestedScenePath;
-            const XJ::XJAssetHandle sceneHandle = mEditorUIState.RequestedSceneHandle;
+            const std::filesystem::path scenePath = mEditorUIState.SceneRequests.RequestedScenePath;
+            const XJ::XJAssetHandle sceneHandle = mEditorUIState.SceneRequests.RequestedSceneHandle;
 
-            mEditorUIState.RequestOpenScene = false;
-            mEditorUIState.RequestedScenePath.clear();
-            mEditorUIState.RequestedSceneHandle = 0;
+            mEditorUIState.SceneRequests.RequestOpenScene = false;
+            mEditorUIState.SceneRequests.RequestedScenePath.clear();
+            mEditorUIState.SceneRequests.RequestedSceneHandle = 0;
 
-            OpenSceneAsset(scenePath, sceneHandle);
+            mEditorSceneController.OpenSceneAsset(mEditorUIState, scenePath, sceneHandle);
         }
 
         if (mScenePreview)
@@ -550,12 +470,12 @@ protected:
 
         if (mGamePreview)
             mGamePreview->DrawUI();
+
+        // 这里处理 Editor Scene Requests
+        mEditorSceneController.ProcessRequests(mEditorUIState);
+        mEditorSceneController.RefreshViewModels(mEditorUIState);
        
-        XJ::XJEntity *kCameraEntity = mPreviewCameraEntity;// 获取摄像机实体
-        if(mScenePreview && mScenePreview->ShouldControlCamera() && kCameraEntity && XJ::XJEntity::HasComponent<XJ::XJCameraComponent>(kCameraEntity))
-        {
-            mCameraController->UpdateCameraControl(deltaTime, XJGetWindow(), kCameraEntity);
-        }
+        mEditorCameraManager.UpdatePreviewCameraControl(deltaTime, XJGetWindow());
 
          // ===== UI 结束 =====
         //mUIContext->EndFrame();
@@ -658,7 +578,8 @@ protected:
          // ===== 先关闭 UI =====
         //mEditorRenderer->Shutdown();
         //mUIContext->Shutdown();
-        
+        mEditorCameraManager.ClearAllCameraReferences();
+        mEditorSceneController.SetScene(nullptr);
 
         XJ::XJRenderContext *kRenderContext = XJApplication::XJGetAppContext()->renderContext;
         XJ::XJVulkanDevice* kDevice = kRenderContext->XJGetDevice();
@@ -669,9 +590,6 @@ protected:
         mFileTexture.reset();// 文件纹理
         mDefaultSampler.reset();// 默认采样器
 
-
-        mSceneInstantiateContext = {};
-        mSceneAsset.reset();
         mCommandBuffers.clear();
         
         mRenderTarget.reset();
@@ -704,11 +622,11 @@ private:
     std::unique_ptr<XJ::XJEditorRenderer>               mEditorRenderer;
     std::unique_ptr<XJ::XJScenePreview>                 mScenePreview;
     std::unique_ptr<XJ::XJGamePreview>                  mGamePreview;
-    XJ::XJEditorUIState                                 mEditorUIState;
     std::unique_ptr<XJ::XJEditorUILayer>                mEditorUILayer;
+    
 
     // 摄像机控制器
-    std::unique_ptr<XJ::XJCameraControllerSystem>       mCameraController;
+    std::unique_ptr<XJ::XJEditorCameraController> mCameraController;
     
     VkSampleCountFlagBits mSampleCount = VK_SAMPLE_COUNT_1_BIT; // 多重采样数量
 
@@ -719,14 +637,13 @@ private:
     static constexpr uint64_t kMonkeyEntityId = 0x30000003ull;
 
     XJ::XJAssetRegistry mAssetRegistry;
-    std::shared_ptr<XJ::XJSceneAsset> mSceneAsset;
-    XJ::XJSceneInstantiateContext mSceneInstantiateContext;
-    
-    bool mSceneDirty = false;
-    std::filesystem::path mCurrentScenePath = "Resource/Scenes/Default.xjscene";
 
-    XJ::XJEntity* mPreviewCameraEntity = nullptr;
-    XJ::XJEntity* mGameCameraEntity = nullptr;
+    XJ::XJEditorCameraManager mEditorCameraManager;
+
+    XJ::XJScene*                                        mRuntimeScene = nullptr;
+    XJ::XJEditorUIState                                 mEditorUIState;
+    XJ::XJEditorSceneController                         mEditorSceneController;
+
    
 };
 

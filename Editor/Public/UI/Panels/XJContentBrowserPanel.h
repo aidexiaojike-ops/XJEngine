@@ -8,6 +8,7 @@
 #include <imgui.h>
 #include <filesystem>
 #include <string>
+#include "UI/XJEditorSelection.h"
 
 namespace XJ
 {
@@ -54,6 +55,9 @@ namespace XJ
             void ImportExternalFile(const std::filesystem::path& sourcePath);
             std::filesystem::path BuildImportDestinationPath(const std::filesystem::path& sourcePath) const;
             std::filesystem::path BuildUniqueImportPath(const std::filesystem::path& desiredPath) const;
+
+        
+            
     };
 }
 

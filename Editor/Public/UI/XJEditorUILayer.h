@@ -2,15 +2,16 @@
 #ifndef XJ_EDITOR_UI_LAYER_H
 #define XJ_EDITOR_UI_LAYER_H
 
-#include "UI/XJEditorUIConfig.h"
 #include "Asset/XJAsset.h"
-#include <memory>
-#include <filesystem>
+#include "UI/XJEditorUIConfig.h"
 #include "UI/XJEditorUIState.h"
+
+#include <filesystem>
+#include <memory>
+
 
 namespace XJ
 {
-    class XJScene;
     class XJAssetRegistry;
     // 面板
     class XJContentBrowserPanel;
@@ -29,7 +30,6 @@ namespace XJ
             void SaveConfig();// 将当前 UI 配置保存到磁盘
             void Shutdown();
 
-            void SetScene(XJScene* scene);// 设置当前编辑的场景
             void SetAssetRegistry(XJAssetRegistry* registry);// 设置资产注册表
 
             void ToggleContentBrowser();

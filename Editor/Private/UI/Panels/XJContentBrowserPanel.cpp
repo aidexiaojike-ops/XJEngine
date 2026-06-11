@@ -176,16 +176,22 @@ namespace XJ
                 ImGui::TableNextRow();
                 ImGui::TableNextColumn();   
                 // apply filter 这里我们简单地根据资产名称进行过滤，如果用户在搜索框中输入了文本，但资产名称不包含该文本，则跳过该资产的显示
-                bool isSelected = (mState.SelectedAsset == handle);
-                if (ImGui::Selectable(meta.Name.c_str(), isSelected, ImGuiSelectableFlags_SpanAllColumns | ImGuiSelectableFlags_AllowDoubleClick))
+                
+                //if (mState.Selection.SelectedAsset == pendingDeleteHandle)
+                //{
+                //    mState.Selection.SelectedAsset = 0;
+                //}
+                bool isSelected = (mState.Selection.SelectedAsset == handle);
+
+               if (ImGui::Selectable(meta.Name.c_str(), isSelected, ImGuiSelectableFlags_SpanAllColumns | ImGuiSelectableFlags_AllowDoubleClick))
                 {
                     HandleSelection(handle);
 
                     if(ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left) && meta.Type == XJAssetType::Scene)//双击场景Json文件
                     {
-                        mState.RequestOpenScene = true;
-                        mState.RequestedScenePath = meta.SourcePath;
-                        mState.RequestedSceneHandle = handle;
+                        mState.SceneRequests.RequestOpenScene = true;
+                        mState.SceneRequests.RequestedScenePath = meta.SourcePath;
+                        mState.SceneRequests.RequestedSceneHandle = handle;
                     }
                 }
                 if(meta.Type == XJAssetType::Mesh && ImGui::BeginDragDropSource())//判断是是否是模型 然后再拖动
@@ -204,10 +210,12 @@ namespace XJ
                  // right-click context menu 右键点击打开上下文菜单，提供选项如 "Select in Inspector" 或 "Delete Asset"
                 if (ImGui::BeginPopupContextItem())
                 {
-                    if (ImGui::MenuItem("Select in Inspector"))
+                    if (ImGui::MenuItem("Find References In Scene"))
                     {
-                        HandleSelection(handle);
-                        mState.SelectedEntity = nullptr;
+                        mState.SceneRequests.RequestFindEntitiesUsingAsset = handle;
+                        mState.Selection.SelectedAsset = handle;
+                        mState.Selection.SelectedEntity = XJ_INVALID_EDITOR_ENTITY_ID;
+                        mState.Selection.HighlightedEntities.clear();
                     }
                 
                     ImGui::Separator();
@@ -253,9 +261,9 @@ namespace XJ
             //}
             registry->Save("Resource/Config/AssetRegistry.json");//保存注册表以持久化删除操作
 
-            if(mState.SelectedAsset == pendingDeleteHandle)
+            if(mState.Selection.SelectedAsset == pendingDeleteHandle)
             {
-                mState.SelectedAsset = 0;//如果被删除的资产正被选中，重置选择状态
+                mState.Selection.SelectedAsset = 0;//如果被删除的资产正被选中，重置选择状态
             }
         }
 
@@ -275,8 +283,9 @@ namespace XJ
     }
     void XJContentBrowserPanel::HandleSelection(XJAssetHandle handle)
     {
-        mState.SelectedAsset = handle;
-        mState.SelectedEntity = nullptr;//切换到资源选择时，清除实体选择
+        mState.Selection.SelectedAsset = handle;
+        mState.Selection.SelectedEntity = XJ_INVALID_EDITOR_ENTITY_ID;//切换到资源选择时，清除实体选择
+        mState.Selection.HighlightedEntities.clear();
     }
     void XJContentBrowserPanel::DrawFolderTree()//左侧 Resource 文件夹树
     {
