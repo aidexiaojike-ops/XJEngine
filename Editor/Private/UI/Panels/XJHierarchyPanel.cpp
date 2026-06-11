@@ -107,6 +107,9 @@ namespace XJ
                 mState.Selection.SelectedAsset = entity.MeshAsset;
                 mState.Selection.SelectedEntity = XJ_INVALID_EDITOR_ENTITY_ID;
                 mState.Selection.HighlightedEntities.clear();
+
+                mState.RequestSelectAssetInContentBrowser = true;
+                mState.RequestedContentBrowserAsset = entity.MeshAsset;
             }
 
             ImGui::Separator();

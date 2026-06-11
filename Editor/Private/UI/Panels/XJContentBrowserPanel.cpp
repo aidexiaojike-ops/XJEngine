@@ -133,12 +133,6 @@ namespace XJ
         }
         const std::string filter = mConfig ? mConfig->filter : "";
         std::filesystem::path currentPath = mConfig ? std::filesystem::path(mConfig->currentPath) : std::filesystem::path();
-        // read filter state (static in toolbar) 
-        // In production these should be members; here we re-read from a known pattern
-        // For simplicity we duplicate the static logic inline
-        //static char* filterBuf = nullptr; // same buffer as DrawToolbar uses
-        // This approach has scoping issues — better to move filterBuf/showType/showHandle to class members
-        // For now, just iterate all without filter support, showing basic table
 
         ImGuiTableFlags tableFlags = ImGuiTableFlags_BordersV//显示垂直边框
                                    | ImGuiTableFlags_BordersOuterH//显示水平外边框
@@ -393,6 +387,27 @@ namespace XJ
     {
         if(!mConfig)
             return;
+        //打开对应的文件夹
+        if (mState.RequestSelectAssetInContentBrowser && mState.AssetRegistry && mConfig)
+        {
+            mState.RequestSelectAssetInContentBrowser = false;
+        
+            XJAssetHandle handle = mState.RequestedContentBrowserAsset;
+            mState.RequestedContentBrowserAsset = 0;
+        
+            auto metaOpt = mState.AssetRegistry->GetMeta(handle);
+            if (metaOpt)
+            {
+                const auto& meta = metaOpt.value();
+            
+                mConfig->currentPath = meta.SourcePath.parent_path().generic_string();
+                mConfig->filter.clear();
+            
+                mState.Selection.SelectedAsset = handle;
+                mState.Selection.SelectedEntity = XJ_INVALID_EDITOR_ENTITY_ID;
+                mState.Selection.HighlightedEntities.clear();
+            }
+        }
     
         ImGui::Text("Path Path: %s", mConfig->currentPath.c_str());
         ImGui::Separator();//分割线

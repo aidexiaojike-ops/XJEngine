@@ -156,6 +156,17 @@ namespace XJ
     {
         return mGameCameraEntity;
     }
+    
+    bool XJEditorCameraManager::IsPreviewCamera(XJEditorEntityId id) const
+    {
+        return mPreviewCameraEntity &&
+               static_cast<XJEditorEntityId>(mPreviewCameraEntity->XJGetUUID()) == id;
+    }
+
+    bool XJEditorCameraManager::IsProtectedEditorCamera(XJEditorEntityId id) const
+    {
+        return IsPreviewCamera(id);
+    }
 
     void XJEditorCameraManager::ApplyCameraBindings()
     {

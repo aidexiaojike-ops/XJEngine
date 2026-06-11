@@ -30,9 +30,11 @@ namespace XJ
             void ValidateCameraPointers();  //验证摄像机
             void OnMouseScroll(float yOffset);  //控制
             void UpdatePreviewCameraControl(float deltaTime, XJGlfwWindow* window); //更新编辑器摄像机
-
+            
             XJEntity* GetPreviewCamera() const;//获取编辑器摄像机
             XJEntity* GetGameCamera() const;    //获取游戏摄像机
+            bool IsPreviewCamera(XJEditorEntityId id) const;
+            bool IsProtectedEditorCamera(XJEditorEntityId id) const;
 
         private:
             void ApplyCameraBindings(); 

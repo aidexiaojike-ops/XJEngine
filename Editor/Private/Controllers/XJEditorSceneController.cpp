@@ -51,6 +51,12 @@ namespace XJ
     {
         mAfterOpenSceneCallback = std::move(callback);
     }
+
+    void XJEditorSceneController::SetCanDeleteEntityCallback(CanDeleteEntityCallback callback)
+    {
+        mCanDeleteEntityCallback = std::move(callback);
+    }
+    
     bool XJEditorSceneController::LoadOrCreateDefaultScene(XJEditorUIState& uiState, XJAssetHandle defaultSceneHandle, 
                                                         XJAssetHandle defaultMeshHandle, const std::filesystem::path& scenePath)
     {
@@ -170,12 +176,12 @@ namespace XJ
         }
     }
 
-    void XJEditorSceneController::ProcessRequests(XJEditorUIState& uiState)//做一下修改参数
+    void XJEditorSceneController::ProcessRequests(XJEditorUIState& uiState)
     {
         if(!mScene)
             return;
-
-         if (uiState.SceneRequests.RequestFindEntitiesUsingAsset != 0)
+        //数据更新
+        if (uiState.SceneRequests.RequestFindEntitiesUsingAsset != 0)
         {
             XJ::XJAssetHandle handle = uiState.SceneRequests.RequestFindEntitiesUsingAsset;
 
@@ -224,24 +230,35 @@ namespace XJ
 
            NotifyAfterMutation();
         }
-
+        //通过ID删除资产
         if (!uiState.SceneRequests.RequestDeleteEntities.empty())
         {
-            
             auto ids = uiState.SceneRequests.RequestDeleteEntities;
             uiState.SceneRequests.RequestDeleteEntities.clear();
-
-            if (mBeforeDeleteCallback)
-                mBeforeDeleteCallback(*mScene, ids);
-
-            XJEditorSceneService::DeleteEntities(*mScene, ids);
-
-            uiState.Selection.SelectedEntity = XJ::XJ_INVALID_EDITOR_ENTITY_ID;
-            uiState.Selection.SelectedAsset = 0;
-            uiState.Selection.HighlightedEntities.clear();
-            uiState.SelectedEntityDetails = {};
-
-            NotifyAfterMutation();
+            //编辑器摄像机不能删除
+            std::vector<XJEditorEntityId> filteredIds;
+            for (XJEditorEntityId id : ids)
+            {
+                if (mCanDeleteEntityCallback && !mCanDeleteEntityCallback(id))
+                    continue;
+            
+                filteredIds.push_back(id);
+            }
+        
+            if (!filteredIds.empty())
+            {
+                if (mBeforeDeleteCallback)
+                    mBeforeDeleteCallback(*mScene, filteredIds);
+            
+                XJEditorSceneService::DeleteEntities(*mScene, filteredIds);
+            
+                uiState.Selection.SelectedEntity = XJ_INVALID_EDITOR_ENTITY_ID;
+                uiState.Selection.SelectedAsset = 0;
+                uiState.Selection.HighlightedEntities.clear();
+                uiState.SelectedEntityDetails = {};
+            
+                NotifyAfterMutation();
+            }
         }
 
         if (uiState.SceneRequests.RequestSaveScene)

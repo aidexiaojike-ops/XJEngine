@@ -37,6 +37,8 @@ namespace XJ
            
             using BeforeOpenSceneCallback = std::function<void()>;//打开场景之前（保存之前场景，清理状态）
             using AfterOpenSceneCallback = std::function<void(XJScene& scene)>;//打开场景之后  加载ecs修改ui
+            
+            using CanDeleteEntityCallback = std::function<bool(XJEditorEntityId id)>;//是否能删除ID
             //==========================================================
             // 设置与注入
             //==========================================================
@@ -50,6 +52,8 @@ namespace XJ
 
             void SetBeforeOpenSceneCallback(BeforeOpenSceneCallback callback);/// 设置“打开场景前”回调
             void SetAfterOpenSceneCallback(AfterOpenSceneCallback callback); /// 设置“打开场景后”回调
+
+            void SetCanDeleteEntityCallback(CanDeleteEntityCallback callback);
             //==========================================================
             // 场景生命周期
             //==========================================================
@@ -96,6 +100,9 @@ namespace XJ
 
             BeforeOpenSceneCallback mBeforeOpenSceneCallback;// 打开场景前回调
             AfterOpenSceneCallback mAfterOpenSceneCallback; // 打开场景后回调
+
+            CanDeleteEntityCallback mCanDeleteEntityCallback;
+
     };
 }
 

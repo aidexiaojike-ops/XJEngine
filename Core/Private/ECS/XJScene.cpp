@@ -58,26 +58,30 @@ namespace XJ
      // DestroyEntity：销毁指定的实体并清除其相关资源
     void XJScene::DestroyEntity(const XJEntity *entity) 
     {
-        // 如果实体有效，首先销毁该实体
-        if (entity && entity->IsValid()) {
-            mEcsRegistry.destroy(entity->GetEcsEntity());
-        }
+        if (!entity)
+            return;
 
-        // 在实体列表中查找该实体
         auto it = mEntities.find(entity->GetEcsEntity());
-        
-        // 如果找到了该实体
-        if (it != mEntities.end()) {
-            // 获取该实体的父节点
-            XJNode *parent = it->second->XJGetParent();
-            if (parent) {
-                // 从父节点的子节点列表中移除该实体
-                parent->XJRemoveChild(it->second.get());
-            }
+        if (it == mEntities.end())
+            return;
 
-            // 从实体列表中移除该实体
-            mEntities.erase(it);
+        XJEntity* entityToDestroy = it->second.get();
+
+        std::vector<XJNode*> children = entityToDestroy->XJGetChildren();
+        for (XJNode* child : children)
+        {
+            if (XJEntity* childEntity = dynamic_cast<XJEntity*>(child))
+                DestroyEntity(childEntity);
         }
+
+        if (entityToDestroy->IsValid())
+            mEcsRegistry.destroy(entityToDestroy->GetEcsEntity());
+
+        XJNode* parent = entityToDestroy->XJGetParent();
+        if (parent)
+            parent->XJRemoveChild(entityToDestroy);
+
+        mEntities.erase(entityToDestroy->GetEcsEntity());
     }
 
      

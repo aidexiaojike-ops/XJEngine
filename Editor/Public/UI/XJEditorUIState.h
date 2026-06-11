@@ -20,6 +20,9 @@ namespace XJ
         XJEditorSelectionState Selection;// 当前选择状态
         XJEditorSceneRequestState SceneRequests;// 待处理的场景操作请求
 
+        bool RequestSelectAssetInContentBrowser = false;
+        XJAssetHandle RequestedContentBrowserAsset = 0;
+
         XJEditorSceneViewModel SceneView;
         XJEditorEntityDetailsView SelectedEntityDetails;
         // ---------- 面板可见性控制 ----------
