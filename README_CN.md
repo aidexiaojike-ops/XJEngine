@@ -89,7 +89,7 @@ File -> Importer -> Asset (CPU) -> Factory -> Resource (GPU) -> Renderer
 
 ### 编辑器架构（MVVM）
 
-- **Controllers**：`XJEditorSceneController`（场景加载/保存/切换） + `XJEditorCameraManager`（视口摄像机绑定）
+- **Controllers**：`XJEditorSceneController`（场景加载/保存/切换）+ `XJEditorCameraManager`（视口摄像机绑定）+ `XJEditorSceneAssetDropController`（资产拖放到场景）+ `XJEditorExternalDropController`（OS文件拖入）
 - **Services**：`XJEditorSceneService`（Controller 与 ECS 之间的桥接层）
 - **ViewModels**：`XJEditorSceneViewModel`、`XJEditorSelection`（UI 面板读取快照，写入请求）
 - **数据流**：`UI Panel → Request → Controller → Service → ECS`

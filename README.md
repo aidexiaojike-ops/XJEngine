@@ -165,8 +165,10 @@ Swapchain
 
 #### **Editor UI System**
 - **Lifecycle Hooks**: `OnUIBegin`/`OnUIEnd`/`OnUIRender`/`OnUIDestroy` virtual methods in XJApplication base class
-- **MVVM Architecture**: Controllers (camera, scene), Services, ViewModels decouple UI from ECS
+- **MVVM Architecture**: Controllers (camera, scene, drop), Services, ViewModels decouple UI from ECS
 - **XJEditorSceneController**: Scene load/save/open, dirty tracking, entity mutation requests
+- **XJEditorSceneAssetDropController**: Content Browser asset drag to Scene Preview with ray-cast entity placement
+- **XJEditorExternalDropController**: OS file drag-drop into editor window (e.g., drag .glb from Explorer)
 - **XJEditorCameraManager**: Viewport camera binding and editor camera lifecycle
 - **XJUIContext**: ImGui context management with GLFW backend, docking, and multi-viewport support
 - **XJEditorRenderer**: Vulkan-accelerated ImGui draw data rendering with descriptor pool management
