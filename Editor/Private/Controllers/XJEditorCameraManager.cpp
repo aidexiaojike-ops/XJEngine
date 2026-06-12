@@ -44,7 +44,7 @@ namespace XJ
                 return entity.get();
         }
 
-        XJEntity* previewCamera = scene->CreateEntityWithUUID(previewCameraUuid, "PreviewCamera");
+        XJEntity* previewCamera = scene->CreateEntityWithUUIDAndTransform(previewCameraUuid, "PreviewCamera");
 
         if (!previewCamera)
             return nullptr;

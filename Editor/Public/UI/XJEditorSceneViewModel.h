@@ -63,7 +63,7 @@ namespace XJ
         uint64_t SourceEntity = 0;
     };
 
-    struct XJEditorEntityDetailsView
+    struct XJEditorEntityDetailsView//所有的组件  id 名字  状态
     {
         bool Valid = false;
 

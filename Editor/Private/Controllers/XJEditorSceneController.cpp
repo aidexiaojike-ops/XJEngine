@@ -198,6 +198,47 @@ namespace XJ
             uiState.Selection.SelectedEntity = XJ::XJ_INVALID_EDITOR_ENTITY_ID;
         }
 
+        if(uiState.SceneRequests.RequestCreateEmptyEntity)
+        {
+            auto request = uiState.SceneRequests.CreateEmptyEntity;
+            uiState.SceneRequests.RequestCreateEmptyEntity = false;
+            uiState.SceneRequests.CreateEmptyEntity = {}; 
+            
+            XJEditorEntityId parentId = request.AsChild ? request.ParentEntity : XJ_INVALID_EDITOR_ENTITY_ID;
+
+            XJEditorEntityId createdId = XJEditorSceneService::CreateEmptyEntity(*mScene, request.Name, parentId);
+
+            if (createdId != XJ_INVALID_EDITOR_ENTITY_ID)
+            {
+                uiState.Selection.SelectedEntity = createdId;
+                uiState.Selection.SelectedAsset = 0;
+                uiState.Selection.HighlightedEntities.clear();
+                uiState.SelectedEntityDetails = {};
+            
+                NotifyAfterMutation();
+            }
+        }
+
+        if(uiState.SceneRequests.RequestAddComponent)//添加组件
+        {
+            auto request = uiState.SceneRequests.AddComponent;
+            uiState.SceneRequests.RequestAddComponent = false;
+            uiState.SceneRequests.AddComponent = {};
+
+            bool added = XJEditorSceneService::AddComponent(*mScene, request.EntityId, request.ComponentType);
+
+            if(added)
+            {
+                uiState.Selection.SelectedEntity = request.EntityId;
+                uiState.Selection.SelectedAsset = 0;
+                uiState.Selection.HighlightedEntities.clear();
+                uiState.SelectedEntityDetails = {};
+            
+                NotifyAfterMutation();
+                RefreshViewModels(uiState);
+            }
+        }
+
         if (uiState.SceneRequests.RequestRenameEntity)
         {
             auto request = uiState.SceneRequests.RenameEntity;
@@ -305,6 +346,12 @@ namespace XJ
         uiState.SceneRequests.RenameEntity = {};
         uiState.SceneRequests.UpdateTransform = {};
         uiState.SceneRequests.UpdateCamera = {};
+
+        uiState.SceneRequests.RequestCreateEmptyEntity = false;
+        uiState.SceneRequests.CreateEmptyEntity = {};
+
+        uiState.SceneRequests.RequestAddComponent = false;
+        uiState.SceneRequests.AddComponent = {};
     }
 
     void XJEditorSceneController::ResetSelectionForScene(XJEditorUIState& uiState, XJAssetHandle sceneHandle)

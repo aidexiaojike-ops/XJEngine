@@ -3,6 +3,7 @@
 
 #include "Asset/XJAsset.h"
 #include "Edit/Mathinclude.h"
+#include "UI/XJEditorComponentTypes.h"
 
 #include <cstdint>
 #include <filesystem>
@@ -14,6 +15,19 @@ namespace XJ
 {
     using XJEditorEntityId = uint64_t;// 编辑器实体唯一标识符类型
     constexpr XJEditorEntityId XJ_INVALID_EDITOR_ENTITY_ID = 0;// 无效的实体 ID 常量
+
+    struct XJEditorCreateEmptyEntityRequest//创建一个空实体
+    {
+        bool AsChild = false;
+        XJEditorEntityId ParentEntity = XJ_INVALID_EDITOR_ENTITY_ID;
+        std::string Name = "Empty Entity";
+    };
+
+    struct XJEditorAddComponentRequest//添加组件功能
+    {
+        XJEditorEntityId EntityId = XJ_INVALID_EDITOR_ENTITY_ID;
+        XJEditorComponentType ComponentType = XJEditorComponentType::None;
+    };
 
     struct XJEditorSelectionState//编辑器选择状态
     {
@@ -65,6 +79,12 @@ namespace XJ
 
         bool RequestUpdateCamera = false;// 是否请求更新摄像机参数
         XJEditorUpdateCameraRequest UpdateCamera;//参数
+
+        bool RequestCreateEmptyEntity = false;//是否请求创建一个空实体
+        XJEditorCreateEmptyEntityRequest CreateEmptyEntity;
+
+        bool RequestAddComponent = false;//是否请求添加组件
+        XJEditorAddComponentRequest AddComponent;
     };
 }
 

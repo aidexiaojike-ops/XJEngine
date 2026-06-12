@@ -30,6 +30,9 @@ namespace XJ
             void DrawAssetDetails(XJAssetHandle handle);//显示资产的详细信息，如类型、来源路径等
 
 
+            void DrawAddComponentButton(const XJEditorEntityDetailsView& details);//添加组件按钮
+            void RequestAddComponent(const XJEditorEntityDetailsView& details, XJEditorComponentType componentType);//准备添加组件
+
             XJEditorUIState& mState;
             XJEditorPanelConfig_Inspector* mConfig = nullptr;
     };

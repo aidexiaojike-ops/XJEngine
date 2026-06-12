@@ -334,22 +334,22 @@ namespace XJ
     {
        
         auto asset = std::make_shared<XJSceneAsset>();
-        auto& reg = const_cast<XJScene&>(scene).XJGetEcsRegistry();
-        auto view = reg.view<XJTransformComponent>();
 
-        for (auto e : view)
+        for (const auto& [enttEntity, entityPtr] : scene.GetEntities())
         {
-            auto* xjEntity = scene.XJGetEntities(e);
-            if (!xjEntity)
+            if (!entityPtr)
                 continue;
-
-            if (xjEntity->XJGetUUID() == XJUUID(static_cast<uint64_t>(0x30000001ull)))
+        
+            const XJEntity& entity = *entityPtr;
+        
+            // 不保存 editor preview camera。
+            if (entity.XJGetUUID() == XJUUID(static_cast<uint64_t>(0x30000001ull)))
                 continue;
-
-            XJSceneEntityData data = BuildEntityData(*xjEntity);
+        
+            XJSceneEntityData data = BuildEntityData(entity);
             asset->Entities.push_back(data);
         }
-
+    
         return asset;
     }
 

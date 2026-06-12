@@ -42,6 +42,8 @@ namespace XJ
 
             XJEntity* CreateEntity(const std::string &name = "");//在场景中创建一个新实体
             XJEntity* CreateEntityWithUUID(const XJUUID &id, const std::string &name = "");
+            XJEntity* CreateEntityWithTransform(const std::string& name);//添加transform组件
+            XJEntity* CreateEntityWithUUIDAndTransform(const XJUUID& id, const std::string& name);//添加一个带有transform组件的实体
             void DestroyEntity(const XJEntity *entity);//销毁指定的实体。
             void DestroyAllEntity();//销毁场景中所有的实体。
 

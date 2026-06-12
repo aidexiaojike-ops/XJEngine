@@ -4,6 +4,7 @@
 
 #include <imgui.h>
 #include <cstring>
+#include <algorithm>
 
 namespace XJ
 {
@@ -91,6 +92,8 @@ namespace XJ
 
         if (showAssetRefs && details.SceneRef.Valid)
             DrawAssetRefComponent(details);
+
+        DrawAddComponentButton(details);
     }
     void XJInspectorPanel::DrawTransformComponent(const XJEditorEntityDetailsView& details)
     {
@@ -104,27 +107,42 @@ namespace XJ
         bool changed = false;
 
         // helper: drag float3 with reset button  显示位置、旋转、缩放的输入框，允许用户修改这些属性，并提供重置按钮
-        auto DragVec3 = [&](const char* label, glm::vec3& value, float speed = 0.1f, float reset = 0.0f)
+        auto DragVec3 = [&](const char* label, glm::vec3& value, float speed)
         {
+            /*Position  X [   ]  Y [   ]  Z [   ]
+              Rotation  X [   ]  Y [   ]  Z [   ]
+              Scale     X [   ]  Y [   ]  Z [   ]*/
             float arr[3] = { value.x, value.y, value.z };
             bool dragChanged = false;
             
             ImGui::PushID(label);//为每个属性创建唯一 ID，避免 ImGui 内部冲突
             ImGui::TextUnformatted(label);//显示属性标签
+            ImGui::SameLine(90.0F);
 
-            ImGui::PushItemWidth(-1);//让输入框占满剩余空间
-            dragChanged |= ImGui::DragFloat("##X", &arr[0], speed);
-            dragChanged |= ImGui::DragFloat("##Y", &arr[1], speed);
-            dragChanged |= ImGui::DragFloat("##Z", &arr[2], speed);
-            ImGui::PopItemWidth();//恢复默认输入框宽度
+            float fullWidth = ImGui::GetContentRegionAvail().x;
+            float itemWidth = (fullWidth - ImGui::GetStyle().ItemSpacing.x * 4.0f) / 3.0f;
+
+            ImGui::TextUnformatted("X");
+            ImGui::SameLine();
+            ImGui::SetNextItemWidth(itemWidth);
+            changed |= ImGui::DragFloat("##X", &arr[0], speed);
+
+            ImGui::SameLine();
+            ImGui::TextUnformatted("Y");
+            ImGui::SameLine();
+            ImGui::SetNextItemWidth(itemWidth);
+            changed |= ImGui::DragFloat("##Y", &arr[1], speed);
+
+            ImGui::SameLine();
+            ImGui::TextUnformatted("Z");
+            ImGui::SameLine();
+            ImGui::SetNextItemWidth(itemWidth);
+            changed |= ImGui::DragFloat("##Z", &arr[2], speed);
+
+            if (changed)
+                value = glm::vec3(arr[0], arr[1], arr[2]);
 
             ImGui::PopID();
-
-            if(dragChanged)
-            {
-                value = glm::vec3(arr[0], arr[1], arr[2]);
-                //changed = true;
-            }
 
             return dragChanged;
         };
@@ -257,5 +275,47 @@ namespace XJ
         }
     }
 
+
+    void XJInspectorPanel::DrawAddComponentButton(const XJEditorEntityDetailsView& details)
+    {
+        ImGui::Separator();
+
+        if (ImGui::Button("Add Component", ImVec2(-1.0f, 0.0f)))
+            ImGui::OpenPopup("AddComponentPopup");
+        
+        if(ImGui::BeginPopup("AddComponentPopup"))
+        {
+            bool hasAnyAvailable = false;
+
+            if(!details.Transform.Valid)
+            {
+                hasAnyAvailable = true;
+                if(ImGui::MenuItem("Transform"))
+                    RequestAddComponent(details, XJEditorComponentType::Transform);
+            }
+
+            if (!details.Camera.Valid)
+            {
+                hasAnyAvailable = true;
+                if (ImGui::MenuItem("Camera"))
+                    RequestAddComponent(details, XJEditorComponentType::Camera);
+            }
+
+            if (!hasAnyAvailable)
+                ImGui::TextDisabled("No components available");
+
+            ImGui::EndPopup();
+        }
+    }
+
+    void XJInspectorPanel::RequestAddComponent(const XJEditorEntityDetailsView& details, XJEditorComponentType componentType)
+    {
+        if (details.Id == XJ_INVALID_EDITOR_ENTITY_ID)
+            return;
+
+        mState.SceneRequests.RequestAddComponent = true;
+        mState.SceneRequests.AddComponent.EntityId = details.Id;
+        mState.SceneRequests.AddComponent.ComponentType = componentType;
+    }
    
 }

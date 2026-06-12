@@ -1,4 +1,5 @@
-#include "Services/XJEditorSceneService.h"
+#include "Services/XJEditorSceneService.h".
+
 
 #include "ECS/XJEntity.h"
 #include "ECS/XJNode.h"
@@ -251,5 +252,69 @@ namespace XJ
         camera.XJSetFov(request.Fov);
         camera.XJSetNear(request.NearPlane);
         camera.XJSetFar(request.FarPlane);
+    }
+
+    XJEditorEntityId XJEditorSceneService::CreateEmptyEntity(XJScene& scene, const std::string& name, XJEditorEntityId parentId)
+    {
+        XJEntity* entity = scene.CreateEntity(name.empty() ? "Empty Entity" : name);
+        if (!entity)
+            return XJ_INVALID_EDITOR_ENTITY_ID;
+
+        if (parentId != XJ_INVALID_EDITOR_ENTITY_ID)
+        {
+            XJEntity* parent = FindEntityById(scene, parentId);
+            if (parent)
+                parent->XJAddChild(entity);
+        }
+
+        return static_cast<XJEditorEntityId>(entity->XJGetUUID());
+    }
+
+    bool XJEditorSceneService::AddComponent(XJScene& scene, XJEditorEntityId entityId, XJEditorComponentType componentType)
+    {
+        XJEntity* entity = FindEntityById(scene, entityId);
+
+        if(!entity || !entity->IsValid())
+            return false;
+        
+        switch (componentType)
+        {
+            case XJEditorComponentType::Transform:
+            {
+                if (entity->HasComponent<XJTransformComponent>())
+                    return false;
+
+                auto& transform = entity->AddComponent<XJTransformComponent>();
+                transform.position = glm::vec3(0.0f);
+                transform.rotation = glm::vec3(0.0f);
+                transform.scale = glm::vec3(1.0f);
+                transform.UpdateModelMatrix();
+                return true;
+            }
+
+            case XJEditorComponentType::Camera:
+            {
+                if (entity->HasComponent<XJCameraComponent>())
+                    return false;
+
+                if (!entity->HasComponent<XJTransformComponent>())
+                {
+                    auto& transform = entity->AddComponent<XJTransformComponent>();
+                    transform.position = glm::vec3(0.0f);
+                    transform.rotation = glm::vec3(0.0f);
+                    transform.scale = glm::vec3(1.0f);
+                    transform.UpdateModelMatrix();
+                }
+
+                auto& camera = entity->AddComponent<XJCameraComponent>();
+                camera.XJSetFov(60.0f);
+                camera.XJSetNear(0.1f);
+                camera.XJSetFar(100.0f);
+                return true;
+            }
+
+            default:
+                return false;
+        }
     }
 }

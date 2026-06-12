@@ -38,7 +38,7 @@ namespace XJ
                 return false;
         }
 
-        XJEntity* entity = scene.CreateEntity(metaOpt->Name);
+        XJEntity* entity = scene.CreateEntityWithTransform(metaOpt->Name);//创建实例添加tansform组件
         if (!entity)
             return false;
 

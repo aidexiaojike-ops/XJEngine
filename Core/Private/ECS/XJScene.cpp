@@ -48,11 +48,26 @@ namespace XJ
         mEntities[enttEntity]->XJSetUUID(id);
         mEntities[enttEntity]->XJSetName(name.empty() ? "Entity" : name);
 
-        // 给实体添加默认的 Transform 组件
-        mEntities[enttEntity]->AddComponent<XJTransformComponent>();
-
         // 返回实体的指针
         return mEntities[enttEntity].get();
+    }
+
+    XJEntity* XJScene::CreateEntityWithTransform(const std::string& name)
+    {
+        XJEntity* entity = CreateEntity(name);
+        if (entity)
+            entity->AddComponent<XJTransformComponent>(); // 给实体添加默认的 Transform 组件
+    
+        return entity;
+    }
+    
+    XJEntity* XJScene::CreateEntityWithUUIDAndTransform(const XJUUID& id, const std::string& name)
+    {
+        XJEntity* entity = CreateEntityWithUUID(id, name);
+        if (entity)
+            entity->AddComponent<XJTransformComponent>();
+
+        return entity;
     }
 
      // DestroyEntity：销毁指定的实体并清除其相关资源

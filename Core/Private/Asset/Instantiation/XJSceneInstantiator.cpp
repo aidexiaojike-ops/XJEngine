@@ -59,7 +59,14 @@ namespace XJ
 
     void XJSceneInstantiator::ApplyTransform(const XJSceneEntityData& data, XJEntity& entity)
     {
-        auto& t = entity.GetComponent<XJTransformComponent>();
+        XJTransformComponent* transform = nullptr;
+
+        if (entity.HasComponent<XJTransformComponent>())
+            transform = &entity.GetComponent<XJTransformComponent>();
+        else
+            transform = &entity.AddComponent<XJTransformComponent>();
+
+        auto& t = *transform;
 
         if (data.Transform.UUID != 0)
             t.XJSetUUID(data.Transform.UUID);

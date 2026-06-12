@@ -21,7 +21,8 @@ namespace XJ
 
     void XJHierarchyPanel::DrawUI()
     {
-        if(!mState.ShowHierarchy)return;
+        if(!mState.ShowHierarchy)
+            return;
 
         const char* title = mConfig ? mConfig->title.c_str() : "World Outliner";
         ImGui::Begin(title);
@@ -29,12 +30,29 @@ namespace XJ
         if(mState.SceneView.RootEntities.empty())
         {
             ImGui::Text("No scene loaded");
-            ImGui::End();
-            return;
+            //ImGui::End();
+            //return;//没有实体对象也可以添加内容
+        }
+        else
+        {
+            for (const XJEditorEntityView& entity : mState.SceneView.RootEntities)
+                DrawEntityNode(entity);
+
+        }
+        //左键空白处UI
+        if (ImGui::BeginPopupContextWindow("HierarchyEmptyContext", ImGuiPopupFlags_MouseButtonRight | ImGuiPopupFlags_NoOpenOverItems))
+        {
+           if (ImGui::MenuItem("Create Empty Entity"))
+           {
+               mState.SceneRequests.RequestCreateEmptyEntity = true;
+               mState.SceneRequests.CreateEmptyEntity = {};
+               mState.SceneRequests.CreateEmptyEntity.AsChild = false;
+               mState.SceneRequests.CreateEmptyEntity.Name = "Empty Entity";
+           }
+       
+           ImGui::EndPopup();
         }
 
-        for (const XJEditorEntityView& entity : mState.SceneView.RootEntities)
-            DrawEntityNode(entity);
 
         ImGui::End();
     }
@@ -110,6 +128,16 @@ namespace XJ
 
                 mState.RequestSelectAssetInContentBrowser = true;
                 mState.RequestedContentBrowserAsset = entity.MeshAsset;
+            }
+            ImGui::Separator();
+            
+            if (ImGui::MenuItem("Create Empty Child"))
+            {
+                mState.SceneRequests.RequestCreateEmptyEntity = true;
+                mState.SceneRequests.CreateEmptyEntity = {};
+                mState.SceneRequests.CreateEmptyEntity.AsChild = true;
+                mState.SceneRequests.CreateEmptyEntity.ParentEntity = entity.Id;
+                mState.SceneRequests.CreateEmptyEntity.Name = "Empty Entity";
             }
 
             ImGui::Separator();
