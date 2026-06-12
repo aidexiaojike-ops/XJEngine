@@ -91,7 +91,8 @@ File -> Importer -> Asset (CPU) -> Factory -> Resource (GPU) -> Renderer
 
 - **Controllers**：`XJEditorSceneController`（场景加载/保存/切换）+ `XJEditorCameraManager`（视口摄像机绑定）+ `XJEditorSceneAssetDropController`（资产拖放到场景）+ `XJEditorExternalDropController`（OS文件拖入）
 - **Services**：`XJEditorSceneService`（Controller 与 ECS 之间的桥接层）
-- **ViewModels**：`XJEditorSceneViewModel`、`XJEditorSelection`（UI 面板读取快照，写入请求）
+- **ViewModels**：`XJEditorSceneViewModel`、`XJEditorSelection`、`XJEditorComponentTypes`（UI 面板读取快照，写入请求）
+- **面板功能**：Inspector 支持 Transform/Camera/MeshRenderer 组件增删编辑，Hierarchy 支持右键菜单创建/删除/重命名
 - **数据流**：`UI Panel → Request → Controller → Service → ECS`
 
 ### 主要模块
