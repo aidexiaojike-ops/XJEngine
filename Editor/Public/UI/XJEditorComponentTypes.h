@@ -10,7 +10,7 @@ namespace XJ
         Transform,
         Camera,
         MeshRenderer,
-        
+        SceneAssetRef,
     };
 }
 

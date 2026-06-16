@@ -1,5 +1,5 @@
-#include "Services/XJEditorSceneService.h".
-
+#include "Services/XJEditorSceneService.h"
+#include <optional>
 
 #include "ECS/XJEntity.h"
 #include "ECS/XJNode.h"
@@ -7,6 +7,12 @@
 #include "ECS/Component/XJCameraComponent.h"
 #include "ECS/Component/XJSceneAssetComponents.h"
 #include "ECS/Component/XJTransformComponent.h"
+#include "ECS/Component/Material/XJUnlitMaterialComponent.h"
+
+#include "Asset/Loader/XJMeshAssetLoader.h"
+#include "Asset/XJAssetRegistry.h"
+#include "Asset/Instantiation/XJSceneInstantiator.h"
+#include "Render/Resource/XJMaterialFactory.h"
 
 #include <algorithm>
 #include <unordered_set>
@@ -15,13 +21,64 @@ namespace XJ
 {
     namespace
     {
-        XJEditorEntityView BuildEntityViewRecursive(XJEntity* entity)
+        bool IsValidMeshAsset(XJAssetRegistry& assetRegistry, XJAssetHandle meshAsset)
         {
-            XJEditorEntityView view;
-
+            if (meshAsset == 0)
+                return false;
+        
+            auto meta = assetRegistry.GetMeta(meshAsset);
+            return meta.has_value() && meta->Type == XJAssetType::Mesh;
+        }
+    
+        void EnsureTransformComponent(XJEntity& entity)
+        {
+            if (entity.HasComponent<XJTransformComponent>())
+                return;
+        
+            auto& transform = entity.AddComponent<XJTransformComponent>();
+            transform.position = glm::vec3(0.0f);
+            transform.rotation = glm::vec3(0.0f);
+            transform.scale = glm::vec3(1.0f);
+            transform.UpdateModelMatrix();
+        }
+    
+        bool RebuildUnlitMeshRenderData(XJEntity& entity, XJAssetHandle meshAsset, XJAssetRegistry& assetRegistry, XJSceneInstantiateContext& instantiateContext, const std::shared_ptr<XJTexture>& defaultTexture, const std::shared_ptr<XJSampler>& defaultSampler)//设置默认材质
+        {
+            if (!defaultTexture || !defaultSampler)
+                return false;
+        
+            XJMeshAssetLoadContext loadContext;
+            loadContext.Registry = &assetRegistry;
+            loadContext.MeshCache = &instantiateContext.MeshCache;
+        
+            std::shared_ptr<XJMesh> gpuMesh = XJMeshAssetLoader::LoadMesh(meshAsset, loadContext);
+            if (!gpuMesh)
+                return false;
+        
+            if (entity.HasComponent<XJUnlitMaterialComponent>())
+                entity.RemoveComponent<XJUnlitMaterialComponent>();
+        
+            auto material = XJMaterialFactory::GetInstance()->CreateDefaultMaterial(defaultTexture, defaultSampler);
+            if (!material)
+                return false;
+        
+            auto& renderComponent = entity.AddComponent<XJUnlitMaterialComponent>();
+            renderComponent.AddMesh(gpuMesh.get(), material.get());
+        
+            return true;
+        }
+        
+        std::optional<XJEditorEntityView> BuildEntityViewRecursive(XJEntity* entity, const XJEditorSceneService::ShouldExposeEntityCallback& shouldExposeEntity)
+        {
             if (!entity)
-                return view;
-
+                return std::nullopt;
+        
+            XJEditorEntityId entityId = static_cast<XJEditorEntityId>(entity->XJGetUUID());
+        
+            if (shouldExposeEntity && !shouldExposeEntity(entityId))
+                return std::nullopt;
+        
+            XJEditorEntityView view;
             view.Id = static_cast<XJEditorEntityId>(entity->XJGetUUID());
             view.Name = entity->XJGetName().empty() ? "XJUnnamed" : entity->XJGetName();
             //获取所有组件
@@ -35,21 +92,26 @@ namespace XJ
                 const auto& meshRef = entity->GetComponent<XJMeshAssetRefComponent>();
                 view.MeshAsset = meshRef.Mesh.IsValid() ? meshRef.Mesh.Handle : 0;
             }
-
+        
             if (view.HasSceneRef)
             {
                 const auto& sceneRef = entity->GetComponent<XJSceneAssetRefComponent>();
                 view.SourceSceneUri = sceneRef.SourceScene.ToUri();
             }
-
+        
             for (XJNode* child : entity->XJGetChildren())
             {
                 if (XJEntity* childEntity = dynamic_cast<XJEntity*>(child))
-                    view.Children.push_back(BuildEntityViewRecursive(childEntity));
+                {
+                    auto childView = BuildEntityViewRecursive(childEntity, shouldExposeEntity);
+                    if (childView.has_value())
+                        view.Children.push_back(std::move(childView.value()));
+                }
             }
-
+        
             return view;
         }
+    
     }
 
     XJEntity* XJEditorSceneService::FindEntityById(XJScene& scene, XJEditorEntityId id)
@@ -147,7 +209,7 @@ namespace XJ
         }
     }
 
-    XJEditorSceneViewModel XJEditorSceneService::BuildSceneViewModel(XJScene& scene)
+    XJEditorSceneViewModel XJEditorSceneService::BuildSceneViewModel(XJScene& scene, const ShouldExposeEntityCallback& shouldExposeEntity)
     {
         XJEditorSceneViewModel viewModel;
 
@@ -158,15 +220,23 @@ namespace XJ
         for (XJNode* child : root->XJGetChildren())
         {
             if (XJEntity* entity = dynamic_cast<XJEntity*>(child))
-                viewModel.RootEntities.push_back(BuildEntityViewRecursive(entity));
+            {
+                auto entityView = BuildEntityViewRecursive(entity, shouldExposeEntity);
+                if (entityView.has_value())
+                    viewModel.RootEntities.push_back(std::move(entityView.value()));
+            }
         }
 
         return viewModel;
     }
 
-    XJEditorEntityDetailsView XJEditorSceneService::BuildEntityDetailsView(XJScene& scene, XJEditorEntityId entityId)
+    XJEditorEntityDetailsView XJEditorSceneService::BuildEntityDetailsView(XJScene& scene, XJEditorEntityId entityId, const ShouldExposeEntityCallback& shouldExposeEntity)
     {
         XJEditorEntityDetailsView details;
+
+        if (shouldExposeEntity && !shouldExposeEntity(entityId))
+            return details;
+
 
         XJEntity* entity = FindEntityById(scene, entityId);
         if (!entity || !entity->IsValid())
@@ -292,7 +362,7 @@ namespace XJ
                 return true;
             }
 
-            case XJEditorComponentType::Camera:
+            case XJEditorComponentType::Camera://添加摄像机也要添加transform
             {
                 if (entity->HasComponent<XJCameraComponent>())
                     return false;
@@ -316,5 +386,103 @@ namespace XJ
             default:
                 return false;
         }
+    }
+
+    bool XJEditorSceneService::DeleteComponent(XJScene& scene, XJEditorEntityId entityId, XJEditorComponentType componentType)
+    {
+        XJEntity* entity = FindEntityById(scene, entityId);
+
+        if(!entity || !entity->IsValid())
+            return false;
+
+        switch(componentType)
+        {
+            case XJEditorComponentType::Transform:
+            {
+                if(!entity->HasComponent<XJTransformComponent>())
+                    return false;
+
+                entity->RemoveComponent<XJTransformComponent>();
+                return true;
+            }
+            case XJEditorComponentType::Camera:
+            {
+                if(!entity->HasComponent<XJCameraComponent>())
+                    return false;
+
+                entity->RemoveComponent<XJCameraComponent>();
+                    return true;
+            }
+            case XJEditorComponentType::MeshRenderer:
+            {
+                bool removed = false;//移除模型也要移除材质
+
+                if(entity->HasComponent<XJMeshAssetRefComponent>())
+                {
+                    entity->RemoveComponent<XJMeshAssetRefComponent>();
+                    removed = true;
+                }
+
+                if(entity->HasComponent<XJMaterialAssetRefComponent>())
+                {
+                    entity->RemoveComponent<XJMaterialAssetRefComponent>();
+                    removed = true;
+                }
+
+                if(entity->HasComponent<XJUnlitMaterialComponent>())
+                {
+                   entity->RemoveComponent<XJUnlitMaterialComponent>();
+                   removed = true;
+                }
+
+                return removed;
+            }
+            case XJEditorComponentType::SceneAssetRef:
+            {
+                if(!entity->HasComponent<XJSceneAssetRefComponent>())
+                    return false;
+
+                entity->RemoveComponent<XJSceneAssetRefComponent>();
+                    return true;
+            }
+
+            default:
+                return false;
+        }
+    }
+    bool XJEditorSceneService::AddMeshRendererComponent(XJScene& scene, XJEditorEntityId entityId, XJAssetHandle defaultMeshAsset, XJAssetRegistry& assetRegistry, XJSceneInstantiateContext& instantiateContext, const std::shared_ptr<XJTexture>& defaultTexture, const std::shared_ptr<XJSampler>& defaultSampler)
+    {
+        XJEntity* entity = FindEntityById(scene, entityId);
+        if(!entity || !entity->IsValid())
+            return false;
+
+        if(entity->HasComponent<XJMeshAssetRefComponent>())
+            return false;
+        
+        if(!IsValidMeshAsset(assetRegistry, defaultMeshAsset))
+            return false;
+        
+        auto& meshRef = entity->AddComponent<XJMeshAssetRefComponent>();
+        meshRef.Mesh = { defaultMeshAsset, XJAssetType::Mesh };
+
+        return RebuildUnlitMeshRenderData(*entity, defaultMeshAsset, assetRegistry, instantiateContext, defaultTexture, defaultSampler);
+    }
+
+    bool XJEditorSceneService::SetMeshRendererMesh(XJScene& scene, XJEditorEntityId entityId, XJAssetHandle meshAsset, XJAssetRegistry& assetRegistry, XJSceneInstantiateContext& instantiateContext, const std::shared_ptr<XJTexture>& defaultTexture, const std::shared_ptr<XJSampler>& defaultSampler)
+    {
+         XJEntity* entity = FindEntityById(scene, entityId);
+        if (!entity || !entity->IsValid())
+            return false;
+
+        if (!entity->HasComponent<XJMeshAssetRefComponent>())
+            return false;
+
+        if (!IsValidMeshAsset(assetRegistry, meshAsset))
+            return false;
+
+        auto& meshRef = entity->GetComponent<XJMeshAssetRefComponent>();
+        meshRef.Mesh = { meshAsset, XJAssetType::Mesh };
+
+        return RebuildUnlitMeshRenderData(*entity, meshAsset, assetRegistry, instantiateContext, defaultTexture, defaultSampler);
     }
 }

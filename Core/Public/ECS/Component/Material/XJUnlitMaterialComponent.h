@@ -50,7 +50,7 @@ namespace XJ
             UnlitMaterialUbo mParams{};//材质参数
     };
 
-    class XJUnlitMaterialComponent : public XJMaterialComponent<XJUnlitMaterial>
+    class XJUnlitMaterialComponent : public XJMaterialComponent<XJUnlitMaterial>//runtime render data
     {
         private:
             /* data */

@@ -189,6 +189,7 @@ protected:
         mEditorSceneController.SetAssetRegistry(&mAssetRegistry);
         mEditorSceneController.SetDefaultResources(mWhiteTexture, mDefaultSampler);
         mEditorSceneController.SetCurrentScenePath("Resource/Scenes/Default.xjscene");
+        mEditorSceneController.SetDefaultMeshHandle(kMonkeyMeshHandle);
         //打开前准备
         mEditorSceneController.SetBeforeDeleteCallback(
             [this](XJ::XJScene& scene, const std::vector<XJ::XJEditorEntityId>& ids)
@@ -219,6 +220,13 @@ protected:
             {
                 return !mEditorCameraManager.IsProtectedEditorCamera(id);//保护编辑器摄像机不会被删
             });
+        
+        mEditorSceneController.SetShouldExposeEntityCallback(
+            [this](XJ::XJEditorEntityId id)
+            {
+                return !mEditorCameraManager.IsProtectedEditorCamera(id);//一些特定ID不会显示
+            });   
+
         //加载默认场景
         if (!mEditorSceneController.LoadOrCreateDefaultScene(mEditorUIState, kDefaultSceneHandle, kMonkeyMeshHandle,
                 "Resource/Scenes/Default.xjscene"))

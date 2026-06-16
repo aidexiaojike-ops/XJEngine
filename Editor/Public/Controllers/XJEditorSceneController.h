@@ -5,6 +5,7 @@
 #include "Asset/XJSceneAsset.h"
 #include "Asset/Instantiation/XJSceneInstantiator.h"
 #include "UI/XJEditorSelection.h"
+#include "UI/XJEditorComponentTypes.h"
 
 #include <filesystem>
 #include <functional>
@@ -39,6 +40,8 @@ namespace XJ
             using AfterOpenSceneCallback = std::function<void(XJScene& scene)>;//打开场景之后  加载ecs修改ui
             
             using CanDeleteEntityCallback = std::function<bool(XJEditorEntityId id)>;//是否能删除ID
+            //using CanDeleteComponentCallback = std::function<bool(XJEditorEntityId id, XJEditorComponentType componentType)>;//是否能删除组件
+            using ShouldExposeEntityCallback = std::function<bool(XJEditorEntityId id)>;//是否隐藏实体
             //==========================================================
             // 设置与注入
             //==========================================================
@@ -76,6 +79,9 @@ namespace XJ
             std::shared_ptr<XJSceneAsset> GetSceneAsset() const;// 获取当前加载的场景资产（只读共享指针）
             const std::filesystem::path& GetCurrentScenePath() const; /// 获取当前场景文件路径
             bool IsSceneDirty() const;/// 查询当前场景是否已被修改（脏状态）
+
+            void SetShouldExposeEntityCallback(ShouldExposeEntityCallback callback);
+            void SetDefaultMeshHandle(XJAssetHandle handle);//设置默认mesh
         
         private:
             void ResetSceneRequestState(XJEditorUIState& uiState);// 重置场景请求状态
@@ -102,6 +108,9 @@ namespace XJ
             AfterOpenSceneCallback mAfterOpenSceneCallback; // 打开场景后回调
 
             CanDeleteEntityCallback mCanDeleteEntityCallback;
+
+            ShouldExposeEntityCallback mShouldExposeEntityCallback;
+            XJAssetHandle mDefaultMeshHandle = 0;//默认mesh 的ECS id
 
     };
 }

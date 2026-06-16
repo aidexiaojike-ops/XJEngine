@@ -8,6 +8,9 @@
 #include "ECS/Component/XJTransformComponent.h"
 #include <glm/gtc/matrix_inverse.hpp> 
 
+#include "UI/XJEditorAssetDragPayload.h"
+#include "UI/XJEditorDragPayload.h"
+
 namespace XJ
 {
     bool XJScenePreview::Render(VkCommandBuffer cmd)
@@ -149,23 +152,26 @@ namespace XJ
                     {
                         if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload(XJ_ASSET_PAYLOAD_NAME))
                         {
-                            const auto* assetPayload = static_cast<const XJAssetDragPayload*>(payload->Data);
-                            if (assetPayload && mAssetDropCallback)
+                            if (payload->DataSize == sizeof(XJEditorAssetDragPayload))
                             {
-                                XJAssetDragPayload droppedPayload = *assetPayload;
-
-                                // 计算拖放位置
-                                glm::vec3 rayOrigin;
-                                glm::vec3 rayDirection;
-                                if (CalculateDropPositionFromViewportRay(imageMin, avail, rayOrigin, rayDirection))
+                                const auto* assetPayload = static_cast<const XJEditorAssetDragPayload*>(payload->Data);
+                                if (assetPayload && mAssetDropCallback)
                                 {
-                                    droppedPayload.HasViewportRay = true;
-                                    droppedPayload.RayOrigin = rayOrigin;
-                                    droppedPayload.RayDirection = rayDirection;
+                                    XJAssetDragPayload droppedPayload{};
+                                    droppedPayload.Handle = assetPayload->Handle;
+                                    droppedPayload.Type = assetPayload->Type;
+                                
+                                    glm::vec3 rayOrigin;
+                                    glm::vec3 rayDirection;
+                                    if (CalculateDropPositionFromViewportRay(imageMin, avail, rayOrigin, rayDirection))
+                                    {
+                                        droppedPayload.HasViewportRay = true;
+                                        droppedPayload.RayOrigin = rayOrigin;
+                                        droppedPayload.RayDirection = rayDirection;
+                                    }
+                                
+                                    mAssetDropCallback(droppedPayload);
                                 }
-
-
-                                mAssetDropCallback(droppedPayload);
                             }
                         }
                         ImGui::EndDragDropTarget();

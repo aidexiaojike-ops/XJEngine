@@ -28,6 +28,12 @@ namespace XJ
         XJEditorEntityId EntityId = XJ_INVALID_EDITOR_ENTITY_ID;
         XJEditorComponentType ComponentType = XJEditorComponentType::None;
     };
+    
+    struct XJEditorDeleteComponentRequest//删除组件
+    {
+        XJEditorEntityId EntityId = XJ_INVALID_EDITOR_ENTITY_ID;
+        XJEditorComponentType ComponentType = XJEditorComponentType::None;
+    };
 
     struct XJEditorSelectionState//编辑器选择状态
     {
@@ -58,7 +64,15 @@ namespace XJ
         float NearPlane = 0.1f;
         float FarPlane = 100.0f;
     };
+
+    struct XJEditorSetMeshRendererMeshRequest//设置渲染mesh 
+    {
+        XJEditorEntityId EntityId = XJ_INVALID_EDITOR_ENTITY_ID;
+        XJAssetHandle MeshAsset = 0;
+    };
  
+
+
     struct XJEditorSceneRequestState//编辑器场景请求状态  这些请求由 UI 层设置，由控制器在合适的时机统一处理
     {
         bool RequestSaveScene = false;//// 是否请求保存当前场景
@@ -85,7 +99,15 @@ namespace XJ
 
         bool RequestAddComponent = false;//是否请求添加组件
         XJEditorAddComponentRequest AddComponent;
+
+        bool RequestDeleteComponent = false;//是否请求删除组件
+        XJEditorDeleteComponentRequest DeleteComponent;
+
+        bool RequestSetMeshRendererMesh = false;//是否请求设置渲染mesh
+        XJEditorSetMeshRendererMeshRequest SetMeshRendererMesh;
     };
+
+
 }
 
 #endif

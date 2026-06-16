@@ -16,13 +16,13 @@ namespace XJ
             XJUUID  SourceEntity = 0;//源场景中实体的 UUID
     };
 
-    class XJMeshAssetRefComponent : public XJComponent
+    class XJMeshAssetRefComponent : public XJComponent//Static Mesh
     {
         public:
             XJAssetRef Mesh;
     };
 
-    class XJMaterialAssetRefComponent : public XJComponent
+    class XJMaterialAssetRefComponent : public XJComponent//Material slots asset refs
     {
         public:
             std::vector<XJAssetRef> Materials;

@@ -33,6 +33,10 @@ target_link_libraries(Editor
 #target_compile_features(Editor PUBLIC cxx_std_17)
 target_compile_features(Editor PRIVATE cxx_std_17)
 
+if (MINGW)
+    target_compile_options(Editor PRIVATE -Wa,-mbig-obj)
+endif()
+
 set_target_properties(Editor PROPERTIES
     ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib
 )

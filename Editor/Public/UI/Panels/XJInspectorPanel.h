@@ -6,6 +6,7 @@
 #include "UI/XJEditorSceneViewModel.h"
 #include "UI/XJEditorUIConfig.h"
 #include "UI/XJEditorSelection.h"
+#include <string>
 
 
 namespace XJ
@@ -29,6 +30,18 @@ namespace XJ
             void DrawAssetRefComponent(const XJEditorEntityDetailsView& details);//显示 AssetRef 组件的 UI，允许用户查看和修改实体引用的资产（如场景、网格等）
             void DrawAssetDetails(XJAssetHandle handle);//显示资产的详细信息，如类型、来源路径等
 
+            bool DrawComponentFrame(const char* label, XJEditorComponentType componentType, const XJEditorEntityDetailsView& details);//组件UI
+            void DrawComponentOptionsMenu(const char* label, XJEditorComponentType componentType, const XJEditorEntityDetailsView& details);//组件UI边上的三个小点打开后里面的内容
+            void RequestDeleteComponent(const XJEditorEntityDetailsView& details, XJEditorComponentType componentType);//删除组件  UI
+            std::string BuildComponentClipboardText(const XJEditorEntityDetailsView& details, XJEditorComponentType componentType) const;//copy组件数据
+            //复制 粘贴组件里面的内容
+            void CopyComponent(const XJEditorEntityDetailsView& details, XJEditorComponentType componentType);
+            void PasteComponent(const XJEditorEntityDetailsView& details, XJEditorComponentType componentType);
+            bool CanPasteComponent(XJEditorComponentType componentType) const;
+            //设置mesh
+            void RequestSetMeshRendererMesh(const XJEditorEntityDetailsView& details, XJAssetHandle meshAsset);
+            void DrawMeshSelector(const XJEditorEntityDetailsView& details);
+            void DrawMeshAssetDropTarget(const XJEditorEntityDetailsView& details);
 
             void DrawAddComponentButton(const XJEditorEntityDetailsView& details);//添加组件按钮
             void RequestAddComponent(const XJEditorEntityDetailsView& details, XJEditorComponentType componentType);//准备添加组件

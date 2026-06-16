@@ -1,5 +1,6 @@
 #include "UI/Panels/XJContentBrowserPanel.h"
 #include "UI/XJEditorDragPayload.h"
+#include "UI/XJEditorAssetDragPayload.h"
 
 #include "UI/XJEditorUILayer.h"
 #include "Asset/XJAssetRegistry.h"
@@ -190,7 +191,7 @@ namespace XJ
                 }
                 if(meta.Type == XJAssetType::Mesh && ImGui::BeginDragDropSource())//判断是是否是模型 然后再拖动
                 {
-                    XJAssetDragPayload payload{};
+                    XJEditorAssetDragPayload payload{};
 
                     payload.Handle = handle;
                     payload.Type = meta.Type;

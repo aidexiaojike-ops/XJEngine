@@ -56,6 +56,14 @@ namespace XJ
     {
         mCanDeleteEntityCallback = std::move(callback);
     }
+    void XJEditorSceneController::SetShouldExposeEntityCallback(ShouldExposeEntityCallback callback)
+    {
+        mShouldExposeEntityCallback = std::move(callback);
+    }
+    void XJEditorSceneController::SetDefaultMeshHandle(XJAssetHandle handle)
+    {
+        mDefaultMeshHandle = handle;
+    }
     
     bool XJEditorSceneController::LoadOrCreateDefaultScene(XJEditorUIState& uiState, XJAssetHandle defaultSceneHandle, 
                                                         XJAssetHandle defaultMeshHandle, const std::filesystem::path& scenePath)
@@ -157,22 +165,35 @@ namespace XJ
 
     void XJEditorSceneController::RefreshViewModels(XJEditorUIState& uiState)
     {
-        if(!mScene)
+        if (!mScene)
         {
             uiState.SceneView = {};
             uiState.SelectedEntityDetails = {};
             return;
         }
-
-        uiState.SceneView = XJEditorSceneService::BuildSceneViewModel(*mScene);
-
-        if(uiState.Selection.SelectedEntity != XJ_INVALID_EDITOR_ENTITY_ID)
+    
+        uiState.SceneView = XJEditorSceneService::BuildSceneViewModel(
+            *mScene,
+            mShouldExposeEntityCallback);
+        
+        if (uiState.Selection.SelectedEntity != XJ_INVALID_EDITOR_ENTITY_ID)
         {
-            uiState.SelectedEntityDetails = XJEditorSceneService::BuildEntityDetailsView(*mScene, uiState.Selection.SelectedEntity);
+            if (mShouldExposeEntityCallback &&
+                !mShouldExposeEntityCallback(uiState.Selection.SelectedEntity))
+            {
+                uiState.Selection.SelectedEntity = XJ_INVALID_EDITOR_ENTITY_ID;
+                uiState.SelectedEntityDetails = {};
+                return;
+            }
+        
+            uiState.SelectedEntityDetails = XJEditorSceneService::BuildEntityDetailsView(
+                *mScene,
+                uiState.Selection.SelectedEntity,
+                mShouldExposeEntityCallback);
         }
         else
         {
-            uiState.SelectedEntityDetails = {}; 
+            uiState.SelectedEntityDetails = {};
         }
     }
 
@@ -225,7 +246,16 @@ namespace XJ
             uiState.SceneRequests.RequestAddComponent = false;
             uiState.SceneRequests.AddComponent = {};
 
-            bool added = XJEditorSceneService::AddComponent(*mScene, request.EntityId, request.ComponentType);
+            bool added = false;
+
+            if (request.ComponentType == XJEditorComponentType::MeshRenderer)
+            {
+                added = XJEditorSceneService::AddMeshRendererComponent(*mScene, request.EntityId, mDefaultMeshHandle, *mAssetRegistry, mInstantiateContext, mDefaultTexture, mDefaultSampler);
+            }
+            else
+            {
+                added = XJEditorSceneService::AddComponent(*mScene, request.EntityId, request.ComponentType);
+            }
 
             if(added)
             {
@@ -238,6 +268,47 @@ namespace XJ
                 RefreshViewModels(uiState);
             }
         }
+
+        if(uiState.SceneRequests.RequestDeleteComponent)//删除组件
+        {
+            auto request = uiState.SceneRequests.DeleteComponent;
+            uiState.SceneRequests.RequestDeleteComponent = false;
+            uiState.SceneRequests.DeleteComponent  = {};
+
+            bool deleted = XJEditorSceneService::DeleteComponent(*mScene, request.EntityId, request.ComponentType);
+
+            if(deleted)
+            {
+                uiState.Selection.SelectedEntity = request.EntityId;
+                uiState.Selection.SelectedAsset = 0;
+                uiState.Selection.HighlightedEntities.clear();
+                uiState.SelectedEntityDetails = {};
+
+                NotifyAfterMutation();
+                RefreshViewModels(uiState);
+            }
+        }
+
+        if (uiState.SceneRequests.RequestSetMeshRendererMesh)//添加mesh
+        {
+            auto request = uiState.SceneRequests.SetMeshRendererMesh;
+            uiState.SceneRequests.RequestSetMeshRendererMesh = false;
+            uiState.SceneRequests.SetMeshRendererMesh = {};
+        
+            bool changed = XJEditorSceneService::SetMeshRendererMesh(*mScene, request.EntityId, request.MeshAsset, *mAssetRegistry, mInstantiateContext, mDefaultTexture, mDefaultSampler);
+            
+            if (changed)
+            {
+                uiState.Selection.SelectedEntity = request.EntityId;
+                uiState.Selection.SelectedAsset = 0;
+                uiState.Selection.HighlightedEntities.clear();
+                uiState.SelectedEntityDetails = {};
+            
+                NotifyAfterMutation();
+                RefreshViewModels(uiState);
+            }
+        }
+
 
         if (uiState.SceneRequests.RequestRenameEntity)
         {
@@ -342,16 +413,22 @@ namespace XJ
         uiState.SceneRequests.RequestRenameEntity = false;
         uiState.SceneRequests.RequestUpdateTransform = false;
         uiState.SceneRequests.RequestUpdateCamera = false;
-
+        //重新命名 更新数据
         uiState.SceneRequests.RenameEntity = {};
         uiState.SceneRequests.UpdateTransform = {};
         uiState.SceneRequests.UpdateCamera = {};
 
         uiState.SceneRequests.RequestCreateEmptyEntity = false;
         uiState.SceneRequests.CreateEmptyEntity = {};
-
+        //添加组件
         uiState.SceneRequests.RequestAddComponent = false;
         uiState.SceneRequests.AddComponent = {};
+        //删除组件
+        uiState.SceneRequests.RequestDeleteComponent = false;
+        uiState.SceneRequests.DeleteComponent = {};
+        //添加mesh
+        uiState.SceneRequests.RequestSetMeshRendererMesh = false;
+        uiState.SceneRequests.SetMeshRendererMesh = {};
     }
 
     void XJEditorSceneController::ResetSelectionForScene(XJEditorUIState& uiState, XJAssetHandle sceneHandle)

@@ -4,6 +4,7 @@
 #include "Edit/Mathinclude.h"
 #include "UI/XJEditorSceneViewModel.h"
 #include "UI/XJEditorSelection.h"
+#include "UI/XJEditorComponentTypes.h"
 
 #include <filesystem>
 #include <vector>
@@ -12,6 +13,20 @@
 namespace XJ
 {
     class XJAssetRegistry;
+
+    struct XJEditorComponentClipboard//用作copy后粘贴数据  复制板
+    {
+        bool Valid = false;
+        XJEditorComponentType ComponentType = XJEditorComponentType::None;  
+
+        glm::vec3 Position{0.0f};
+        glm::vec3 Rotation{0.0f};
+        glm::vec3 Scale{1.0f};  
+
+        float Fov = 60.0f;
+        float NearPlane = 0.1f;
+        float FarPlane = 100.0f;
+    };
 
     struct XJEditorUIState//编辑器 UI 全局状态
     {
@@ -34,7 +49,11 @@ namespace XJ
         std::vector<std::filesystem::path> PendingExternalDroppedFiles; // 待处理的外部拖入文件路径列表
         glm::vec2 PendingExternalDropMousePos{0.0f};// 拖放发生时鼠标在编辑器窗口内的坐标
         bool HasPendingExternalDrop = false; // 是否存在待处理的外部拖放事件
+
+        XJEditorComponentClipboard ComponentClipboard;
     };
+
+
 }
 
 #endif
