@@ -2,7 +2,56 @@
 
 namespace XJ
 {
+    namespace
+    {
+        glm::vec4 ReadVec4Parameter(const XJMaterialAsset& asset, const std::string& name, const glm::vec4& fallback)
+        {
+            const XJMaterialParameterValue* value = asset.FindParameter(name);
+            if (!value)
+                return fallback;
+
+            if (std::holds_alternative<glm::vec4>(*value))
+                return std::get<glm::vec4>(*value);
+
+            if (std::holds_alternative<glm::vec3>(*value))
+            {
+                const glm::vec3& v = std::get<glm::vec3>(*value);
+                return glm::vec4(v, fallback.w);
+            }
+
+            return fallback;
+        }
+
+        float ReadFloatParameter(const XJMaterialAsset& asset, const std::string& name, float fallback)
+        {
+            const XJMaterialParameterValue* value = asset.FindParameter(name);
+            if (!value)
+                return fallback;
+
+            if (std::holds_alternative<float>(*value))
+                return std::get<float>(*value);
+
+            if (std::holds_alternative<int>(*value))
+                return static_cast<float>(std::get<int>(*value));
+
+            return fallback;
+        }
+
+        XJAssetHandle ReadTextureParameter(const XJMaterialAsset& asset, const std::string& name, XJAssetHandle fallback)
+        {
+            const XJMaterialParameterValue* value = asset.FindParameter(name);
+            if (!value)
+                return fallback;
+
+            if (std::holds_alternative<XJAssetHandle>(*value))
+                return std::get<XJAssetHandle>(*value);
+
+            return fallback;
+        }
+    }
+
     XJMaterialFactory XJMaterialFactory::mMaterialFactory{};
+
     std::shared_ptr<XJTexture> XJMaterialFactory::GetOrLoadTexture(XJAssetHandle handle, const std::shared_ptr<XJTexture>& fallback)
     {
         // 检查 cache
@@ -25,7 +74,15 @@ namespace XJ
     {
         auto kMat = CreateMaterial<XJUnlitMaterial>();
         // PBR BaseColor → A/B（一期：A/B 同色）
-        glm::vec3 kColor(asset.BaseColorFactor);
+        glm::vec4 baseColor = ReadVec4Parameter(asset, "BaseColor", asset.BaseColorFactor);
+        float metallic = ReadFloatParameter(asset, "Metallic", asset.MetallicFactor);
+        float roughness = ReadFloatParameter(asset, "Roughness", asset.RoughnessFactor);
+        XJAssetHandle albedoTexture = ReadTextureParameter(asset, "AlbedoTexture", asset.AlbedoTexture);
+
+        (void)metallic;
+        (void)roughness;
+
+        glm::vec3 kColor(baseColor);
         kMat->XJSetBaseColorA(kColor);
         kMat->XJSetBaseColorB(kColor);
 

@@ -1,5 +1,4 @@
 #include "UI/Panels/XJContentBrowserPanel.h"
-#include "UI/XJEditorDragPayload.h"
 #include "UI/XJEditorAssetDragPayload.h"
 
 #include "UI/XJEditorUILayer.h"
@@ -273,6 +272,7 @@ namespace XJ
             case XJAssetType::Texture:  return "Texture";
             case XJAssetType::Material: return "Material";
             case XJAssetType::Scene:    return "Scene";
+            case XJAssetType::Shader: return "Shader";
             default:                    return "Unknown";
         }
     }

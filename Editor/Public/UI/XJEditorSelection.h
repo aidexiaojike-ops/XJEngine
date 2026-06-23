@@ -4,6 +4,7 @@
 #include "Asset/XJAsset.h"
 #include "Edit/Mathinclude.h"
 #include "UI/XJEditorComponentTypes.h"
+#include "UI/XJEditorMaterialTypes.h"
 
 #include <cstdint>
 #include <filesystem>
@@ -70,7 +71,27 @@ namespace XJ
         XJEditorEntityId EntityId = XJ_INVALID_EDITOR_ENTITY_ID;
         XJAssetHandle MeshAsset = 0;
     };
+
+    struct XJEditorSetMeshRendererMaterialRequest//设置渲染材质
+    {   
+        XJEditorEntityId EntityId = XJ_INVALID_EDITOR_ENTITY_ID;
+        uint32_t SlotIndex = 0;//材质通道序号
+        XJAssetHandle MaterialAsset = 0;//材质资产
+    };
+    struct XJEditorResetMeshRendererMaterialRequest//重置渲染材质
+    {
+        XJEditorEntityId EntityId = XJ_INVALID_EDITOR_ENTITY_ID;
+        uint32_t SlotIndex = 0;
+    };
  
+    struct XJEditorSetMaterialParameterRequest//材质窗口设置
+    {
+        XJEditorEntityId EntityId = XJ_INVALID_EDITOR_ENTITY_ID;
+        uint32_t SlotIndex = 0;
+        XJAssetHandle MaterialAsset = 0;
+        std::string ParameterName;
+        XJEditorMaterialParameterValue Value;
+    };
 
 
     struct XJEditorSceneRequestState//编辑器场景请求状态  这些请求由 UI 层设置，由控制器在合适的时机统一处理
@@ -105,7 +126,17 @@ namespace XJ
 
         bool RequestSetMeshRendererMesh = false;//是否请求设置渲染mesh
         XJEditorSetMeshRendererMeshRequest SetMeshRendererMesh;
+
+        bool RequestSetMeshRendererMaterial = false;//是否渲染材质
+        XJEditorSetMeshRendererMaterialRequest SetMeshRendererMaterial;
+
+        bool RequestResetMeshRendererMaterial = false;//是否重置渲染材质
+        XJEditorResetMeshRendererMaterialRequest ResetMeshRendererMaterial;
+
+        bool RequestSetMaterialParameter = false;//是否设置材质参数
+        XJEditorSetMaterialParameterRequest SetMaterialParameter;
     };
+
 
 
 }

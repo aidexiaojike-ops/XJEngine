@@ -12,5 +12,12 @@
     "name": "Monkey",
     "source": "Resource/Mesh/Monkey.glb",
     "imported": ""
+  },
+  "556870913": {
+    "handle": 556870913,
+    "type": 3,
+    "name": "UnlitMat",
+    "source": "Resource/Material/UnlitMat.xjmat",
+    "imported": ""
   }
 }

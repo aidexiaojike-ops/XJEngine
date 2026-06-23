@@ -18,6 +18,7 @@ namespace XJ
         Texture,
         Material,
         Scene,
+        Shader,
     };
 
 
@@ -30,10 +31,10 @@ namespace XJ
             virtual ~XJAsset() = default;
 
         public:
-            XJAssetHandle mHandle = 0;
-            XJAssetType mType = XJAssetType::None;
-            std::string mName;
-            std::filesystem::path mPath;
+            XJAssetHandle mHandle = 0;//文件句柄
+            XJAssetType mType = XJAssetType::None;//文件类型
+            std::string mName;//文件名字
+            std::filesystem::path mPath;//文件路径
 
             static XJAssetHandle GenerateHandle()
             {
@@ -43,6 +44,7 @@ namespace XJ
 
 
     };
+    
 }
 
 

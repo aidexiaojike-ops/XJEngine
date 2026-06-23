@@ -32,7 +32,7 @@ namespace XJ
 
             static XJEditorSceneViewModel BuildSceneViewModel(XJScene& scene, const ShouldExposeEntityCallback& shouldExposeEntity = {});//显示模型
 
-            static XJEditorEntityDetailsView BuildEntityDetailsView(XJScene& scene, XJEditorEntityId entityId, const ShouldExposeEntityCallback& shouldExposeEntity);
+            static XJEditorEntityDetailsView BuildEntityDetailsView(XJScene& scene, XJEditorEntityId entityId, XJAssetRegistry* assetRegistry, const ShouldExposeEntityCallback& shouldExposeEntity);
 
             static void RenameEntity(XJScene& scene, XJEditorEntityId entityId, const std::string& name);//通过ID修改名字
             static void UpdateTransform(XJScene& scene, const XJEditorUpdateTransformRequest& request);//更改位置
@@ -43,6 +43,20 @@ namespace XJ
             static bool DeleteComponent(XJScene& scene, XJEditorEntityId entityId, XJEditorComponentType componentType);//删除组件
             static bool AddMeshRendererComponent(XJScene& scene, XJEditorEntityId entityId, XJAssetHandle defaultMeshAsset, XJAssetRegistry& assetRegistry, XJSceneInstantiateContext& instantiateContext, const std::shared_ptr<XJTexture>& defaultTexture, const std::shared_ptr<XJSampler>& defaultSampler);//添加mesh组件
             static bool SetMeshRendererMesh(XJScene& scene, XJEditorEntityId entityId, XJAssetHandle meshAsset, XJAssetRegistry& assetRegistry, XJSceneInstantiateContext& instantiateContext, const std::shared_ptr<XJTexture>& defaultTexture, const std::shared_ptr<XJSampler>& defaultSampler);//设置mesh
+            static bool SetMeshRendererMaterial(XJScene& scene, XJEditorEntityId entityId, uint32_t slotIndex, XJAssetHandle materialAsset, XJAssetRegistry& assetRegistry, XJSceneInstantiateContext& instantiateContext, const std::shared_ptr<XJTexture>& defaultTexture, const std::shared_ptr<XJSampler>& defaultSampler);//设置材质
+            static bool ResetMeshRendererMaterialToDefault(XJScene& scene, XJEditorEntityId entityId, uint32_t slotIndex, XJAssetRegistry& assetRegistry, XJSceneInstantiateContext& instantiateContext, const std::shared_ptr<XJTexture>& defaultTexture, const std::shared_ptr<XJSampler>& defaultSampler);//重载材质
+
+            static bool SetMaterialParameter(//设置材质参数
+                        XJScene& scene,
+                        XJEditorEntityId entityId,
+                        uint32_t slotIndex,
+                        XJAssetHandle materialAsset,
+                        const std::string& parameterName,
+                        const XJEditorMaterialParameterValue& value,
+                        XJAssetRegistry& assetRegistry,
+                        XJSceneInstantiateContext& instantiateContext,
+                        const std::shared_ptr<XJTexture>& defaultTexture,
+                        const std::shared_ptr<XJSampler>& defaultSampler);
 
     };
 }

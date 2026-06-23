@@ -137,25 +137,38 @@ add_custom_command(TARGET XJEngine POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_directory
         ${CMAKE_SOURCE_DIR}/Resource/Texture
         ${XJ_RESOURCE_DIR}/Texture
-)
+)#贴图
 
 add_custom_command(TARGET XJEngine POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_directory
         ${CMAKE_SOURCE_DIR}/Resource/Mesh
         ${XJ_RESOURCE_DIR}/Mesh
-)
+)#模型
+
+add_custom_command(TARGET XJEngine POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+        ${CMAKE_SOURCE_DIR}/Resource/Material
+        ${XJ_RESOURCE_DIR}/Material
+)#材质
+
+add_custom_command(TARGET XJEngine POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+        ${CMAKE_SOURCE_DIR}/Resource/Shader
+        ${XJ_RESOURCE_DIR}/Shader
+)#shader
+
 
 add_custom_command(TARGET XJEngine POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_directory
         ${CMAKE_SOURCE_DIR}/Resource/Scenes
         ${XJ_RESOURCE_DIR}/Scenes
-)
+)#场景
 
 add_custom_command(TARGET XJEngine POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_directory
         ${CMAKE_SOURCE_DIR}/Resource/Config
         ${XJ_RESOURCE_DIR}/Config
-)
+)#配置文件
 
 # ------------------------------------------------------------
 # 工程状态提示（可选，但对调试很有用）

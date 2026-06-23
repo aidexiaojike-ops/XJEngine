@@ -189,6 +189,7 @@ namespace XJ
             uiState.SelectedEntityDetails = XJEditorSceneService::BuildEntityDetailsView(
                 *mScene,
                 uiState.Selection.SelectedEntity,
+                mAssetRegistry,
                 mShouldExposeEntityCallback);
         }
         else
@@ -296,6 +297,77 @@ namespace XJ
             uiState.SceneRequests.SetMeshRendererMesh = {};
         
             bool changed = XJEditorSceneService::SetMeshRendererMesh(*mScene, request.EntityId, request.MeshAsset, *mAssetRegistry, mInstantiateContext, mDefaultTexture, mDefaultSampler);
+            
+            if (changed)
+            {
+                uiState.Selection.SelectedEntity = request.EntityId;
+                uiState.Selection.SelectedAsset = 0;
+                uiState.Selection.HighlightedEntities.clear();
+                uiState.SelectedEntityDetails = {};
+            
+                NotifyAfterMutation();
+                RefreshViewModels(uiState);
+            }
+        }
+        if (uiState.SceneRequests.RequestSetMeshRendererMaterial)//设置材质
+        {
+            //开启设置
+            auto request = uiState.SceneRequests.SetMeshRendererMaterial;
+            uiState.SceneRequests.RequestSetMeshRendererMaterial = false;
+            uiState.SceneRequests.SetMeshRendererMaterial = {};
+            
+            bool changed = XJEditorSceneService::SetMeshRendererMaterial(*mScene, request.EntityId, request.SlotIndex, request.MaterialAsset, *mAssetRegistry, mInstantiateContext, mDefaultTexture, mDefaultSampler);
+            
+            if(changed)//更新数据
+            {
+                uiState.Selection.SelectedEntity = request.EntityId;
+                uiState.Selection.SelectedAsset = 0;
+                uiState.Selection.HighlightedEntities.clear();
+                uiState.SelectedEntityDetails = {};
+
+                NotifyAfterMutation();
+                RefreshViewModels(uiState);
+            }
+
+        }
+
+        if (uiState.SceneRequests.RequestResetMeshRendererMaterial)//重载材质
+        {
+            auto request = uiState.SceneRequests.ResetMeshRendererMaterial;
+            uiState.SceneRequests.RequestResetMeshRendererMaterial = false;
+            uiState.SceneRequests.ResetMeshRendererMaterial = {};
+        
+            bool changed = XJEditorSceneService::ResetMeshRendererMaterialToDefault(*mScene, request.EntityId, request.SlotIndex, *mAssetRegistry, mInstantiateContext, mDefaultTexture, mDefaultSampler);
+            
+            if (changed)
+            {
+                uiState.Selection.SelectedEntity = request.EntityId;
+                uiState.Selection.SelectedAsset = 0;
+                uiState.Selection.HighlightedEntities.clear();
+                uiState.SelectedEntityDetails = {};
+            
+                NotifyAfterMutation();
+                RefreshViewModels(uiState);
+            }
+        }
+
+        if(uiState.SceneRequests.RequestSetMaterialParameter)//设置材质参数
+        {
+            auto request = uiState.SceneRequests.SetMaterialParameter;
+            uiState.SceneRequests.RequestSetMaterialParameter = false;
+            uiState.SceneRequests.SetMaterialParameter = {};
+
+            bool changed = XJEditorSceneService::SetMaterialParameter(
+                *mScene,
+                request.EntityId,
+                request.SlotIndex,
+                request.MaterialAsset,
+                request.ParameterName,
+                request.Value,
+                *mAssetRegistry,
+                mInstantiateContext,
+                mDefaultTexture,
+                mDefaultSampler);
             
             if (changed)
             {
@@ -429,6 +501,15 @@ namespace XJ
         //添加mesh
         uiState.SceneRequests.RequestSetMeshRendererMesh = false;
         uiState.SceneRequests.SetMeshRendererMesh = {};
+        //设置材质
+        uiState.SceneRequests.RequestSetMeshRendererMaterial = false;
+        uiState.SceneRequests.SetMeshRendererMaterial = {};
+        //重载材质
+        uiState.SceneRequests.RequestResetMeshRendererMaterial = false;
+        uiState.SceneRequests.ResetMeshRendererMaterial = {};
+        //设置材质参数
+        uiState.SceneRequests.RequestSetMaterialParameter = false;
+        uiState.SceneRequests.SetMaterialParameter = {};
     }
 
     void XJEditorSceneController::ResetSelectionForScene(XJEditorUIState& uiState, XJAssetHandle sceneHandle)

@@ -1,0 +1,37 @@
+{
+  "version": 1,
+  "parameters": [
+    {
+      "name": "BaseColor",
+      "displayName": "Base Color",
+      "type": "color4",
+      "default": [0.8, 0.6, 0.2, 1.0],
+      "category": "Surface"
+    },
+    {
+      "name": "Metallic",
+      "displayName": "Metallic",
+      "type": "float",
+      "default": 0.0,
+      "min": 0.0,
+      "max": 1.0,
+      "category": "Surface"
+    },
+    {
+      "name": "Roughness",
+      "displayName": "Roughness",
+      "type": "float",
+      "default": 1.0,
+      "min": 0.0,
+      "max": 1.0,
+      "category": "Surface"
+    },
+    {
+      "name": "AlbedoTexture",
+      "displayName": "Albedo Texture",
+      "type": "texture2D",
+      "default": 0,
+      "category": "Textures"
+    }
+  ]
+}

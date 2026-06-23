@@ -1,4 +1,7 @@
 #include "Asset/Instantiation/XJSceneInstantiator.h"
+#include "Asset/Importer/XJMaterialImporter.h"
+#include "Asset/XJAssetRegistry.h"
+#include "Asset/Loader/XJMeshAssetLoader.h"
 
 #include "ECS/Component/Material/XJUnlitMaterialComponent.h"
 #include "ECS/Component/XJCameraComponent.h"
@@ -7,11 +10,40 @@
 #include "ECS/XJEntity.h"
 #include "ECS/XJScene.h"
 #include "Render/Resource/XJMaterialFactory.h"
-#include "Asset/Loader/XJMeshAssetLoader.h"
-
 
 namespace XJ
 {
+
+    namespace
+    {
+        std::shared_ptr<XJUnlitMaterial> CreateMaterialForSlot(const std::vector<XJAssetRef>& materials, uint32_t slotIndex, XJSceneInstantiateContext& ctx)
+        {
+            if (slotIndex < materials.size())
+            {
+                const XJAssetRef& materialRef = materials[slotIndex];
+
+                if (materialRef.IsValid() && ctx.Registry)
+                {
+                    auto meta = ctx.Registry->GetMeta(materialRef.Handle);
+                    if (meta && meta->Type == XJAssetType::Material)
+                    {
+                        auto materialAsset = XJMaterialImporter::ImportMaterial(meta->SourcePath.string());
+                        if (materialAsset)
+                        {
+                            materialAsset->mHandle = meta->Handle;
+                            materialAsset->mName = meta->Name;
+                            materialAsset->mPath = meta->SourcePath;
+
+                            return XJMaterialFactory::GetInstance()->CreateFromAsset(*materialAsset, ctx.DefaultTexture, ctx.DefaultSampler);
+                        }
+                    }
+                }
+            }
+
+            return XJMaterialFactory::GetInstance()->CreateDefaultMaterial(ctx.DefaultTexture, ctx.DefaultSampler);
+        }
+    }
+
     bool XJSceneInstantiator::Instantiate(const XJSceneAsset& asset, XJScene& outScene, XJSceneInstantiateContext* ctx)
     {
         XJSceneInstantiateContext localCtx;
@@ -107,7 +139,10 @@ namespace XJ
             return;
 
         auto& comp = entity.AddComponent<XJUnlitMaterialComponent>();
-        auto mat = XJMaterialFactory::GetInstance()->CreateDefaultMaterial(ctx.DefaultTexture, ctx.DefaultSampler);//创建一个基础的 Unlit 材质
+        auto mat = CreateMaterialForSlot(data.MeshRenderer.Materials, 0, ctx);
+        if (!mat)
+            return;
+        //auto mat = XJMaterialFactory::GetInstance()->CreateDefaultMaterial(ctx.DefaultTexture, ctx.DefaultSampler);//创建一个基础的 Unlit 材质
         //mat->XJSetBaseColorA(glm::vec3(0.8f, 0.6f, 0.2f));
         //mat->XJSetBaseColorB(glm::vec3(0.8f, 0.6f, 0.2f));
         //mat->XJSetTextureView(UNLIT_MAT_BASE_COLOR_A, ctx.DefaultTexture, ctx.DefaultSampler);

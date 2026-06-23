@@ -7,7 +7,7 @@
 #include "UI/XJEditorUIConfig.h"
 #include "UI/XJEditorSelection.h"
 #include <string>
-
+#include <variant>
 
 namespace XJ
 {
@@ -42,6 +42,15 @@ namespace XJ
             void RequestSetMeshRendererMesh(const XJEditorEntityDetailsView& details, XJAssetHandle meshAsset);
             void DrawMeshSelector(const XJEditorEntityDetailsView& details);
             void DrawMeshAssetDropTarget(const XJEditorEntityDetailsView& details);
+            //设置材质
+            void DrawMaterialSlots(const XJEditorEntityDetailsView& details);//材质插槽
+            void RequestSetMeshRendererMaterial(const XJEditorEntityDetailsView& details,uint32_t slotIndex,XJAssetHandle materialAsset);//请求设置材质
+            void RequestResetMeshRendererMaterial(const XJEditorEntityDetailsView& details, uint32_t slotIndex);//请求重载材质
+            void DrawMaterialSelector(const XJEditorEntityDetailsView& details, const XJEditorMaterialSlotView& slot);//绘制材质选择
+            //设置材质参数
+            void DrawMaterialParameters(const XJEditorEntityDetailsView& details, const XJEditorMaterialSlotView& slot);//绘制材质参数
+            void DrawMaterialParameterControl(const XJEditorEntityDetailsView& details, const XJEditorMaterialSlotView& slot, const XJEditorMaterialParameterView& parameter);//绘制材质参数的控制
+            void RequestSetMaterialParameter(const XJEditorEntityDetailsView& details, const XJEditorMaterialSlotView& slot, const XJEditorMaterialParameterView& parameter, const XJEditorMaterialParameterValue& value);//请求设置材质参数
 
             void DrawAddComponentButton(const XJEditorEntityDetailsView& details);//添加组件按钮
             void RequestAddComponent(const XJEditorEntityDetailsView& details, XJEditorComponentType componentType);//准备添加组件

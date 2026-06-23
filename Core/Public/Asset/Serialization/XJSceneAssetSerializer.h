@@ -5,13 +5,12 @@
 #include <filesystem>
 #include <memory>
 
-//.xjscene 文件读写。只负责数据，不创建 ECS entity。
 namespace XJ
 {
     class XJScene;
     class XJEntity;
 
-    class XJSceneAssetSerializer
+    class XJSceneAssetSerializer//.xjscene 文件读写。只负责数据，不创建 ECS entity。
     {
         public:
            

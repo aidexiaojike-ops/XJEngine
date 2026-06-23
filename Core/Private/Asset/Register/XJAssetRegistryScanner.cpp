@@ -18,14 +18,20 @@ namespace XJ
     {
         std::string ext = ToLower(path.extension().string());
 
-        if (ext == ".glb")
+        if (ext == ".glb")//读取模型2
             return XJAssetType::Mesh;
 
-        if (ext == ".xjscene")
+        if (ext == ".xjscene")//读取场景
             return XJAssetType::Scene;
 
-        if (ext == ".png" || ext == ".jpg" || ext == ".jpeg")
+        if (ext == ".png" || ext == ".jpg" || ext == ".jpeg")//读取图片
             return XJAssetType::Texture;
+
+        if (ext == ".xjmat")//读取材质
+            return XJAssetType::Material;
+
+        if (ext == ".xjshader")//读取shader
+             return XJAssetType::Shader;
 
         return XJAssetType::None;
     }

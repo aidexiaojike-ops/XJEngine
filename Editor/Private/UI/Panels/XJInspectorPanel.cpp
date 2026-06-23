@@ -9,6 +9,7 @@
 #include <algorithm>
 #include <cstdio>
 #include <string>
+#include <unordered_map>
 
 
 
@@ -23,6 +24,7 @@ namespace XJ
             case XJAssetType::Texture: return "Texture";
             case XJAssetType::Material: return "Material";
             case XJAssetType::Scene: return "Scene";
+            case XJAssetType::Shader: return "Shader";
             default: return "Unknown";
         }
     }
@@ -510,6 +512,8 @@ namespace XJ
         if (!DrawComponentFrame("Mesh Renderer", XJEditorComponentType::MeshRenderer, details))
             return;
 
+        ImGui::SeparatorText("Static Mesh");
+
         ImGui::LabelText("Static Mesh", "0x%016llX", static_cast<uint64_t>(details.Mesh.MeshAsset));//显示实体引用的网格资源的句柄，格式化为 16 位十六进制数
         ImGui::LabelText("Mesh URI", "%s", details.Mesh.MeshUri.c_str());//显示实体引用的网格资源的句柄，格式化为 16 位十六进制数
 
@@ -541,7 +545,267 @@ namespace XJ
         DrawMeshSelector(details);
         DrawMeshAssetDropTarget(details);
 
+        DrawMaterialSlots(details);
+
         ImGui::TreePop();
+    }
+
+    void XJInspectorPanel::DrawMaterialSlots(const XJEditorEntityDetailsView& details)
+    {
+        ImGui::Spacing();
+        ImGui::SeparatorText("Materials");
+
+        if(details.Mesh.MaterialSlots.empty())
+        {
+            ImGui::TextDisabled("No Material Slots");
+            return;
+        }
+
+        for(const auto& slot : details.Mesh.MaterialSlots)
+        {
+            ImGui::PushID(static_cast<int>(slot.SlotIndex));
+            ImGui::Text("Element %u", slot.SlotIndex);
+
+            if(slot.HasMaterialAsset)
+            {//多个材质
+                ImGui::LabelText("Material", "0x%016llX", static_cast<uint64_t>(slot.MaterialAsset));
+                ImGui::LabelText("URI", "%s", slot.MaterialUri.c_str());
+            }
+            else
+            {
+                ImGui::LabelText("Material", "%s", slot.DisplayName.empty() ? "Default Unlit Material" : slot.DisplayName.c_str());
+            }
+
+            DrawMaterialSelector(details, slot);
+            DrawMaterialParameters(details, slot);
+            ImGui::Separator();
+
+            ImGui::PopID();
+        }
+    }
+    void XJInspectorPanel::DrawMaterialParameters(const XJEditorEntityDetailsView& details, const XJEditorMaterialSlotView& slot)
+    {
+        if(!slot.HasMaterialAsset)
+            return;
+
+        if(slot.Parameters.empty())
+        {
+           //ImGui::LabelText("Material Path", "%s", slot.MaterialPath.string().c_str());
+           //ImGui::LabelText("Shader Path", "%s", slot.ShaderPath.string().c_str());
+           //ImGui::LabelText("Parameter Count", "%zu", slot.Parameters.size());
+            ImGui::TextDisabled("No editable parameters");
+            return;
+        }
+        if (!ImGui::TreeNodeEx("Parameters", ImGuiTreeNodeFlags_DefaultOpen))
+            return;
+
+        std::string currentCategory;
+
+        for (const auto& parameter : slot.Parameters)
+        {
+            if (!parameter.Category.empty() && parameter.Category != currentCategory)
+            {
+                currentCategory = parameter.Category;
+                ImGui::SeparatorText(currentCategory.c_str());
+            }
+
+            DrawMaterialParameterControl(details, slot, parameter);
+        }
+
+        ImGui::TreePop();  
+    }
+
+
+    void XJInspectorPanel::DrawMaterialParameterControl(const XJEditorEntityDetailsView& details, const XJEditorMaterialSlotView& slot, const XJEditorMaterialParameterView& parameter)
+    {
+        if (!parameter.Editable)
+        {
+            ImGui::TextDisabled("%s", parameter.DisplayName.c_str());
+            return;
+        }
+
+        const char* label = parameter.DisplayName.empty() ? parameter.Name.c_str() : parameter.DisplayName.c_str();
+
+        switch (parameter.Type)
+        {
+            case XJEditorMaterialParameterType::Float:
+            {
+                float value = 0.0f;
+                if (std::holds_alternative<float>(parameter.Value))
+                    value = std::get<float>(parameter.Value);
+
+                bool changed = parameter.HasRange
+                    ? ImGui::SliderFloat(label, &value, parameter.Min, parameter.Max)
+                    : ImGui::DragFloat(label, &value, 0.01f);
+
+                if (changed)
+                    RequestSetMaterialParameter(details, slot, parameter, value);
+
+                break;
+            }
+
+            case XJEditorMaterialParameterType::Int:
+            {
+                int value = 0;
+                if (std::holds_alternative<int>(parameter.Value))
+                    value = std::get<int>(parameter.Value);
+
+                bool changed = parameter.HasRange
+                    ? ImGui::SliderInt(label, &value, static_cast<int>(parameter.Min), static_cast<int>(parameter.Max))
+                    : ImGui::DragInt(label, &value, 1.0f);
+
+                if (changed)
+                    RequestSetMaterialParameter(details, slot, parameter, value);
+
+                break;
+            }
+
+            case XJEditorMaterialParameterType::Bool:
+            {
+                bool value = false;
+                if (std::holds_alternative<bool>(parameter.Value))
+                    value = std::get<bool>(parameter.Value);
+
+                if (ImGui::Checkbox(label, &value))
+                    RequestSetMaterialParameter(details, slot, parameter, value);
+
+                break;
+            }
+
+            case XJEditorMaterialParameterType::Vec2:
+            {
+                glm::vec2 value(0.0f);
+                if (std::holds_alternative<glm::vec2>(parameter.Value))
+                    value = std::get<glm::vec2>(parameter.Value);
+
+                float raw[2] = { value.x, value.y };
+                if (ImGui::DragFloat2(label, raw, 0.01f))
+                    RequestSetMaterialParameter(details, slot, parameter, glm::vec2(raw[0], raw[1]));
+
+                break;
+            }
+
+            case XJEditorMaterialParameterType::Vec3:
+            {
+                glm::vec3 value(0.0f);
+                if (std::holds_alternative<glm::vec3>(parameter.Value))
+                    value = std::get<glm::vec3>(parameter.Value);
+
+                float raw[3] = { value.x, value.y, value.z };
+                if (ImGui::DragFloat3(label, raw, 0.01f))
+                    RequestSetMaterialParameter(details, slot, parameter, glm::vec3(raw[0], raw[1], raw[2]));
+
+                break;
+            }
+
+            case XJEditorMaterialParameterType::Vec4:
+            {
+                glm::vec4 value(0.0f);
+                if (std::holds_alternative<glm::vec4>(parameter.Value))
+                    value = std::get<glm::vec4>(parameter.Value);
+
+                float raw[4] = { value.x, value.y, value.z, value.w };
+                if (ImGui::DragFloat4(label, raw, 0.01f))
+                    RequestSetMaterialParameter(details, slot, parameter, glm::vec4(raw[0], raw[1], raw[2], raw[3]));
+
+                break;
+            }
+
+            case XJEditorMaterialParameterType::Color3:
+            {
+                glm::vec3 value(1.0f);
+                if (std::holds_alternative<glm::vec3>(parameter.Value))
+                    value = std::get<glm::vec3>(parameter.Value);
+
+                float raw[3] = { value.x, value.y, value.z };
+                if (ImGui::ColorEdit3(label, raw))
+                    RequestSetMaterialParameter(details, slot, parameter, glm::vec3(raw[0], raw[1], raw[2]));
+
+                break;
+            }
+
+            case XJEditorMaterialParameterType::Color4:
+            {
+                glm::vec4 value(1.0f);
+                if (std::holds_alternative<glm::vec4>(parameter.Value))
+                    value = std::get<glm::vec4>(parameter.Value);
+
+                float raw[4] = { value.x, value.y, value.z, value.w };
+                if (ImGui::ColorEdit4(label, raw))
+                    RequestSetMaterialParameter(details, slot, parameter, glm::vec4(raw[0], raw[1], raw[2], raw[3]));
+
+                break;
+            }
+
+            case XJEditorMaterialParameterType::Texture2D:
+            {
+                XJAssetHandle value = 0;
+                if (std::holds_alternative<XJAssetHandle>(parameter.Value))
+                    value = std::get<XJAssetHandle>(parameter.Value);
+
+                ImGui::LabelText(label, "0x%016llX", static_cast<uint64_t>(value));
+
+                std::string popupId = "SelectTexturePopup##" + std::to_string(slot.SlotIndex) + parameter.Name;
+
+                if (ImGui::Button(("Select Texture##" + parameter.Name).c_str(), ImVec2(-1.0f, 0.0f)))
+                    ImGui::OpenPopup(popupId.c_str());
+
+                if (ImGui::BeginPopup(popupId.c_str()))
+                {
+                    bool found = false;
+
+                    if (ImGui::Selectable("None", value == 0))
+                    {
+                        RequestSetMaterialParameter(details, slot, parameter, static_cast<XJAssetHandle>(0));
+                        ImGui::CloseCurrentPopup();
+                    }
+
+                    if (mState.AssetRegistry)
+                    {
+                        for (const auto& [handle, meta] : mState.AssetRegistry->XJGetAllMetas())
+                        {
+                            if (meta.Type != XJAssetType::Texture)
+                                continue;
+
+                            found = true;
+
+                            if (ImGui::Selectable(meta.Name.c_str(), value == handle))
+                            {
+                                RequestSetMaterialParameter(details, slot, parameter, handle);
+                                ImGui::CloseCurrentPopup();
+                            }
+
+                            if (ImGui::IsItemHovered())
+                                ImGui::SetTooltip("%s", meta.SourcePath.string().c_str());
+                        }
+                    }
+
+                    if (!found)
+                        ImGui::TextDisabled("No texture assets found");
+
+                    ImGui::EndPopup();
+                }
+
+                break;
+            }
+
+            default:
+                ImGui::TextDisabled("%s: Unsupported parameter", label);
+                break;
+        }
+    }
+
+    void XJInspectorPanel::RequestSetMaterialParameter(const XJEditorEntityDetailsView& details, const XJEditorMaterialSlotView& slot, const XJEditorMaterialParameterView& parameter, const XJEditorMaterialParameterValue& value)
+    {
+        if (details.Id == XJ_INVALID_EDITOR_ENTITY_ID || !slot.HasMaterialAsset || slot.MaterialAsset == 0)
+            return;
+
+        mState.SceneRequests.RequestSetMaterialParameter = true;
+        mState.SceneRequests.SetMaterialParameter.EntityId = details.Id;
+        mState.SceneRequests.SetMaterialParameter.SlotIndex = slot.SlotIndex;
+        mState.SceneRequests.SetMaterialParameter.MaterialAsset = slot.MaterialAsset;
+        mState.SceneRequests.SetMaterialParameter.ParameterName = parameter.Name;
+        mState.SceneRequests.SetMaterialParameter.Value = value;
     }
    
     void XJInspectorPanel::RequestSetMeshRendererMesh(const XJEditorEntityDetailsView& details, XJAssetHandle meshAsset)
@@ -631,5 +895,88 @@ namespace XJ
         }
     
         ImGui::EndDragDropTarget();
+    }
+    void XJInspectorPanel::DrawMaterialSelector(const XJEditorEntityDetailsView& details, const XJEditorMaterialSlotView& slot)
+    {
+        if(!mState.AssetRegistry)
+        {
+            ImGui::TextDisabled("No Asset Registry");
+            return;
+
+        }
+
+        std::string popupId = "SelectMaterialPopup##" + std::to_string(slot.SlotIndex);
+
+        if (ImGui::Button("Select Material", ImVec2(-1.0f, 0.0f)))
+            ImGui::OpenPopup(popupId.c_str());
+        
+        if(ImGui::BeginPopup(popupId.c_str()))
+        {
+            static std::unordered_map<uint32_t, std::string> searchBySlot;
+            std::string& searchText = searchBySlot[slot.SlotIndex];
+
+            char searchBuffer[128] = {};
+            std::strncpy(searchBuffer, searchText.c_str(), sizeof(searchBuffer) - 1);
+
+            ImGui::SetNextItemWidth(260.0f);
+            if (ImGui::InputText("Search", searchBuffer, sizeof(searchBuffer)))
+                searchText = searchBuffer;
+
+            ImGui::Separator();
+
+            const std::string search = searchText;
+
+            bool found = false;
+
+            for (const auto& [handle, meta] : mState.AssetRegistry->XJGetAllMetas())
+            {
+                if (meta.Type != XJAssetType::Material)
+                    continue;
+
+                if (!search.empty() && meta.Name.find(search) == std::string::npos)
+                    continue;
+
+                found = true;
+
+                bool selected = slot.MaterialAsset == handle;
+                if (ImGui::Selectable(meta.Name.c_str(), selected))
+                {
+                    RequestSetMeshRendererMaterial(details, slot.SlotIndex, handle);
+                    ImGui::CloseCurrentPopup();
+                }
+
+                if (ImGui::IsItemHovered())
+                    ImGui::SetTooltip("%s", meta.SourcePath.string().c_str());
+            }
+
+            if (!found)
+                ImGui::TextDisabled("No material assets found");
+
+            ImGui::EndPopup();
+        }
+        
+        if (ImGui::Button("Reset To Default", ImVec2(-1.0f, 0.0f)))
+            RequestResetMeshRendererMaterial(details, slot.SlotIndex);
+
+    }
+    void XJInspectorPanel::RequestSetMeshRendererMaterial(const XJEditorEntityDetailsView& details, uint32_t slotIndex, XJAssetHandle materialAsset)
+    {
+        if (details.Id == XJ_INVALID_EDITOR_ENTITY_ID || materialAsset == 0)
+            return;
+
+        mState.SceneRequests.RequestSetMeshRendererMaterial = true;
+        mState.SceneRequests.SetMeshRendererMaterial.EntityId = details.Id;
+        mState.SceneRequests.SetMeshRendererMaterial.SlotIndex = slotIndex;
+        mState.SceneRequests.SetMeshRendererMaterial.MaterialAsset = materialAsset;
+    }
+
+    void XJInspectorPanel::RequestResetMeshRendererMaterial(const XJEditorEntityDetailsView& details, uint32_t slotIndex)
+    {
+        if (details.Id == XJ_INVALID_EDITOR_ENTITY_ID)
+            return;
+
+        mState.SceneRequests.RequestResetMeshRendererMaterial = true;
+        mState.SceneRequests.ResetMeshRendererMaterial.EntityId = details.Id;
+        mState.SceneRequests.ResetMeshRendererMaterial.SlotIndex = slotIndex;
     }
 }

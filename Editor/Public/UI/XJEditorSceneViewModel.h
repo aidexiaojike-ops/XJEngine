@@ -4,9 +4,11 @@
 #include "Asset/XJAsset.h"
 #include "Edit/Mathinclude.h"
 #include "UI/XJEditorSelection.h"
+#include "UI/XJEditorMaterialTypes.h"
 
 #include <string>
 #include <vector>
+#include <filesystem>
 
 namespace XJ
 {
@@ -40,7 +42,7 @@ namespace XJ
         glm::vec3 Scale{1.0f};
     };
 
-    struct XJEditorCameraView
+    struct XJEditorCameraView//摄像机窗口
     {
         bool Valid = false;
         float Fov = 60.0f;
@@ -49,11 +51,40 @@ namespace XJ
         std::string ModeName;
     };
 
-    struct XJEditorMeshAssetRefView
+    struct XJEditorMaterialParameterView//材质参数窗口
+    {
+        std::string Name;
+        std::string DisplayName;
+        XJEditorMaterialParameterType Type = XJEditorMaterialParameterType::None;
+        XJEditorMaterialParameterValue Value;
+
+        bool Editable = true;
+        bool HasRange = false;
+        float Min = 0.0f;
+        float Max = 1.0f;
+        std::string Category;
+    };
+
+    struct XJEditorMaterialSlotView//多材质 窗口
+    {
+        uint32_t SlotIndex = 0;
+        bool HasMaterialAsset = false;
+        XJAssetHandle MaterialAsset = 0;
+        std::string MaterialUri;
+        std::string DisplayName;
+
+        std::filesystem::path MaterialPath;
+        std::filesystem::path ShaderPath;
+        std::vector<XJEditorMaterialParameterView> Parameters;
+    };
+
+    struct XJEditorMeshAssetRefView//模型窗口
     {
         bool Valid = false;
         XJAssetHandle MeshAsset = 0;
         std::string MeshUri;
+
+        std::vector<XJEditorMaterialSlotView> MaterialSlots;
     };
 
     struct XJEditorSceneAssetRefView
@@ -62,6 +93,7 @@ namespace XJ
         std::string SourceSceneUri;
         uint64_t SourceEntity = 0;
     };
+
 
     struct XJEditorEntityDetailsView//所有的组件  id 名字  状态
     {

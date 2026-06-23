@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "shader": "Resource/Shader/Unlit.xjshader",
+  "parameters": {
+    "BaseColor": [0.8, 0.6, 0.2, 1.0],
+    "Metallic": 0.0,
+    "Roughness": 1.0,
+    "AlbedoTexture": 0
+  }
+}

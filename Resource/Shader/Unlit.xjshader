@@ -1,0 +1,6 @@
+{
+  "version": 1,
+  "vertex": "Resource/Shader/Unlit.vert.spv",
+  "fragment": "Resource/Shader/Unlit.frag.spv",
+  "schema": "Resource/Shader/Unlit.schema"
+}
