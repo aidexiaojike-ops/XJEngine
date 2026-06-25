@@ -210,9 +210,11 @@ protected:
             });
 
         mEditorSceneController.SetAfterMutationCallback(
-            []()
+            [this]()
             {
                 // 预留扩展点：以后可以在这里刷新日志、通知 UI 等。
+                if (mRuntimeScene)//To测试
+                    mEditorCameraManager.SetupCamerasForScene(mRuntimeScene, kPreviewCameraEntityId);
             });
         
         mEditorSceneController.SetCanDeleteEntityCallback(

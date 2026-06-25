@@ -52,6 +52,8 @@ namespace XJ
             void DrawMaterialParameterControl(const XJEditorEntityDetailsView& details, const XJEditorMaterialSlotView& slot, const XJEditorMaterialParameterView& parameter);//绘制材质参数的控制
             void RequestSetMaterialParameter(const XJEditorEntityDetailsView& details, const XJEditorMaterialSlotView& slot, const XJEditorMaterialParameterView& parameter, const XJEditorMaterialParameterValue& value);//请求设置材质参数
 
+            void RequestResetMaterialParameter(const XJEditorEntityDetailsView& details, const XJEditorMaterialSlotView& slot, const XJEditorMaterialParameterView& parameter);
+
             void DrawAddComponentButton(const XJEditorEntityDetailsView& details);//添加组件按钮
             void RequestAddComponent(const XJEditorEntityDetailsView& details, XJEditorComponentType componentType);//准备添加组件
 

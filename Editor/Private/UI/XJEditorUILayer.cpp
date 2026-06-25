@@ -111,6 +111,15 @@ namespace XJ
     {
         if (ImGui::BeginMainMenuBar())// 绘制主菜单栏
         {
+            if (ImGui::BeginMenu("File"))
+            {
+                if (ImGui::MenuItem("Save Scene"))
+                {
+                    mState.SceneRequests.RequestSaveScene = true;
+                }
+            
+                ImGui::EndMenu();
+            }
             
             if(ImGui::BeginMenu("Window"))
             {

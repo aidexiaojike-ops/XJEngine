@@ -58,11 +58,13 @@ namespace XJ
         XJEditorMaterialParameterType Type = XJEditorMaterialParameterType::None;
         XJEditorMaterialParameterValue Value;
 
+        bool IsOverride = false;
         bool Editable = true;
         bool HasRange = false;
         float Min = 0.0f;
         float Max = 1.0f;
         std::string Category;
+
     };
 
     struct XJEditorMaterialSlotView//多材质 窗口

@@ -232,7 +232,8 @@ namespace XJ
                 parameter.Min = def.Min;
                 parameter.Max = def.Max;
                 parameter.Category = def.Category;
-            
+                parameter.IsOverride = materialAsset->HasParameterOverride(def.Name);
+
                 if (const XJMaterialParameterValue* value = materialAsset->FindParameter(def.Name))
                     parameter.Value = ToEditorMaterialParameterValue(*value);
                 else
@@ -756,12 +757,47 @@ namespace XJ
         material->mHandle = meta->Handle;
         material->mName = meta->Name;
         material->mPath = meta->SourcePath;
-        material->SetParameter(parameterName, ToRuntimeMaterialParameterValue(value));
+        material->SetParameterOverride(parameterName, ToRuntimeMaterialParameterValue(value));
 
         if (!XJMaterialAssetSerializer::SaveToFile(*material, meta->SourcePath))
-        return false;
+            return false;
 
         return SetMeshRendererMaterial(scene, entityId, slotIndex, materialAsset, assetRegistry, instantiateContext, defaultTexture, defaultSampler);
     }
     
+    bool XJEditorSceneService::ResetMaterialParameter(XJScene& scene, XJEditorEntityId entityId, uint32_t slotIndex, XJAssetHandle materialAsset, const std::string& parameterName,
+                            XJAssetRegistry& assetRegistry, XJSceneInstantiateContext& instantiateContext, const std::shared_ptr<XJTexture>& defaultTexture, const std::shared_ptr<XJSampler>& defaultSampler)
+    {   
+        if(materialAsset == 0 || parameterName.empty())
+        {
+            return false;
+        }
+
+        auto meta = assetRegistry.GetMeta(materialAsset);
+        if(!meta || meta->Type != XJAssetType::Material)
+            return false;
+        
+        auto material = XJMaterialImporter::ImportMaterial(meta->SourcePath.string());
+        if(!material)
+            return false;
+
+        material->mHandle = meta->Handle;
+        material->mName = meta->Name;
+        material->mPath = meta->SourcePath;
+
+        material->ClearParameterOverride(parameterName);
+
+        auto shaderAsset = XJShaderAssetSerializer::LoadFromFile(material->ShaderPath);
+        if(shaderAsset)
+        {
+            if(const XJParameterDef* def = shaderAsset->Schema.FindParameter(parameterName))
+                material->Parameters[parameterName] = def->DefaultValue;
+        }
+
+        if(!XJMaterialAssetSerializer::SaveToFile(*material, meta->SourcePath))
+            return false;
+
+        return SetMeshRendererMaterial(scene, entityId, slotIndex, materialAsset, assetRegistry, instantiateContext, defaultTexture, defaultSampler);
+
+    }
 }

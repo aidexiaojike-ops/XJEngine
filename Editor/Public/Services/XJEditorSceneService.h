@@ -58,6 +58,17 @@ namespace XJ
                         const std::shared_ptr<XJTexture>& defaultTexture,
                         const std::shared_ptr<XJSampler>& defaultSampler);
 
+            static bool ResetMaterialParameter(//重置材质参数
+                        XJScene& scene,
+                        XJEditorEntityId entityId,
+                        uint32_t slotIndex,
+                        XJAssetHandle materialAsset,
+                        const std::string& parameterName,
+                        XJAssetRegistry& assetRegistry,
+                        XJSceneInstantiateContext& instantiateContext,
+                        const std::shared_ptr<XJTexture>& defaultTexture,
+                        const std::shared_ptr<XJSampler>& defaultSampler);
+
     };
 }
 

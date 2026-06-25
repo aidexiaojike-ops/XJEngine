@@ -16,6 +16,7 @@ namespace XJ
         public:
 
             uint32_t Version = 1;
+            // uint32_t Version = 2;//To测试
 
             std::filesystem::path ShaderPath;
             // 最终运行时使用值：schema defaults + overrides

@@ -598,6 +598,10 @@ namespace XJ
         }
         if (!ImGui::TreeNodeEx("Parameters", ImGuiTreeNodeFlags_DefaultOpen))
             return;
+        
+        ImGui::TextDisabled("Material: %s", slot.MaterialPath.string().c_str());
+        ImGui::TextDisabled("Shader: %s", slot.ShaderPath.string().c_str());
+        ImGui::TextDisabled("Parameter Count: %zu", slot.Parameters.size());
 
         std::string currentCategory;
 
@@ -626,6 +630,28 @@ namespace XJ
 
         const char* label = parameter.DisplayName.empty() ? parameter.Name.c_str() : parameter.DisplayName.c_str();
 
+
+        ImGui::PushID(parameter.Name.c_str());
+
+        auto DrawParameterPrefix = [&]()
+        {
+            // Draw the material row as: Name [R] [control].
+            ImGui::TextUnformatted(label);
+
+            if (parameter.IsOverride)
+            {
+                ImGui::SameLine();
+                if (ImGui::SmallButton("R"))
+                    RequestResetMaterialParameter(details, slot, parameter);
+
+                if (ImGui::IsItemHovered())
+                    ImGui::SetTooltip("Reset To Default");
+            }
+
+            ImGui::SameLine();
+            ImGui::SetNextItemWidth(-1.0f);
+        };
+
         switch (parameter.Type)
         {
             case XJEditorMaterialParameterType::Float:
@@ -634,9 +660,11 @@ namespace XJ
                 if (std::holds_alternative<float>(parameter.Value))
                     value = std::get<float>(parameter.Value);
 
+                DrawParameterPrefix();
+
                 bool changed = parameter.HasRange
-                    ? ImGui::SliderFloat(label, &value, parameter.Min, parameter.Max)
-                    : ImGui::DragFloat(label, &value, 0.01f);
+                    ? ImGui::SliderFloat("##Value", &value, parameter.Min, parameter.Max)
+                    : ImGui::DragFloat("##Value", &value, 0.01f);
 
                 if (changed)
                     RequestSetMaterialParameter(details, slot, parameter, value);
@@ -650,9 +678,11 @@ namespace XJ
                 if (std::holds_alternative<int>(parameter.Value))
                     value = std::get<int>(parameter.Value);
 
+                DrawParameterPrefix();
+
                 bool changed = parameter.HasRange
-                    ? ImGui::SliderInt(label, &value, static_cast<int>(parameter.Min), static_cast<int>(parameter.Max))
-                    : ImGui::DragInt(label, &value, 1.0f);
+                    ? ImGui::SliderInt("##Value", &value, static_cast<int>(parameter.Min), static_cast<int>(parameter.Max))
+                    : ImGui::DragInt("##Value", &value, 1.0f);
 
                 if (changed)
                     RequestSetMaterialParameter(details, slot, parameter, value);
@@ -666,9 +696,11 @@ namespace XJ
                 if (std::holds_alternative<bool>(parameter.Value))
                     value = std::get<bool>(parameter.Value);
 
-                if (ImGui::Checkbox(label, &value))
-                    RequestSetMaterialParameter(details, slot, parameter, value);
+                DrawParameterPrefix();
 
+                if (ImGui::Checkbox("##Value", &value))
+                    RequestSetMaterialParameter(details, slot, parameter, value);
+                    
                 break;
             }
 
@@ -679,7 +711,11 @@ namespace XJ
                     value = std::get<glm::vec2>(parameter.Value);
 
                 float raw[2] = { value.x, value.y };
-                if (ImGui::DragFloat2(label, raw, 0.01f))
+
+                DrawParameterPrefix();
+
+                bool changed = ImGui::DragFloat2("##Value", raw, 0.01f);
+                if (changed)
                     RequestSetMaterialParameter(details, slot, parameter, glm::vec2(raw[0], raw[1]));
 
                 break;
@@ -692,7 +728,11 @@ namespace XJ
                     value = std::get<glm::vec3>(parameter.Value);
 
                 float raw[3] = { value.x, value.y, value.z };
-                if (ImGui::DragFloat3(label, raw, 0.01f))
+
+                DrawParameterPrefix();
+
+                bool changed = ImGui::DragFloat3("##Value", raw, 0.01f);
+                if (changed)
                     RequestSetMaterialParameter(details, slot, parameter, glm::vec3(raw[0], raw[1], raw[2]));
 
                 break;
@@ -703,9 +743,13 @@ namespace XJ
                 glm::vec4 value(0.0f);
                 if (std::holds_alternative<glm::vec4>(parameter.Value))
                     value = std::get<glm::vec4>(parameter.Value);
-
+                
                 float raw[4] = { value.x, value.y, value.z, value.w };
-                if (ImGui::DragFloat4(label, raw, 0.01f))
+
+                DrawParameterPrefix();
+
+                bool changed = ImGui::DragFloat4("##Value", raw, 0.01f);
+                if (changed)
                     RequestSetMaterialParameter(details, slot, parameter, glm::vec4(raw[0], raw[1], raw[2], raw[3]));
 
                 break;
@@ -716,9 +760,14 @@ namespace XJ
                 glm::vec3 value(1.0f);
                 if (std::holds_alternative<glm::vec3>(parameter.Value))
                     value = std::get<glm::vec3>(parameter.Value);
-
+                
                 float raw[3] = { value.x, value.y, value.z };
-                if (ImGui::ColorEdit3(label, raw))
+
+                DrawParameterPrefix();
+
+                bool changed = ImGui::ColorEdit3("##Value", raw);
+
+                if (changed)
                     RequestSetMaterialParameter(details, slot, parameter, glm::vec3(raw[0], raw[1], raw[2]));
 
                 break;
@@ -731,7 +780,10 @@ namespace XJ
                     value = std::get<glm::vec4>(parameter.Value);
 
                 float raw[4] = { value.x, value.y, value.z, value.w };
-                if (ImGui::ColorEdit4(label, raw))
+                DrawParameterPrefix();
+
+                bool changed = ImGui::ColorEdit4("##Value", raw);
+                if (changed)
                     RequestSetMaterialParameter(details, slot, parameter, glm::vec4(raw[0], raw[1], raw[2], raw[3]));
 
                 break;
@@ -743,11 +795,14 @@ namespace XJ
                 if (std::holds_alternative<XJAssetHandle>(parameter.Value))
                     value = std::get<XJAssetHandle>(parameter.Value);
 
-                ImGui::LabelText(label, "0x%016llX", static_cast<uint64_t>(value));
+                DrawParameterPrefix();
+
+                ImGui::Text("0x%016llX", static_cast<uint64_t>(value));
 
                 std::string popupId = "SelectTexturePopup##" + std::to_string(slot.SlotIndex) + parameter.Name;
 
-                if (ImGui::Button(("Select Texture##" + parameter.Name).c_str(), ImVec2(-1.0f, 0.0f)))
+                ImGui::SameLine();
+                if (ImGui::Button(("Select Texture##" + parameter.Name).c_str()))
                     ImGui::OpenPopup(popupId.c_str());
 
                 if (ImGui::BeginPopup(popupId.c_str()))
@@ -793,6 +848,10 @@ namespace XJ
                 ImGui::TextDisabled("%s: Unsupported parameter", label);
                 break;
         }
+
+
+
+        ImGui::PopID();
     }
 
     void XJInspectorPanel::RequestSetMaterialParameter(const XJEditorEntityDetailsView& details, const XJEditorMaterialSlotView& slot, const XJEditorMaterialParameterView& parameter, const XJEditorMaterialParameterValue& value)
@@ -978,5 +1037,17 @@ namespace XJ
         mState.SceneRequests.RequestResetMeshRendererMaterial = true;
         mState.SceneRequests.ResetMeshRendererMaterial.EntityId = details.Id;
         mState.SceneRequests.ResetMeshRendererMaterial.SlotIndex = slotIndex;
+    }
+
+    void XJInspectorPanel::RequestResetMaterialParameter(const XJEditorEntityDetailsView& details, const XJEditorMaterialSlotView& slot, const XJEditorMaterialParameterView& parameter)
+    {
+        if (details.Id == XJ_INVALID_EDITOR_ENTITY_ID || !slot.HasMaterialAsset || slot.MaterialAsset == 0)
+            return;
+
+        mState.SceneRequests.RequestResetMaterialParameter = true;
+        mState.SceneRequests.ResetMaterialParameter.EntityId = details.Id;
+        mState.SceneRequests.ResetMaterialParameter.SlotIndex = slot.SlotIndex;
+        mState.SceneRequests.ResetMaterialParameter.MaterialAsset = slot.MaterialAsset;
+        mState.SceneRequests.ResetMaterialParameter.ParameterName = parameter.Name;
     }
 }

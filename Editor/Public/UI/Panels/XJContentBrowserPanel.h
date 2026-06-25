@@ -37,6 +37,12 @@ namespace XJ
             void TryCreateFolder(const std::filesystem::path& parent, const std::string& folderName);//尝试创建新文件夹，检查名称合法性和是否已存在同名文件夹，如果成功则在父目录下创建新文件夹
             void TryDeleteFolder(const std::filesystem::path& folderPath);//尝试删除文件夹，检查文件夹是否为空或是否存在，如果成功则删除指定路径的文件夹    
 
+
+            bool CreateMaterialAsset(const std::filesystem::path& directory);//创建材质
+            bool CreateSceneAsset(const std::filesystem::path& directory);//创建场景
+            void RegisterCreatedAsset(const std::filesystem::path& path, XJAssetType type, XJAssetHandle handle);//注册创建
+           
+           
             static const char* AssetTypeToString(XJAssetType type);//将资产类型枚举转换为字符串，供 UI 显示使用
 
             
@@ -55,6 +61,8 @@ namespace XJ
             void ImportExternalFile(const std::filesystem::path& sourcePath);
             std::filesystem::path BuildImportDestinationPath(const std::filesystem::path& sourcePath) const;
             std::filesystem::path BuildUniqueImportPath(const std::filesystem::path& desiredPath) const;
+            XJAssetHandle BuildUniqueAssetHandle(const std::filesystem::path& path, XJAssetType type) const;//生成不冲突的资产句柄
+            std::filesystem::path BuildUniqueAssetPath(const std::filesystem::path& directory, const std::string& baseName, const std::string& extension) const;//添加资产路径
 
         
             

@@ -4,6 +4,11 @@
 #include "UI/XJEditorUILayer.h"
 #include "Asset/XJAssetRegistry.h"
 #include "Asset/XJAsset.h"
+#include "Asset/XJMaterialAsset.h"
+#include "Asset/XJSceneAsset.h"
+#include "Asset/Serialization/XJMaterialAssetSerializer.h"
+#include "Asset/Serialization/XJSceneAssetSerializer.h"
+#include "Asset/Register/XJAssetRegistryScanner.h"
 
 #include <imgui.h>
 #include <algorithm>
@@ -11,7 +16,6 @@
 #include <vector>
 #include <string>
 
-#include "Asset/Register/XJAssetRegistryScanner.h"
 
 #ifdef _WIN32
 #include <windows.h>
@@ -34,6 +38,7 @@ namespace XJ
             );
         #endif
     }
+
     XJContentBrowserPanel::XJContentBrowserPanel(XJEditorUIState& state, XJEditorPanelConfig_ContentBrowser* config)
         : mState(state),mConfig(config)
     {
@@ -204,6 +209,21 @@ namespace XJ
                  // right-click context menu 右键点击打开上下文菜单，提供选项如 "Select in Inspector" 或 "Delete Asset"
                 if (ImGui::BeginPopupContextItem())
                 {
+                    if (ImGui::BeginMenu("Create"))
+                    {
+                        std::filesystem::path targetDirectory = currentPath.empty() ? meta.SourcePath.parent_path() : currentPath;
+                    
+                        if (ImGui::MenuItem("Material"))
+                            CreateMaterialAsset(targetDirectory);
+                    
+                        if (ImGui::MenuItem("Scene"))
+                            CreateSceneAsset(targetDirectory);
+                    
+                        ImGui::EndMenu();
+                    }
+
+                    ImGui::Separator();
+
                     if (ImGui::MenuItem("Find References In Scene"))
                     {
                         mState.SceneRequests.RequestFindEntitiesUsingAsset = handle;
@@ -348,6 +368,19 @@ namespace XJ
             {
                 OpenCreateFolderPopup(folderPath);//打开创建文件夹的弹窗，传入当前文件夹路径作为父路径
             }
+
+            ImGui::Separator();
+            if (ImGui::BeginMenu("Create Asset"))
+            {
+                if (ImGui::MenuItem("Material"))
+                    CreateMaterialAsset(folderPath);
+            
+                if (ImGui::MenuItem("Scene"))
+                    CreateSceneAsset(folderPath);
+            
+                ImGui::EndMenu();
+            }
+
             ImGui::Separator();
             //if(folderPath != std::filesystem::path(mConfig->rootPath) && std::filesystem::is_empty(folderPath))//根目录不能删除，非空文件夹不能删除
             if(folderPath != std::filesystem::path(mConfig->rootPath))//根目录不能删除，非空文件夹不能删除
@@ -562,6 +595,49 @@ namespace XJ
         return targetFolder / sourcePath.filename();
     }
 
+    std::filesystem::path XJContentBrowserPanel::BuildUniqueAssetPath(const std::filesystem::path& directory, const std::string& baseName, const std::string& extension) const
+    {
+        std::filesystem::path targetDirectory = directory.empty() ? std::filesystem::path("Resource") : directory;
+
+        std::string ext = extension;
+        if (!ext.empty() && ext.front() != '.')
+            ext = "." + ext;
+
+        std::filesystem::path candidate = targetDirectory / (baseName + ext);
+
+        if (!std::filesystem::exists(candidate) &&
+            (!mState.AssetRegistry || !mState.AssetRegistry->ContainsSourcePath(candidate)))
+        {
+            return candidate;
+        }
+
+        for (int index = 1; index < 1000; ++index)
+        {
+            std::filesystem::path numbered =
+                targetDirectory / (baseName + "_" + std::to_string(index) + ext);
+
+            if (!std::filesystem::exists(numbered) &&
+                (!mState.AssetRegistry || !mState.AssetRegistry->ContainsSourcePath(numbered)))
+            {
+                return numbered;
+            }
+        }
+
+        return {};
+    }
+    XJAssetHandle XJContentBrowserPanel::BuildUniqueAssetHandle(const std::filesystem::path& path, XJAssetType type) const
+    {
+        if (!mState.AssetRegistry)
+            return 0;
+
+        XJAssetHandle handle = XJAssetRegistryScanner::GenerateStableHandle(path, type);
+
+        while (mState.AssetRegistry->Contains(handle))
+            ++handle;
+
+        return handle;
+    }
+
     std::filesystem::path XJContentBrowserPanel::BuildUniqueImportPath(const std::filesystem::path& desiredPath) const
     {
        if (!std::filesystem::exists(desiredPath))
@@ -628,5 +704,86 @@ namespace XJ
             ++meta.Handle;
 
         mState.AssetRegistry->RegisterAsset(meta);
+    }
+
+    bool XJContentBrowserPanel::CreateMaterialAsset(const std::filesystem::path& directory)
+    {
+        if(!mState.AssetRegistry)
+            return false;
+        
+        std::filesystem::path  path = BuildUniqueAssetPath(directory, "NewMaterial", ".xjmat");
+        if (path.empty())
+            return false;
+
+        XJAssetHandle handle = BuildUniqueAssetHandle(path, XJAssetType::Material);
+        if (handle == 0)
+            return false;
+
+        XJMaterialAsset material;
+        material.Version = 2;
+        material.mType = XJAssetType::Material;
+        material.mName = path.stem().string();
+        material.mPath = path;
+        material.ShaderPath = "Resource/Shader/Unlit.xjshader";
+        material.Parameters.clear();
+        material.ParameterOverrides.clear();
+
+        if (!XJMaterialAssetSerializer::SaveToFile(material, path))
+        return false;
+
+        RegisterCreatedAsset(path, XJAssetType::Material, handle);
+        return true;
+    }
+
+    bool XJContentBrowserPanel::CreateSceneAsset(const std::filesystem::path& directory)
+    {
+        if (!mState.AssetRegistry)
+            return false;
+
+        std::filesystem::path path = BuildUniqueAssetPath(directory, "NewScene", ".xjscene");
+        if (path.empty())
+            return false;
+
+        XJAssetHandle handle = BuildUniqueAssetHandle(path, XJAssetType::Scene);
+        if (handle == 0)
+            return false;
+
+        XJSceneAsset scene;
+        scene.mType = XJAssetType::Scene;
+        scene.mName = path.stem().string();
+        scene.mPath = path;
+        scene.Entities.clear();
+
+        if (!XJSceneAssetSerializer::SaveToFile(scene, path))
+            return false;
+
+        RegisterCreatedAsset(path, XJAssetType::Scene, handle);
+        return true;
+    }
+
+    void XJContentBrowserPanel::RegisterCreatedAsset(const std::filesystem::path& path, XJAssetType type, XJAssetHandle handle)
+    {
+        if (!mState.AssetRegistry || handle == 0)
+            return;
+
+        XJAssetMeta meta;
+        meta.Handle = handle;
+        meta.Type = type;
+        meta.Name = path.stem().string();
+        meta.SourcePath = path.lexically_normal().generic_string();
+        meta.ImportedPath = "";
+
+        mState.AssetRegistry->RegisterAsset(meta);
+        mState.AssetRegistry->Save("Resource/Config/AssetRegistry.json");
+
+        if (mConfig)
+        {
+            mConfig->currentPath = path.parent_path().generic_string();
+            mConfig->filter.clear();
+        }
+
+        mState.Selection.SelectedAsset = meta.Handle;
+        mState.Selection.SelectedEntity = XJ_INVALID_EDITOR_ENTITY_ID;
+        mState.Selection.HighlightedEntities.clear();
     }
 }

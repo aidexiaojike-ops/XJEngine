@@ -381,6 +381,35 @@ namespace XJ
             }
         }
 
+        if (uiState.SceneRequests.RequestResetMaterialParameter)
+        {
+            auto request = uiState.SceneRequests.ResetMaterialParameter;
+            uiState.SceneRequests.RequestResetMaterialParameter = false;
+            uiState.SceneRequests.ResetMaterialParameter = {};
+
+            bool changed = XJEditorSceneService::ResetMaterialParameter(
+                *mScene,
+                request.EntityId,
+                request.SlotIndex,
+                request.MaterialAsset,
+                request.ParameterName,
+                *mAssetRegistry,
+                mInstantiateContext,
+                mDefaultTexture,
+                mDefaultSampler);
+
+            if (changed)
+            {
+                uiState.Selection.SelectedEntity = request.EntityId;
+                uiState.Selection.SelectedAsset = 0;
+                uiState.Selection.HighlightedEntities.clear();
+                uiState.SelectedEntityDetails = {};
+
+                NotifyAfterMutation();
+                RefreshViewModels(uiState);
+            }
+        }
+
 
         if (uiState.SceneRequests.RequestRenameEntity)
         {
@@ -510,6 +539,9 @@ namespace XJ
         //设置材质参数
         uiState.SceneRequests.RequestSetMaterialParameter = false;
         uiState.SceneRequests.SetMaterialParameter = {};
+
+        uiState.SceneRequests.RequestResetMaterialParameter = false;
+        uiState.SceneRequests.ResetMaterialParameter = {};
     }
 
     void XJEditorSceneController::ResetSelectionForScene(XJEditorUIState& uiState, XJAssetHandle sceneHandle)

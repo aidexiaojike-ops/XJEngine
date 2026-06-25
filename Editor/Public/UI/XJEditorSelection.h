@@ -93,6 +93,13 @@ namespace XJ
         XJEditorMaterialParameterValue Value;
     };
 
+    struct XJEditorResetMaterialParameterRequest//重置材质参数请求
+    {
+        XJEditorEntityId EntityId = XJ_INVALID_EDITOR_ENTITY_ID;
+        uint32_t SlotIndex = 0;
+        XJAssetHandle MaterialAsset = 0;
+        std::string ParameterName;
+    };
 
     struct XJEditorSceneRequestState//编辑器场景请求状态  这些请求由 UI 层设置，由控制器在合适的时机统一处理
     {
@@ -135,6 +142,9 @@ namespace XJ
 
         bool RequestSetMaterialParameter = false;//是否设置材质参数
         XJEditorSetMaterialParameterRequest SetMaterialParameter;
+        
+        bool RequestResetMaterialParameter = false;//重载材质参数请求
+        XJEditorResetMaterialParameterRequest ResetMaterialParameter;
     };
 
 

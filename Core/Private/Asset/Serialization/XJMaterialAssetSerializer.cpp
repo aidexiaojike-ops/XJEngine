@@ -10,6 +10,28 @@ namespace XJ
     namespace
     {
 
+        std::string ToProjectRelativePathString(const std::filesystem::path& path)
+        {
+            if (path.empty())
+                return {};
+        
+            std::filesystem::path normalized = path.lexically_normal();
+        
+            std::string generic = normalized.generic_string();
+        
+            const std::string resourcePrefix = "Resource/";
+            size_t resourcePos = generic.find(resourcePrefix);
+            if (resourcePos != std::string::npos)
+                return generic.substr(resourcePos);
+        
+            const std::string binResourcePrefix = "bin/Resource/";
+            size_t binResourcePos = generic.find(binResourcePrefix);
+            if (binResourcePos != std::string::npos)
+                return generic.substr(binResourcePos + 4);
+        
+            return generic;
+        }
+
         bool MaterialParameterValueEquals(const XJMaterialParameterValue& a, const XJMaterialParameterValue& b)//比较函数，用来判断 override 是否等于 default，避免保存无意义 override：
         {
             if (a.index() != b.index())
@@ -157,16 +179,19 @@ namespace XJ
                     root["baseColor"][2].get<float>(),
                     root["baseColor"][3].get<float>());
 
-                asset.Parameters["BaseColor"] = asset.BaseColorFactor;
+                asset.ParameterOverrides["BaseColor"] = asset.BaseColorFactor;
             }
 
             asset.MetallicFactor = root.value("metallic", asset.MetallicFactor);
             asset.RoughnessFactor = root.value("roughness", asset.RoughnessFactor);
             asset.AlbedoTexture = root.value("albedoTexture", static_cast<XJAssetHandle>(0));
 
-            asset.Parameters["Metallic"] = asset.MetallicFactor;
-            asset.Parameters["Roughness"] = asset.RoughnessFactor;
-            asset.Parameters["AlbedoTexture"] = asset.AlbedoTexture;
+            asset.ParameterOverrides["BaseColor"] = asset.BaseColorFactor;
+            asset.ParameterOverrides["Metallic"] = asset.MetallicFactor;
+            asset.ParameterOverrides["Roughness"] = asset.RoughnessFactor;
+            asset.ParameterOverrides["AlbedoTexture"] = asset.AlbedoTexture;
+
+            asset.Parameters = asset.ParameterOverrides;
         }
 
     }
@@ -208,10 +233,18 @@ namespace XJ
 
             for (const auto& def : shaderAsset->Schema.Parameters)
             {
+                materialAsset->Parameters[def.Name] = def.DefaultValue;
+
                 if (parametersJson.contains(def.Name))
-                    materialAsset->Parameters[def.Name] = ReadValueByType(parametersJson[def.Name], def.Type);
-                else
-                    materialAsset->Parameters[def.Name] = def.DefaultValue;
+                {
+                    XJMaterialParameterValue overrideValue = ReadValueByType(parametersJson[def.Name], def.Type);
+                
+                    if (!MaterialParameterValueEquals(overrideValue, def.DefaultValue))
+                    {
+                        materialAsset->ParameterOverrides[def.Name] = overrideValue;
+                        materialAsset->Parameters[def.Name] = overrideValue;
+                    }
+                }
             }
         }
         else
@@ -247,17 +280,32 @@ namespace XJ
     }
 
     bool XJMaterialAssetSerializer::SaveToFile(const XJMaterialAsset& materialAsset, const std::filesystem::path& path)
-    {
+    {   
         if (path.has_parent_path())
             std::filesystem::create_directories(path.parent_path());
 
         nlohmann::json root;
         root["version"] = materialAsset.Version;
+        // root["version"] = 2;//To测试
         root["shader"] = materialAsset.ShaderPath.generic_string();
+        // root["shader"] = ToProjectRelativePathString(materialAsset.ShaderPath);//To测试
         root["parameters"] = nlohmann::json::object();
+        //保存时只写 overrides，并且如果 override 等于 schema default
+        std::shared_ptr<XJShaderAsset> shaderAsset;
+        if(!materialAsset.ShaderPath.empty())
+            shaderAsset = XJShaderAssetSerializer::LoadFromFile(materialAsset.ShaderPath);
 
-        for (const auto& [name, value] : materialAsset.Parameters)
-            root["parameters"][name] = WriteValue(value);
+        for(const auto& [name ,value]:materialAsset.ParameterOverrides)
+        {
+            if(shaderAsset)
+            {
+                const XJParameterDef* def = shaderAsset->Schema.FindParameter(name);
+                if(def && MaterialParameterValueEquals(value, def->DefaultValue))
+                    continue;
+            }
+
+            root["parameters"][name]  = WriteValue(value);
+        }
 
         std::ofstream out(path);
         if (!out.is_open())
