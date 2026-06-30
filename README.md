@@ -22,7 +22,7 @@ XJEngine is a lightweight modern game engine built with Vulkan and ECS architect
 | **ECS Architecture** | High-performance Entity Component System using EnTT library |
 | **Event Driven System** | Complete input handling for window, mouse, keyboard events |
 | **Modular Material System** | Extensible material pipeline with textures, samplers and uniform buffers |
-| **Shader Schema System** | JSON-defined shader parameters (color, float, texture2D) with defaults/min/max, material asset serialization |
+| **Shader Schema System** | JSON-defined shader parameters (color, float, texture2D), schema validation, material asset serialization |
 | **Unlit Material System** | Complete unlit pipeline with Frame UBO, material parameter UBO, texture blending, and dynamic descriptor pool expansion |
 | **Runtime Material Generation** | Programmatic material creation with random colors, textures, and UV transforms at runtime |
 | **Procedural Textures** | Generate textures from pixel data (single color or multi-pixel arrays) without external files |
@@ -145,7 +145,7 @@ Swapchain
 - **Texture Management**: Per-material texture views with sampler state, UV transform support
 - **Push Constants**: `ModelPC` struct for per-draw model and normal matrix updates
 - **Shader Pipeline**: SPIR-V shader compilation and pipeline state management
-- **Shader Schema System**: JSON-defined parameters (Unlit.schema) with types (color4, float, texture2D), defaults, min/max ranges
+- **Shader Schema System**: JSON-defined parameters (Unlit.schema) with types (color4, float, texture2D), defaults, min/max ranges, schema validation via `XJShaderSchemaValidator`
 - **Material Serializers**: `XJMaterialAssetSerializer`, `XJShaderAssetSerializer`, `XJShaderSchemaSerializer`
 - **Inspector Material Editing**: Parameter editing with `XJEditorMaterialParameterType` (Float, Color3, Texture2D, etc.)
 
@@ -169,8 +169,10 @@ Swapchain
 
 #### **Editor UI System**
 - **Lifecycle Hooks**: `OnUIBegin`/`OnUIEnd`/`OnUIRender`/`OnUIDestroy` virtual methods in XJApplication base class
-- **MVVM Architecture**: Controllers (camera, scene, drop), Services, ViewModels decouple UI from ECS
+- **MVVM Architecture**: Controllers (camera, scene, drop, asset), Services, ViewModels decouple UI from ECS
 - **XJEditorSceneController**: Scene load/save/open, dirty tracking, entity mutation requests
+- **XJEditorAssetController**: Asset create/rename/delete/import lifecycle management
+- **XJEditorAssetRequests**: MVVM request structs (CreateAsset, RenameAsset, DeleteAsset, ImportExternalFiles)
 - **XJEditorSceneAssetDropController**: Content Browser asset drag to Scene Preview with ray-cast entity placement
 - **XJEditorExternalDropController**: OS file drag-drop into editor window (e.g., drag .glb from Explorer)
 - **XJEditorCameraManager**: Viewport camera binding and editor camera lifecycle
