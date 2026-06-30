@@ -4,12 +4,6 @@
 #include "UI/XJEditorUILayer.h"
 #include "Asset/XJAssetRegistry.h"
 #include "Asset/XJAsset.h"
-#include "Asset/XJMaterialAsset.h"
-#include "Asset/XJSceneAsset.h"
-#include "Asset/Serialization/XJMaterialAssetSerializer.h"
-#include "Asset/Serialization/XJSceneAssetSerializer.h"
-#include "Asset/Register/XJAssetRegistryScanner.h"
-
 #include <imgui.h>
 #include <algorithm>
 #include <cstring>
@@ -108,8 +102,7 @@ namespace XJ
         ImGui::SameLine();
         if (ImGui::Button("Refresh")&& mState.AssetRegistry)
         {
-            XJAssetRegistryScanner::ScanResourceAssets(*mState.AssetRegistry, "Resource");
-            mState.AssetRegistry->Save("Resource/Config/AssetRegistry.json");
+            mState.AssetRequests.RequestRefreshRegistry = true;
         }
         
         ImGui::SameLine();
@@ -147,7 +140,6 @@ namespace XJ
                                    
         bool pendingDeleteAsset = false;
         XJAssetHandle pendingDeleteHandle = 0;
-        std::filesystem::path pendingDeletePath;
         if(ImGui::BeginTable("AssetTable", 4, tableFlags))
         {
            
@@ -181,8 +173,33 @@ namespace XJ
                 //    mState.Selection.SelectedAsset = 0;
                 //}
                 bool isSelected = (mState.Selection.SelectedAsset == handle);
+                bool isRenaming = (mRenamingAsset == handle);
 
-               if (ImGui::Selectable(meta.Name.c_str(), isSelected, ImGuiSelectableFlags_SpanAllColumns | ImGuiSelectableFlags_AllowDoubleClick))
+                if (isRenaming)
+                {
+                    ImGui::PushID(static_cast<int>(handle));
+
+                    if (mFocusRenameAssetInput)
+                    {
+                        ImGui::SetKeyboardFocusHere();
+                        mFocusRenameAssetInput = false;
+                    }
+
+                    ImGui::SetNextItemWidth(-1.0f);
+                    bool submitted = ImGui::InputText("##RenameAsset", mRenameAssetBuffer, sizeof(mRenameAssetBuffer), ImGuiInputTextFlags_EnterReturnsTrue);
+
+                    if (ImGui::IsKeyPressed(ImGuiKey_Escape))
+                    {
+                        mRenamingAsset = 0;
+                    }
+                    else if (submitted || ImGui::IsItemDeactivatedAfterEdit())
+                    {
+                        SubmitRenameAsset(handle);
+                    }
+
+                    ImGui::PopID();
+                }
+               else if (ImGui::Selectable(meta.Name.c_str(), isSelected, ImGuiSelectableFlags_SpanAllColumns | ImGuiSelectableFlags_AllowDoubleClick))
                 {
                     HandleSelection(handle);
 
@@ -193,7 +210,7 @@ namespace XJ
                         mState.SceneRequests.RequestedSceneHandle = handle;
                     }
                 }
-                if(meta.Type == XJAssetType::Mesh && ImGui::BeginDragDropSource())//判断是是否是模型 然后再拖动
+                if(!isRenaming && meta.Type == XJAssetType::Mesh && ImGui::BeginDragDropSource())//判断是是否是模型 然后再拖动
                 {
                     XJEditorAssetDragPayload payload{};
 
@@ -207,17 +224,17 @@ namespace XJ
                 }
                 
                  // right-click context menu 右键点击打开上下文菜单，提供选项如 "Select in Inspector" 或 "Delete Asset"
-                if (ImGui::BeginPopupContextItem())
+                if (!isRenaming && ImGui::BeginPopupContextItem())
                 {
                     if (ImGui::BeginMenu("Create"))
                     {
                         std::filesystem::path targetDirectory = currentPath.empty() ? meta.SourcePath.parent_path() : currentPath;
-                    
+                     
                         if (ImGui::MenuItem("Material"))
-                            CreateMaterialAsset(targetDirectory);
-                    
+                            RequestCreateAsset(XJEditorCreateAssetType::Material, targetDirectory);
+                     
                         if (ImGui::MenuItem("Scene"))
-                            CreateSceneAsset(targetDirectory);
+                            RequestCreateAsset(XJEditorCreateAssetType::Scene, targetDirectory);
                     
                         ImGui::EndMenu();
                     }
@@ -238,13 +255,18 @@ namespace XJ
                     {
                         ImGui::SetClipboardText(meta.SourcePath.string().c_str());
                     }
+
+                    if (ImGui::MenuItem("Rename"))
+                    {
+                        BeginRenameAsset(handle, meta.Name);
+                    }
+
                     ImGui::Separator();
                     
                     if (ImGui::MenuItem("Delete Asset"))
                     {
                         pendingDeleteAsset = true;
                         pendingDeleteHandle = handle;
-                        pendingDeletePath = meta.SourcePath;
                     }
                 
                     ImGui::EndPopup();
@@ -266,19 +288,8 @@ namespace XJ
         
         if(pendingDeleteAsset)
         {
-            std::error_code ec;
-            registry->RemoveAsset(pendingDeleteHandle);
-
-            //if(!pendingDeletePath.empty() && std::filesystem::exists(pendingDeletePath))
-            //{
-            //    std::filesystem::remove(pendingDeletePath, ec);
-            //}
-            registry->Save("Resource/Config/AssetRegistry.json");//保存注册表以持久化删除操作
-
-            if(mState.Selection.SelectedAsset == pendingDeleteHandle)
-            {
-                mState.Selection.SelectedAsset = 0;//如果被删除的资产正被选中，重置选择状态
-            }
+            mState.AssetRequests.RequestDeleteAsset = true;
+            mState.AssetRequests.DeleteAsset.Handle = pendingDeleteHandle;
         }
 
     }
@@ -301,6 +312,32 @@ namespace XJ
         mState.Selection.SelectedAsset = handle;
         mState.Selection.SelectedEntity = XJ_INVALID_EDITOR_ENTITY_ID;//切换到资源选择时，清除实体选择
         mState.Selection.HighlightedEntities.clear();
+    }
+
+    void XJContentBrowserPanel::BeginRenameAsset(XJAssetHandle handle, const std::string& currentName)
+    {
+        if (handle == 0)
+            return;
+
+        mRenamingAsset = handle;
+        std::memset(mRenameAssetBuffer, 0, sizeof(mRenameAssetBuffer));
+
+        const std::string name = currentName.empty() ? "UnnamedAsset" : currentName;
+        std::strncpy(mRenameAssetBuffer, name.c_str(), sizeof(mRenameAssetBuffer) - 1);
+
+        mFocusRenameAssetInput = true;
+    }
+
+    void XJContentBrowserPanel::SubmitRenameAsset(XJAssetHandle handle)
+    {
+        if (handle == 0 || mRenamingAsset != handle || !mState.AssetRegistry)
+            return;
+
+        mState.AssetRequests.RequestRenameAsset = true;
+        mState.AssetRequests.RenameAsset.Handle = handle;
+        mState.AssetRequests.RenameAsset.Name = mRenameAssetBuffer;
+
+        mRenamingAsset = 0;
     }
     void XJContentBrowserPanel::DrawFolderTree()//左侧 Resource 文件夹树
     {
@@ -373,10 +410,10 @@ namespace XJ
             if (ImGui::BeginMenu("Create Asset"))
             {
                 if (ImGui::MenuItem("Material"))
-                    CreateMaterialAsset(folderPath);
-            
+                    RequestCreateAsset(XJEditorCreateAssetType::Material, folderPath);
+             
                 if (ImGui::MenuItem("Scene"))
-                    CreateSceneAsset(folderPath);
+                    RequestCreateAsset(XJEditorCreateAssetType::Scene, folderPath);
             
                 ImGui::EndMenu();
             }
@@ -576,214 +613,35 @@ namespace XJ
         mState.PendingExternalDroppedFiles.clear();
         mState.HasPendingExternalDrop = false;
 
-        for (const auto& sourcePath : droppedFiles)
+        if (!droppedFiles.empty())
         {
-            ImportExternalFile(sourcePath);
+            mState.AssetRequests.RequestImportExternalFiles = true;
+            mState.AssetRequests.ImportExternalFiles.DestinationDirectory = GetCurrentAssetDirectory();
+            mState.AssetRequests.ImportExternalFiles.SourcePaths = std::move(droppedFiles);
         }
-
-        if (mState.AssetRegistry)
-            mState.AssetRegistry->Save("Resource/Config/AssetRegistry.json");
     }
 
-    std::filesystem::path XJContentBrowserPanel::BuildImportDestinationPath(const std::filesystem::path& sourcePath) const
+    std::filesystem::path XJContentBrowserPanel::GetCurrentAssetDirectory() const
     {
-        std::filesystem::path targetFolder = "Resource";
-
         if (mConfig && !mConfig->currentPath.empty())
-            targetFolder = std::filesystem::path(mConfig->currentPath);
+            return std::filesystem::path(mConfig->currentPath);
 
-        return targetFolder / sourcePath.filename();
+        return "Resource";
     }
 
-    std::filesystem::path XJContentBrowserPanel::BuildUniqueAssetPath(const std::filesystem::path& directory, const std::string& baseName, const std::string& extension) const
+    void XJContentBrowserPanel::RequestCreateAsset(XJEditorCreateAssetType type, const std::filesystem::path& directory)
     {
-        std::filesystem::path targetDirectory = directory.empty() ? std::filesystem::path("Resource") : directory;
-
-        std::string ext = extension;
-        if (!ext.empty() && ext.front() != '.')
-            ext = "." + ext;
-
-        std::filesystem::path candidate = targetDirectory / (baseName + ext);
-
-        if (!std::filesystem::exists(candidate) &&
-            (!mState.AssetRegistry || !mState.AssetRegistry->ContainsSourcePath(candidate)))
-        {
-            return candidate;
-        }
-
-        for (int index = 1; index < 1000; ++index)
-        {
-            std::filesystem::path numbered =
-                targetDirectory / (baseName + "_" + std::to_string(index) + ext);
-
-            if (!std::filesystem::exists(numbered) &&
-                (!mState.AssetRegistry || !mState.AssetRegistry->ContainsSourcePath(numbered)))
-            {
-                return numbered;
-            }
-        }
-
-        return {};
-    }
-    XJAssetHandle XJContentBrowserPanel::BuildUniqueAssetHandle(const std::filesystem::path& path, XJAssetType type) const
-    {
-        if (!mState.AssetRegistry)
-            return 0;
-
-        XJAssetHandle handle = XJAssetRegistryScanner::GenerateStableHandle(path, type);
-
-        while (mState.AssetRegistry->Contains(handle))
-            ++handle;
-
-        return handle;
-    }
-
-    std::filesystem::path XJContentBrowserPanel::BuildUniqueImportPath(const std::filesystem::path& desiredPath) const
-    {
-       if (!std::filesystem::exists(desiredPath))
-           return desiredPath;
-
-       const std::filesystem::path parent = desiredPath.parent_path();
-       const std::string stem = desiredPath.stem().string();
-       const std::string extension = desiredPath.extension().string();
-
-       for (int index = 1; index < 1000; ++index)
-       {
-           std::filesystem::path candidate =
-               parent / (stem + "_" + std::to_string(index) + extension);
-
-           if (!std::filesystem::exists(candidate))
-               return candidate;
-       }
-
-       return {};
-    }
-
-    void XJContentBrowserPanel::ImportExternalFile(const std::filesystem::path& sourcePath)
-    {
-        if (!mState.AssetRegistry)
+        if (type == XJEditorCreateAssetType::None)
             return;
 
-        if (!std::filesystem::exists(sourcePath) ||
-            !std::filesystem::is_regular_file(sourcePath))
-        {
-            return;
-        }
-
-        XJAssetType type = XJAssetRegistryScanner::GetAssetTypeFromExtension(sourcePath);
-        if (type == XJAssetType::None)
-            return;
-
-        std::filesystem::path desiredPath = BuildImportDestinationPath(sourcePath);
-        std::filesystem::path destinationPath = BuildUniqueImportPath(desiredPath);
-
-        if (destinationPath.empty())
-            return;
-
-        std::error_code ec;
-        std::filesystem::create_directories(destinationPath.parent_path(), ec);
-        if (ec)
-            return;
-
-        if (mState.AssetRegistry->ContainsSourcePath(destinationPath))
-            return;
-        std::filesystem::copy_file(sourcePath, destinationPath, std::filesystem::copy_options::none, ec);
-
-        if (ec)
-            return;
-
-
-        XJAssetMeta meta;
-        meta.Type = type;
-        meta.Name = XJAssetRegistryScanner::GetAssetNameFromPath(destinationPath);
-        meta.SourcePath = destinationPath.lexically_normal().generic_string();
-        meta.ImportedPath = "";
-        meta.Handle = XJAssetRegistryScanner::GenerateStableHandle(destinationPath, type);
-
-        while (mState.AssetRegistry->Contains(meta.Handle))
-            ++meta.Handle;
-
-        mState.AssetRegistry->RegisterAsset(meta);
-    }
-
-    bool XJContentBrowserPanel::CreateMaterialAsset(const std::filesystem::path& directory)
-    {
-        if(!mState.AssetRegistry)
-            return false;
-        
-        std::filesystem::path  path = BuildUniqueAssetPath(directory, "NewMaterial", ".xjmat");
-        if (path.empty())
-            return false;
-
-        XJAssetHandle handle = BuildUniqueAssetHandle(path, XJAssetType::Material);
-        if (handle == 0)
-            return false;
-
-        XJMaterialAsset material;
-        material.Version = 2;
-        material.mType = XJAssetType::Material;
-        material.mName = path.stem().string();
-        material.mPath = path;
-        material.ShaderPath = "Resource/Shader/Unlit.xjshader";
-        material.Parameters.clear();
-        material.ParameterOverrides.clear();
-
-        if (!XJMaterialAssetSerializer::SaveToFile(material, path))
-        return false;
-
-        RegisterCreatedAsset(path, XJAssetType::Material, handle);
-        return true;
-    }
-
-    bool XJContentBrowserPanel::CreateSceneAsset(const std::filesystem::path& directory)
-    {
-        if (!mState.AssetRegistry)
-            return false;
-
-        std::filesystem::path path = BuildUniqueAssetPath(directory, "NewScene", ".xjscene");
-        if (path.empty())
-            return false;
-
-        XJAssetHandle handle = BuildUniqueAssetHandle(path, XJAssetType::Scene);
-        if (handle == 0)
-            return false;
-
-        XJSceneAsset scene;
-        scene.mType = XJAssetType::Scene;
-        scene.mName = path.stem().string();
-        scene.mPath = path;
-        scene.Entities.clear();
-
-        if (!XJSceneAssetSerializer::SaveToFile(scene, path))
-            return false;
-
-        RegisterCreatedAsset(path, XJAssetType::Scene, handle);
-        return true;
-    }
-
-    void XJContentBrowserPanel::RegisterCreatedAsset(const std::filesystem::path& path, XJAssetType type, XJAssetHandle handle)
-    {
-        if (!mState.AssetRegistry || handle == 0)
-            return;
-
-        XJAssetMeta meta;
-        meta.Handle = handle;
-        meta.Type = type;
-        meta.Name = path.stem().string();
-        meta.SourcePath = path.lexically_normal().generic_string();
-        meta.ImportedPath = "";
-
-        mState.AssetRegistry->RegisterAsset(meta);
-        mState.AssetRegistry->Save("Resource/Config/AssetRegistry.json");
+        mState.AssetRequests.RequestCreateAsset = true;
+        mState.AssetRequests.CreateAsset.Type = type;
+        mState.AssetRequests.CreateAsset.Directory = directory.empty() ? GetCurrentAssetDirectory() : directory;
 
         if (mConfig)
         {
-            mConfig->currentPath = path.parent_path().generic_string();
+            mConfig->currentPath = mState.AssetRequests.CreateAsset.Directory.generic_string();
             mConfig->filter.clear();
         }
-
-        mState.Selection.SelectedAsset = meta.Handle;
-        mState.Selection.SelectedEntity = XJ_INVALID_EDITOR_ENTITY_ID;
-        mState.Selection.HighlightedEntities.clear();
     }
 }

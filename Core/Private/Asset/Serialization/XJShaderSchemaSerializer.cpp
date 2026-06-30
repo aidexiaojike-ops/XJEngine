@@ -102,12 +102,15 @@ namespace XJ
         XJParameterDef ReadParameterDef(const nlohmann::json& j)//默认值
         {
             XJParameterDef def;
-
+            //读取字段
             def.Name = j.value("name", std::string{});
             def.DisplayName = j.value("displayName", def.Name);
             def.Type = XJShaderParameterTypeFromString(j.value("type",std::string{}));
             def.Category = j.value("category", std::string{});
             def.Editable = j.value("editable", true);
+            def.UboName = j.value("ubo",std::string{});
+            def.MemberName = j.value("member",std::string{});
+            def.SamplerName = j.value("sampler",std::string{});
 
             if(j.contains("min") && j.contains("max"))
             {
@@ -121,7 +124,7 @@ namespace XJ
 
             return def;
         }
-
+        //保存字段
         nlohmann::json WriteParameterDef(const XJParameterDef& def)//写默认值
         {
             nlohmann::json j;
@@ -133,6 +136,15 @@ namespace XJ
 
             if (!def.Category.empty())
                 j["category"] = def.Category;
+
+            if(!def.UboName.empty())
+                j["ubo"] = def.UboName;
+
+            if(!def.MemberName.empty())
+                j["member"] = def.MemberName;
+
+            if(!def.SamplerName.empty())
+                j["sampler"] = def.SamplerName;
 
             if (def.HasRange)
             {

@@ -3,6 +3,7 @@
 
 #include "Asset/XJAsset.h"
 #include "Render/Shader/XJShaderSchema.h"
+#include "Render/Shader/XJShaderValidation.h"
 
 #include <filesystem>
 #include <string>
@@ -20,6 +21,7 @@ namespace XJ
             std::filesystem::path SchemaPath;
         
             XJShaderSchema Schema;
+            XJShaderValidationResult Validation;
     };
 
 

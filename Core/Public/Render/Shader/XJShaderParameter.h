@@ -44,6 +44,11 @@ namespace XJ//shader 用到的参数
         std::string Category;
 
         bool Editable = true;
+        // UBO parameters use UboName + MemberName.
+        // Texture parameters use SamplerName.
+        std::string UboName;
+        std::string MemberName;
+        std::string SamplerName;
     };
 
     inline const char* XJShaderParameterTypeToString(XJShaderParameterType type)//转成字符串  UI用

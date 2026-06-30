@@ -5,8 +5,7 @@
 #include <imgui.h>
 #include <iomanip>
 #include <sstream>
-
-
+#include <cstring>
 
 namespace XJ
 {
@@ -53,7 +52,6 @@ namespace XJ
            ImGui::EndPopup();
         }
 
-
         ImGui::End();
     }
 
@@ -91,17 +89,43 @@ namespace XJ
         imguiId << "##" << std::hex << entity.Id;
         label += imguiId.str();
 
+        bool isRenaming = mRenamingEntity == entity.Id;
+        bool opened = false;
 
-        bool opened = ImGui::TreeNodeEx(label.c_str(), flags);//创建树节点
+        if(isRenaming)
+        {
+            ImGui::PushID(static_cast<int>(entity.Id));
+
+            if(mFocusRenameInput)
+            {
+                ImGui::SetKeyboardFocusHere();
+                mFocusRenameInput = false;
+            }
+
+            ImGui::SetNextItemWidth(-1.0f);
+            bool submitted = ImGui::InputText("##RenameEntity", mRenameBuffer, sizeof(mRenameBuffer), ImGuiInputTextFlags_EnterReturnsTrue);
+
+            if(submitted || ImGui::IsItemDeactivatedAfterEdit())
+                SubmitRenameEntity(entity.Id);
+
+            if(ImGui::IsKeyPressed(ImGuiKey_Escape))
+                mRenamingEntity = XJ_INVALID_EDITOR_ENTITY_ID;
+
+            ImGui::PopID();
+        }
+        else
+        {
+            opened = ImGui::TreeNodeEx(label.c_str(), flags);//创建树节点
+        }
         //chick to select 点击节点以选择实体
-        if (ImGui::IsItemClicked())
+        if (!isRenaming && ImGui::IsItemClicked())
         {
             mState.Selection.SelectedEntity = entity.Id;
             mState.Selection.SelectedAsset = 0;
             mState.Selection.HighlightedEntities.clear();
         }
         // right-click context menu 右键点击打开上下文菜单
-         if (ImGui::IsItemHovered())
+        if (!isRenaming && ImGui::IsItemHovered())
         {
             ImGui::BeginTooltip();
             ImGui::Text("Name: %s", entity.Name.c_str());
@@ -118,7 +142,7 @@ namespace XJ
 
             ImGui::EndTooltip();
         }
-        if (ImGui::BeginPopupContextItem())
+        if (!isRenaming && ImGui::BeginPopupContextItem())
         {
             if (ImGui::MenuItem("Select Mesh Asset", nullptr, false, entity.MeshAsset != 0))
             {
@@ -141,7 +165,12 @@ namespace XJ
             }
 
             ImGui::Separator();
+            if (ImGui::MenuItem("Rename"))
+            {
+                BeginRenameEntity(entity.Id, entity.Name);
+            }
 
+            ImGui::Separator();
             if (ImGui::MenuItem("Delete From Scene"))
             {
                 if (!mState.Selection.HighlightedEntities.empty() &&
@@ -166,6 +195,29 @@ namespace XJ
 
             ImGui::TreePop();
         }
+    }
+
+    void XJHierarchyPanel::BeginRenameEntity(XJEditorEntityId entityId, const std::string& currentName)
+    {
+        mRenamingEntity = entityId;
+        std::memset(mRenameBuffer, 0, sizeof(mRenameBuffer));
+
+        const std::string name = currentName.empty() ? "XJUnnamed" : currentName;
+        std::strncpy(mRenameBuffer, name.c_str(), sizeof(mRenameBuffer) - 1);
+
+        mFocusRenameInput = true;
+    }
+
+    void XJHierarchyPanel::SubmitRenameEntity(XJEditorEntityId entityId)
+    {
+        if(entityId == XJ_INVALID_EDITOR_ENTITY_ID || mRenamingEntity != entityId)
+            return;
+
+        mState.SceneRequests.RequestRenameEntity = true;
+        mState.SceneRequests.RenameEntity.EntityId = entityId;
+        mState.SceneRequests.RenameEntity.Name = mRenameBuffer;
+
+        mRenamingEntity = XJ_INVALID_EDITOR_ENTITY_ID;
     }
 
 

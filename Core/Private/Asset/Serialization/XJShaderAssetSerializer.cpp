@@ -1,6 +1,6 @@
 #include "Asset/Serialization/XJShaderAssetSerializer.h"
-
 #include "Asset/Serialization/XJShaderSchemaSerializer.h"
+#include "Render/Shader/XJShaderSchemaValidator.h"
 
 #include <fstream>
 #include <nlohmann/json.hpp>
@@ -58,6 +58,7 @@ namespace XJ
             if (schema)
                 shaderAsset->Schema = *schema;
         }
+        shaderAsset->Validation = XJShaderSchemaValidator::ValidateFromSourceFiles(shaderAsset->Schema, shaderAsset->VertexPath, shaderAsset->FragmentPath);
 
         return shaderAsset;
     }

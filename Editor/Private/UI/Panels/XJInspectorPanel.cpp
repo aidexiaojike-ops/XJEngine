@@ -3,6 +3,7 @@
 #include "UI/XJEditorUIState.h"
 //#include "UI/XJEditorDragPayload.h"
 #include "UI/XJEditorAssetDragPayload.h"
+#include "Services/XJEditorAssetService.h"
 
 #include <imgui.h>
 #include <cstring>
@@ -26,6 +27,73 @@ namespace XJ
             case XJAssetType::Scene: return "Scene";
             case XJAssetType::Shader: return "Shader";
             default: return "Unknown";
+        }
+    }
+
+
+    static void DrawShaderValidationView(const XJEditorShaderValidationView& validation)//绘制shader信息窗口
+    {
+        if (!validation.Valid)
+        {
+            for (const auto& message : validation.Messages)
+            {
+                ImGui::TextColored(
+                    ImVec4(1.0f, 0.35f, 0.25f, 1.0f),
+                    "%s",
+                    message.Message.c_str());
+            }
+
+            if (validation.Messages.empty())
+                ImGui::TextColored(ImVec4(1.0f, 0.35f, 0.25f, 1.0f), "Shader validation unavailable");
+
+            return;
+        }
+
+        if (validation.Empty())
+        {
+            ImGui::TextColored(ImVec4(0.35f, 1.0f, 0.35f, 1.0f), "No validation issues");
+            return;
+        }
+
+        for (const auto& message : validation.Messages)
+        {
+            ImVec4 color(0.75f, 0.75f, 0.75f, 1.0f);
+            const char* severity = "Info";
+
+            switch (message.Severity)
+            {
+                case XJEditorAssetValidationSeverity::Warning:
+                    color = ImVec4(1.0f, 0.8f, 0.25f, 1.0f);
+                    severity = "Warning";
+                    break;
+
+                case XJEditorAssetValidationSeverity::Error:
+                    color = ImVec4(1.0f, 0.35f, 0.25f, 1.0f);
+                    severity = "Error";
+                    break;
+
+                case XJEditorAssetValidationSeverity::Info:
+                default:
+                    break;
+            }
+
+            if (message.ParameterName.empty())
+            {
+                ImGui::TextColored(
+                    color,
+                    "[%s] %s",
+                    severity,
+                    message.Message.c_str());
+            }
+            else
+            {
+                ImGui::TextColored(
+                    color,
+                    "[%s] %s: %s",
+                    severity,
+                    message.ParameterName.c_str(),
+                    message.Message.c_str());
+            }
         }
     }
     XJInspectorPanel::XJInspectorPanel(XJEditorUIState& state, XJEditorPanelConfig_Inspector* config)
@@ -225,28 +293,30 @@ namespace XJ
             return;
         }
 
-        auto metaOpt = mState.AssetRegistry->GetMeta(handle);
-        if(!metaOpt.has_value())
+        XJEditorAssetDetailsView details = XJEditorAssetService::BuildAssetDetailsView(*mState.AssetRegistry, handle);
+        
+        if (!details.Valid)
         {
             ImGui::Text("Asset not found: 0x%016llX", static_cast<uint64_t>(handle));
             return;
-        }   
+        }
 
-        const auto& meta = metaOpt.value();
-
-        if(ImGui::CollapsingHeader("Asset", ImGuiTreeNodeFlags_DefaultOpen))
+        if (ImGui::CollapsingHeader("Asset", ImGuiTreeNodeFlags_DefaultOpen))
         {
-            //ImGui::LabelText("Name", "%s", meta.Name.c_str());
-            //ImGui::LabelText("Handle", "0x%016llX", static_cast<uint64_t>(meta.Handle));
-            //ImGui::LabelText("Type", "%d", static_cast<int>(meta.Type));
-            //ImGui::LabelText("Source", "%s", meta.SourcePath.string().c_str());
-            //ImGui::LabelText("Imported", "%s", meta.ImportedPath.string().c_str());
+            ImGui::LabelText("Name", "%s", details.Name.c_str());
+            ImGui::LabelText("Handle", "0x%016llX", static_cast<uint64_t>(details.Handle));
+            ImGui::LabelText("Type", "%s", AssetTypeToString(details.Type));
+            ImGui::LabelText("Source", "%s", details.SourcePath.string().c_str());
+            ImGui::LabelText("Imported", "%s", details.ImportedPath.string().c_str());
+        }
 
-            ImGui::LabelText("Name", "%s", meta.Name.c_str());
-            ImGui::LabelText("Handle", "0x%016llX", static_cast<uint64_t>(meta.Handle));
-            ImGui::LabelText("Type", "%s", AssetTypeToString(meta.Type));
-            ImGui::LabelText("Source", "%s", meta.SourcePath.string().c_str());
-            ImGui::LabelText("Imported", "%s", meta.ImportedPath.string().c_str());
+        if (details.HasShaderValidation)
+        {
+            if (ImGui::CollapsingHeader("Shader Validation", ImGuiTreeNodeFlags_DefaultOpen))
+            {
+                ImGui::LabelText("Shader", "%s", details.ShaderPath.string().c_str());
+                DrawShaderValidationView(details.ShaderValidation);
+            }
         }
     }
 

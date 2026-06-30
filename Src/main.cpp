@@ -20,6 +20,7 @@
 #include "ECS/XJScene.h"
 
 #include "Controllers/XJEditorCameraController.h"
+#include "Controllers/XJEditorAssetController.h"
 #include "Controllers/XJEditorSceneController.h"
 #include "Controllers/XJEditorCameraManager.h"
 #include "Controllers/XJEditorExternalDropController.h"
@@ -187,6 +188,9 @@ protected:
 
         mEditorSceneController.SetScene(scene);
         mEditorSceneController.SetAssetRegistry(&mAssetRegistry);
+        mEditorAssetController.SetAssetRegistry(&mAssetRegistry);
+        mEditorAssetController.SetRegistryPath("Resource/Config/AssetRegistry.json");
+        mEditorAssetController.SetRootPath("Resource");
         mEditorSceneController.SetDefaultResources(mWhiteTexture, mDefaultSampler);
         mEditorSceneController.SetCurrentScenePath("Resource/Scenes/Default.xjscene");
         mEditorSceneController.SetDefaultMeshHandle(kMonkeyMeshHandle);
@@ -333,7 +337,8 @@ protected:
         if (mGamePreview)
             mGamePreview->DrawUI();
 
-        // 这里处理 Editor Scene Requests
+        // 这里处理 Editor Requests
+        mEditorAssetController.ProcessRequests(mEditorUIState);
         mEditorSceneController.ProcessRequests(mEditorUIState);
         mEditorSceneController.RefreshViewModels(mEditorUIState);
        
@@ -507,6 +512,7 @@ private:
 
     XJ::XJScene*                                        mRuntimeScene = nullptr;
     XJ::XJEditorUIState                                 mEditorUIState;
+    XJ::XJEditorAssetController                         mEditorAssetController;
     XJ::XJEditorSceneController                         mEditorSceneController;
 
    

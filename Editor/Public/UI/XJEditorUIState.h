@@ -2,6 +2,7 @@
 #define XJ_EDITOR_UI_STATE_H
 
 #include "Edit/Mathinclude.h"
+#include "UI/XJEditorAssetRequests.h"
 #include "UI/XJEditorSceneViewModel.h"
 #include "UI/XJEditorSelection.h"
 #include "UI/XJEditorComponentTypes.h"
@@ -34,6 +35,7 @@ namespace XJ
 
         XJEditorSelectionState Selection;// 当前选择状态
         XJEditorSceneRequestState SceneRequests;// 待处理的场景操作请求
+        XJEditorAssetRequestState AssetRequests;// 待处理的资产操作请求
 
         bool RequestSelectAssetInContentBrowser = false;
         XJAssetHandle RequestedContentBrowserAsset = 0;

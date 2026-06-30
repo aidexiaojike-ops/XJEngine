@@ -5,6 +5,7 @@
 #include "UI/XJEditorSceneViewModel.h"
 #include "UI/XJEditorSelection.h"
 #include "UI/XJEditorUIConfig.h"
+#include <string>
 
 namespace XJ
 {
@@ -12,17 +13,23 @@ namespace XJ
 
     class XJHierarchyPanel
     {
-    public:
-        XJHierarchyPanel(XJEditorUIState& state, XJEditorPanelConfig_Hierarchy* config);
-        ~XJHierarchyPanel();
+        public:
+            XJHierarchyPanel(XJEditorUIState& state, XJEditorPanelConfig_Hierarchy* config);
+            ~XJHierarchyPanel();
 
-        void DrawUI();
+            void DrawUI();
 
-    private:
-        void DrawEntityNode(const XJEditorEntityView& entity);
+        private:
+            void DrawEntityNode(const XJEditorEntityView& entity);
+            void BeginRenameEntity(XJEditorEntityId entityId, const std::string& currentName);//开始行内改名
+            void SubmitRenameEntity(XJEditorEntityId entityId);//提交行内改名请求
 
-        XJEditorUIState& mState;
-        XJEditorPanelConfig_Hierarchy* mConfig = nullptr;
+            XJEditorUIState& mState;
+            XJEditorPanelConfig_Hierarchy* mConfig = nullptr;
+
+            XJEditorEntityId mRenamingEntity = XJ_INVALID_EDITOR_ENTITY_ID;
+            char mRenameBuffer[256] = {};
+            bool mFocusRenameInput = false;
     };
 }
 

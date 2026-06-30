@@ -1,12 +1,14 @@
 {
-  "version": 1,
+  "version": 2,
   "parameters": [
     {
       "name": "BaseColor",
       "displayName": "Base Color",
       "type": "color4",
       "default": [0.8, 0.6, 0.2, 1.0],
-      "category": "Surface"
+      "category": "Surface",
+      "ubo": "MaterialUbo",
+      "member": "baseColorA"
     },
     {
       "name": "Metallic",
@@ -15,7 +17,9 @@
       "default": 0.0,
       "min": 0.0,
       "max": 1.0,
-      "category": "Surface"
+      "category": "Surface",
+      "ubo": "MaterialUbo",
+      "member": "metallic"
     },
     {
       "name": "Roughness",
@@ -24,14 +28,17 @@
       "default": 1.0,
       "min": 0.0,
       "max": 1.0,
-      "category": "Surface"
+      "category": "Surface",
+      "ubo": "MaterialUbo",
+      "member": "roughness"
     },
     {
       "name": "AlbedoTexture",
       "displayName": "Albedo Texture",
       "type": "texture2D",
       "default": 0,
-      "category": "Textures"
+      "category": "Textures",
+      "sampler": "textureA"
     }
   ]
 }
