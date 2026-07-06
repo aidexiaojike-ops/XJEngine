@@ -111,6 +111,15 @@ add_subdirectory(${ENTT_DIR})
 #7.josn
 set(JSON_DIR ${CMAKE_CURRENT_SOURCE_DIR}/External/json)
 add_subdirectory(${JSON_DIR})
+#8.SPIRV_REFLECT
+set(SPIRV_REFLECT_DIR ${CMAKE_CURRENT_SOURCE_DIR}/External/SPIRV-Reflect)
+
+set(SPIRV_REFLECT_EXECUTABLE OFF CACHE BOOL "" FORCE)
+set(SPIRV_REFLECT_STATIC_LIB ON CACHE BOOL "" FORCE)
+set(SPIRV_REFLECT_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+set(SPIRV_REFLECT_INSTALL OFF CACHE BOOL "" FORCE)
+
+add_subdirectory(${SPIRV_REFLECT_DIR})
 
 # ----------- 链接第三方库 -----------
 # 所有依赖的目标都已经被定义，可以安全链接
@@ -126,6 +135,7 @@ target_link_libraries(Platform
         stb
         EnTT::EnTT
         nlohmann_json
+        spirv-reflect-static
 )
 
 set(SHADER_ROOT ${CMAKE_SOURCE_DIR}/Resource/Shader)

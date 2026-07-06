@@ -138,7 +138,65 @@ namespace XJ
         {
             return type == XJShaderParameterType::Texture2D;
         }
+
+
+        uint32_t ExpectedMinimumParameterSize(XJShaderParameterType type)//
+        {
+            switch (type)
+            {
+                case XJShaderParameterType::Float:
+                case XJShaderParameterType::Int:
+                case XJShaderParameterType::Bool:
+                    return 4;
+            
+                case XJShaderParameterType::Vec2:
+                    return 8;
+            
+                case XJShaderParameterType::Vec3:
+                case XJShaderParameterType::Color3:
+                case XJShaderParameterType::Vec4:
+                case XJShaderParameterType::Color4:
+                    return 16;
+            
+                default:
+                    return 0;
+            }
+        }
+
+        const XJShaderReflectedUbo* FindUbo(const XJShaderReflectionResult& reflection, const std::string& name)//找ubo
+        {
+            for (const auto& ubo : reflection.Ubos)
+            {
+                if (ubo.Name == name)
+                    return &ubo;
+            }
+        
+            return nullptr;
+        }
+
+        const XJShaderReflectedMember* FindMember(const XJShaderReflectedUbo& ubo, const std::string& name)
+        {
+            for (const auto& member : ubo.Members)
+            {
+                if (member.Name == name)
+                    return &member;
+            }
+        
+            return nullptr;
+        }
+
+        const XJShaderReflectedSampler* FindSampler(const XJShaderReflectionResult& reflection, const std::string& name)
+        {
+            for (const auto& sampler : reflection.Samplers)
+            {
+                if (sampler.Name == name)
+                    return &sampler;
+            }
+        
+            return nullptr;
+        }
     }
+
 
     XJShaderValidationResult XJShaderSchemaValidator::ValidateFromSourceFiles(const XJShaderSchema& schema, const std::filesystem::path& vertexPath, const std::filesystem::path& fragmentPath)
     {
@@ -204,5 +262,73 @@ namespace XJ
         }
 
         return result;
+    }
+
+    XJShaderValidationResult XJShaderSchemaValidator::ValidateFromReflection(const XJShaderSchema& schema, const XJShaderReflectionResult& reflection)
+    {
+        XJShaderValidationResult result;
+
+        if(!reflection.Valid)
+        {
+            //如果反射结果无效，则添加错误消息并返回结果
+            AddMessage(result, XJShaderValidationSeverity::Error, {}, "Shader reflection is invalid.");
+            for (const auto& error : reflection.Errors)
+            {
+                AddMessage(result, XJShaderValidationSeverity::Error, {}, error);
+            }
+            return result;
+        }
+
+        for(const auto& parameter : schema.Parameters)
+        {
+            //纹理参数
+            if (IsTextureParameter(parameter.Type))
+            {
+                if (parameter.SamplerName.empty())
+                {
+                    AddMessage(result, XJShaderValidationSeverity::Warning, parameter.Name, "Texture parameter has no sampler binding.");
+                    continue;
+                }
+
+                const XJShaderReflectedSampler* sampler = FindSampler(reflection, parameter.SamplerName);
+                if (!sampler)
+                {
+                    AddMessage(result, XJShaderValidationSeverity::Error, parameter.Name, "Sampler not found in SPIR-V reflection: " + parameter.SamplerName);
+                }
+
+                continue;
+            }
+            // 非纹理参数
+            if (parameter.UboName.empty() || parameter.MemberName.empty())
+            {
+                AddMessage(result, XJShaderValidationSeverity::Warning, parameter.Name, "Non-texture parameter has no ubo/member binding.");
+                continue;
+            }
+            // 查找 UBO
+            const XJShaderReflectedUbo* ubo = FindUbo(reflection, parameter.UboName);
+            if (!ubo)
+            {
+                AddMessage(result, XJShaderValidationSeverity::Error, parameter.Name, "UBO not found in SPIR-V reflection: " + parameter.UboName);
+                continue;
+            }
+            // 查找 UBO 中的成员
+            const XJShaderReflectedMember* member = FindMember(*ubo, parameter.MemberName);
+            if (!member)
+            {
+                AddMessage(result, XJShaderValidationSeverity::Error, parameter.Name, "UBO member not found in SPIR-V reflection: " + parameter.UboName + "." + parameter.MemberName);
+                continue;
+            }
+            // 检查成员的大小是否符合预期的参数类型
+            const uint32_t expectedSize = ExpectedMinimumParameterSize(parameter.Type);
+            if (expectedSize > 0 && member->Size < expectedSize)
+            {
+                AddMessage(result, XJShaderValidationSeverity::Error, parameter.Name, "UBO member size is smaller than expected for parameter type: " + parameter.UboName + "." + parameter.MemberName);
+            }
+
+
+        }
+
+        return result;
+        
     }
 }

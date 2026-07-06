@@ -1,6 +1,7 @@
 #include "Asset/Serialization/XJShaderAssetSerializer.h"
 #include "Asset/Serialization/XJShaderSchemaSerializer.h"
 #include "Render/Shader/XJShaderSchemaValidator.h"
+#include "Render/Shader/XJShaderReflector.h"
 
 #include <fstream>
 #include <nlohmann/json.hpp>
@@ -58,7 +59,30 @@ namespace XJ
             if (schema)
                 shaderAsset->Schema = *schema;
         }
-        shaderAsset->Validation = XJShaderSchemaValidator::ValidateFromSourceFiles(shaderAsset->Schema, shaderAsset->VertexPath, shaderAsset->FragmentPath);
+        shaderAsset->Reflection = XJShaderReflector::ReflectShaderProgram(shaderAsset->VertexPath, shaderAsset->FragmentPath);     
+
+        if (shaderAsset->Reflection.Valid)
+        {
+            shaderAsset->Validation = XJShaderSchemaValidator::ValidateFromReflection(shaderAsset->Schema, shaderAsset->Reflection);
+        }
+        else
+        {
+            //to do: 反射失败时，使用源文件验证
+            shaderAsset->Validation = XJShaderSchemaValidator::ValidateFromSourceFiles(shaderAsset->Schema, shaderAsset->VertexPath, shaderAsset->FragmentPath);     
+
+            XJShaderValidationMessage fallbackMessage;
+            fallbackMessage.Severity = XJShaderValidationSeverity::Warning;
+            fallbackMessage.Message = "SPIR-V reflection unavailable; using shader source validation fallback.";
+            shaderAsset->Validation.Messages.push_back(fallbackMessage);        
+
+            for (const auto& error : shaderAsset->Reflection.Errors)
+            {
+                XJShaderValidationMessage message;
+                message.Severity = XJShaderValidationSeverity::Warning;
+                message.Message = error;
+                shaderAsset->Validation.Messages.push_back(message);
+            }
+        }
 
         return shaderAsset;
     }

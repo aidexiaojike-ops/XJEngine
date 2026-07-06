@@ -32,8 +32,8 @@ layout(set = 0, binding = 0, std140) uniform FrameUbo
 
 layout(set = 1, binding = 0, std140) uniform MaterialUbo
 {
-    vec3 baseColorA;
-    vec3 baseColorB;
+    vec4 baseColorA;
+    vec4 baseColorB;
     float mixValue;
     TextureParam textureParamA;
     TextureParam textureParamB;
@@ -47,22 +47,22 @@ layout(location = 0) out vec4 fragColor;
 
 void main()
 {
-    vec3 colorA = materialUbo.baseColorA;
-    vec3 colorB = materialUbo.baseColorB;
+    vec4 colorA = materialUbo.baseColorA;
+    vec4 colorB = materialUbo.baseColorB;
 
     if(materialUbo.textureParamA.enable)
     {
         TextureParam param = materialUbo.textureParamA;
         param.uvTransform.w = -frameUbo.time;
-        colorA = texture(textureA, getTextureUV(param, v_Texcoord)).rgb;   
+        colorA = texture(textureA, getTextureUV(param, v_Texcoord));
     }
 
     if(materialUbo.textureParamB.enable)
     {
-        colorB = texture(textureB, getTextureUV(materialUbo.textureParamB, v_Texcoord)).rgb;  
+        colorB = texture(textureB, getTextureUV(materialUbo.textureParamB, v_Texcoord));
     }
 
-    vec3 finalColor = mix(colorA, colorB, materialUbo.mixValue);
-    fragColor = vec4(finalColor, 1.0);
+    vec4 finalColor = mix(colorA, colorB, materialUbo.mixValue);
+    fragColor = finalColor;
 
 }

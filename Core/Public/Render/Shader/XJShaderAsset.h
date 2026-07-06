@@ -4,6 +4,8 @@
 #include "Asset/XJAsset.h"
 #include "Render/Shader/XJShaderSchema.h"
 #include "Render/Shader/XJShaderValidation.h"
+#include "Render/Shader/XJShaderReflection.h"
+
 
 #include <filesystem>
 #include <string>
@@ -22,6 +24,7 @@ namespace XJ
         
             XJShaderSchema Schema;
             XJShaderValidationResult Validation;
+            XJShaderReflectionResult Reflection;
     };
 
 

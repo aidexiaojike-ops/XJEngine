@@ -82,14 +82,14 @@ namespace XJ
         (void)metallic;
         (void)roughness;
 
-        glm::vec3 kColor(baseColor);
-        kMat->XJSetBaseColorA(kColor);
-        kMat->XJSetBaseColorB(kColor);
+       //glm::vec3 kColor(baseColor);
+        kMat->XJSetBaseColorA(baseColor);
+        kMat->XJSetBaseColorB(baseColor);
 
          // Albedo 贴图 → TextureViewA
-        if (asset.AlbedoTexture != 0)
+        if (albedoTexture != 0)
         {
-            auto kTex = GetOrLoadTexture(asset.AlbedoTexture, defaultTex);
+            auto kTex = GetOrLoadTexture(albedoTexture, defaultTex);
             kMat->XJSetTextureView(UNLIT_MAT_BASE_COLOR_A, kTex, defaultSampler);
             kMat->UpdateTextureViewEnable(UNLIT_MAT_BASE_COLOR_A, true);
         }
@@ -112,8 +112,8 @@ namespace XJ
     {
         auto mat = CreateMaterial<XJUnlitMaterial>();
 
-        mat->XJSetBaseColorA(glm::vec3(0.8f, 0.6f, 0.2f));
-        mat->XJSetBaseColorB(glm::vec3(0.8f, 0.6f, 0.2f));
+        mat->XJSetBaseColorA(glm::vec4(0.8f, 0.6f, 0.2f, 1.0f));
+        mat->XJSetBaseColorB(glm::vec4(0.8f, 0.6f, 0.2f, 1.0f));
 
         if(defaultTexture && defaultSampler)
         {

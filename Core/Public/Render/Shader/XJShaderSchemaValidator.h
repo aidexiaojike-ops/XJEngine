@@ -5,6 +5,7 @@
 
 #include "Render/Shader/XJShaderSchema.h"
 #include "Render/Shader/XJShaderValidation.h"
+#include "Render/Shader/XJShaderReflection.h"
 
 #include <filesystem>
 
@@ -14,6 +15,8 @@ namespace XJ
     {
         public:
             static XJShaderValidationResult ValidateFromSourceFiles(const XJShaderSchema& schema, const std::filesystem::path& vertexPath, const std::filesystem::path& fragmentPath);//从源文件验证
+
+            static XJShaderValidationResult ValidateFromReflection(const XJShaderSchema& schema, const XJShaderReflectionResult& reflection);
     };
 }
 

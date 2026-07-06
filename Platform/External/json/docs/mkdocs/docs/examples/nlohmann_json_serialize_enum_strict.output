@@ -1,2 +1,0 @@
-ns::TS_STOPPED -> "stopped", ns::Color::red -> "red"
-"running" -> 1, "blue" -> 2

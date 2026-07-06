@@ -22,8 +22,8 @@ namespace XJ
     };
     struct UnlitMaterialUbo
     {
-        alignas(16) glm::vec3 baseColorA;
-        alignas(16) glm::vec3 baseColorB;
+        alignas(16) glm::vec4 baseColorA;
+        alignas(16) glm::vec4 baseColorB;
         alignas(4) float mixValue;
         alignas(16) TextureParam textureParamA;
         alignas(16) TextureParam textureParamB;
@@ -34,14 +34,14 @@ namespace XJ
     {
         public:
         const  UnlitMaterialUbo &XJGetParams() const { return mParams; }
-        const  glm::vec3 XJGetBaseColorA() const {return mParams.baseColorA;};
-        const  glm::vec3 XJGetBaseColorB() const {return mParams.baseColorB;};
+        const  glm::vec4 XJGetBaseColorA() const {return mParams.baseColorA;};
+        const  glm::vec4 XJGetBaseColorB() const {return mParams.baseColorB;};
         float XJGetMixValue() const{return mParams.mixValue;};
         const  TextureParam &XJGetTextureParamA() const {return mParams.textureParamA;};
         const  TextureParam &XJGetTextureParamB() const {return mParams.textureParamB;};
 
-        void XJSetBaseColorA(const glm::vec3 &color){    mParams.baseColorA = color; bShouldFlushParams = true;}
-        void XJSetBaseColorB(const glm::vec3 &color){    mParams.baseColorB = color; bShouldFlushParams = true;}
+        void XJSetBaseColorA(const glm::vec4 &color){    mParams.baseColorA = color; bShouldFlushParams = true;}
+        void XJSetBaseColorB(const glm::vec4 &color){    mParams.baseColorB = color; bShouldFlushParams = true;}
         void XJSetMixValue(float mixValue){    mParams.mixValue = mixValue; bShouldFlushParams = true;}
         void XJSetTextureParamA(const TextureParam &texParam){    mParams.textureParamA = texParam; bShouldFlushParams = true;}
         void XJSetTextureParamB(const TextureParam &texParam){    mParams.textureParamB = texParam; bShouldFlushParams = true;}
