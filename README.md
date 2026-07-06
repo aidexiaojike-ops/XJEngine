@@ -22,7 +22,7 @@ XJEngine is a lightweight modern game engine built with Vulkan and ECS architect
 | **ECS Architecture** | High-performance Entity Component System using EnTT library |
 | **Event Driven System** | Complete input handling for window, mouse, keyboard events |
 | **Modular Material System** | Extensible material pipeline with textures, samplers and uniform buffers |
-| **Shader Schema System** | JSON-defined shader parameters (color, float, texture2D), schema validation, material asset serialization |
+| **Shader Schema System** | JSON-defined shader parameters, schema validation, SPIR-V shader reflection, material asset serialization |
 | **Unlit Material System** | Complete unlit pipeline with Frame UBO, material parameter UBO, texture blending, and dynamic descriptor pool expansion |
 | **Runtime Material Generation** | Programmatic material creation with random colors, textures, and UV transforms at runtime |
 | **Procedural Textures** | Generate textures from pixel data (single color or multi-pixel arrays) without external files |
@@ -206,6 +206,7 @@ Swapchain
 - **tinygltf**: glTF 2.0 model file loader (header-only)
 - **Dear ImGui**: Editor UI framework with Vulkan backend
 - **nlohmann/json**: JSON serialization for assets and scenes
+- **SPIRV-Reflect**: SPIR-V shader introspection and reflection
 
 ## 🚀 Building
 
