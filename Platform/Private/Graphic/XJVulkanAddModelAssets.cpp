@@ -1,6 +1,6 @@
 #include <Graphic/XJVulkanAddModelAssets.h>
 #include <Graphic/XJVulkanDevice.h>
-#include <tiny_obj_loader.h>
+// #include <tiny_obj_loader.h>
 #include <Edit/Mathinclude.h>
 
 namespace XJ

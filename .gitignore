@@ -4,3 +4,4 @@ bin/
 .vscode/
 logs/
 Platform/External/VulkanSDK/
+ThirdParty/VulkanSDK/

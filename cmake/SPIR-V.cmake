@@ -2,7 +2,7 @@
 # glslc（使用项目自带 VulkanSDK）
 # ===============================
 set(GLSLC_COMMAND
-    ${CMAKE_SOURCE_DIR}/Platform/External/VulkanSDK/Bin/glslc.exe
+    ${CMAKE_SOURCE_DIR}/ThirdParty/VulkanSDK/Bin/glslc.exe
 )
 
 if(NOT EXISTS ${GLSLC_COMMAND})

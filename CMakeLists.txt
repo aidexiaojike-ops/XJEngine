@@ -39,7 +39,7 @@ add_custom_target(PrepareRuntimeDirs
 # CMake 模块路径
 # ------------------------------------------------------------
 list(APPEND CMAKE_MODULE_PATH
-    ${CMAKE_SOURCE_DIR}/Editor/cmake
+    ${CMAKE_SOURCE_DIR}/cmake
 )
 
 # ------------------------------------------------------------
@@ -51,7 +51,7 @@ include(FindVulkanDLLs)  # Vulkan Runtime DLL 查找 / 拷贝
 # ------------------------------------------------------------
 # 外部 / 平台模块
 # ------------------------------------------------------------
-add_subdirectory(Platform/External/VulkanSDK)
+include(${CMAKE_SOURCE_DIR}/cmake/ThirdParty.cmake)
 add_subdirectory(Platform)
 
 # ------------------------------------------------------------

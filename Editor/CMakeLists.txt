@@ -26,8 +26,10 @@ target_include_directories(Editor
 target_link_libraries(Editor
     PUBLIC
        Platform          # 提供 imgui、VulkanCommon、GLFW
+       imgui
     PRIVATE
        Core         # 提供 XJScene、XJEntity、XJComponent 等核心数据结构    
+       nlohmann_json
 )
 
 #target_compile_features(Editor PUBLIC cxx_std_17)

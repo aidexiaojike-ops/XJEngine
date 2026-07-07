@@ -14,13 +14,13 @@ function(copy_vulkan_runtime_dlls)
     # Vulkan Runtime DLL (from bundled VulkanSDK)
     # ---------------------------------------------
     set(VULKAN_DLL
-        ${CMAKE_SOURCE_DIR}/Platform/External/VulkanSDK/Dll/vulkan-1.dll
+        ${CMAKE_SOURCE_DIR}/ThirdParty/VulkanSDK/Dll/vulkan-1.dll
     )
 
     if(NOT EXISTS ${VULKAN_DLL})
         message(FATAL_ERROR
             "Vulkan runtime DLL not found:\n  ${VULKAN_DLL}\n"
-            "Please check Platform/External/VulkanSDK/Dll/"
+            "Please check ThirdParty/VulkanSDK/Dll/"
         )
     endif()
 

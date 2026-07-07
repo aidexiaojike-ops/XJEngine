@@ -23,27 +23,33 @@ if(CORE_SOURCES)
         ${CORE_PRIVATE_HEADERS}
     )
     
-    # 设置Core的include路径
-    target_include_directories(Core
-        PUBLIC
-            ${CMAKE_CURRENT_SOURCE_DIR}/Public
-        PRIVATE
-            ${CMAKE_CURRENT_SOURCE_DIR}/Private
-    )
+# 设置Core的include路径
+target_include_directories(Core
+    PUBLIC
+        ${CMAKE_CURRENT_SOURCE_DIR}/Public
+    PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/Private
+)
     
     # 链接Platform（Core依赖Platform）
-    target_link_libraries(Core
-        PUBLIC
-            Platform
-            tinygltf
-    )
+target_link_libraries(Core
+PUBLIC
+    Platform
+    EnTT::EnTT
+    glm::glm-header-only
+    tinygltf
+PRIVATE
+    tinyobjloader
+    nlohmann_json
+    spirv-reflect-static
+)
     
-    # 设置C++标准
-    target_compile_features(Core PUBLIC cxx_std_17)
+# 设置C++标准
+target_compile_features(Core PUBLIC cxx_std_17)
 
-    if (CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
-        target_compile_options(Core PRIVATE -Wa,-mbig-obj)
-    endif()
+if (CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+    target_compile_options(Core PRIVATE -Wa,-mbig-obj)
+endif()
     
 else()
     # 如果没有源文件，创建接口库（仅头文件）
