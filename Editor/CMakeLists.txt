@@ -12,8 +12,7 @@ file(GLOB_RECURSE EDITOR_HEADERS CONFIGURE_DEPENDS
 
 )
 
-#add_library(Editor STATIC ${EDITOR_SOURCES} ${EDITOR_HEADERS})
-add_library(Editor STATIC ${EDITOR_SOURCES})
+add_library(Editor STATIC ${EDITOR_SOURCES} ${EDITOR_HEADERS})
 #链接文件
 target_include_directories(Editor
     PUBLIC
@@ -35,7 +34,7 @@ target_link_libraries(Editor
 #target_compile_features(Editor PUBLIC cxx_std_17)
 target_compile_features(Editor PRIVATE cxx_std_17)
 
-if (MINGW)
+if (CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
     target_compile_options(Editor PRIVATE -Wa,-mbig-obj)
 endif()
 
@@ -43,4 +42,4 @@ set_target_properties(Editor PROPERTIES
     ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib
 )
 
-source_group(TREE ${CMAKE_CURRENT_SOURCE_DIR} FILES ${EDITOR_SOURCES})
+source_group(TREE ${CMAKE_CURRENT_SOURCE_DIR} FILES ${EDITOR_SOURCES} ${EDITOR_HEADERS})

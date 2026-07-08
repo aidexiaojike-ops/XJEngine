@@ -15,8 +15,8 @@
 #include "Asset/Importer/XJTextureImporter.h"
 #include "Asset/XJAssetRegistry.h"
 
-#include "ECS/System/XJBaseMaterialSystem.h"
-#include "ECS/System/XJUnlitMaterialSystem.h"
+#include "Render/System/XJBaseMaterialSystem.h"
+#include "Render/System/XJUnlitMaterialSystem.h"
 #include "ECS/XJScene.h"
 
 #include "Controllers/XJEditorCameraController.h"

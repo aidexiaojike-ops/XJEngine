@@ -1,7 +1,7 @@
 #ifndef XJ_UNLIT_MATERIAL_SYSTEM_H
 #define XJ_UNLIT_MATERIAL_SYSTEM_H
 
-#include "ECS/System/XJMaterialSystem.h"
+#include "Render/System/XJMaterialSystem.h"
 #include "ECS/Component/Material/XJUnlitMaterialComponent.h"
 
 namespace XJ

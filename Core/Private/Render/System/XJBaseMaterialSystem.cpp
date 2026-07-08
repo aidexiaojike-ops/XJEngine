@@ -1,4 +1,4 @@
-#include "ECS/System/XJBaseMaterialSystem.h"//获取基础材质系统信息
+#include "Render/System/XJBaseMaterialSystem.h"//获取基础材质系统信息
 #include "Graphic/XJVulkanPipeline.h"//获取管线信息
 #include "Edit/FileUtil.h"//获取文件工具类
 #include "Graphic/XJVulkanGeometryUtil.h"//获取几何体工具类

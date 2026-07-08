@@ -1,4 +1,4 @@
-#include "ECS/System/XJMaterialSystem.h"
+#include "Render/System/XJMaterialSystem.h"
 #include "XJApplication.h"
 #include "Render/XJRenderTarget.h"
 #include "Render/XJRenderContext.h"

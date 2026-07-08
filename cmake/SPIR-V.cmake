@@ -1,9 +1,11 @@
 # ===============================
-# glslc（使用项目自带 VulkanSDK）
+# glslc resolved by SetupVulkanSDK.cmake
 # ===============================
-set(GLSLC_COMMAND
-    ${CMAKE_SOURCE_DIR}/ThirdParty/VulkanSDK/Bin/glslc.exe
-)
+if(NOT DEFINED XJ_VULKAN_GLSLC)
+    message(FATAL_ERROR "XJ_VULKAN_GLSLC is not defined. Include SetupVulkanSDK before SPIR-V.cmake")
+endif()
+
+set(GLSLC_COMMAND ${XJ_VULKAN_GLSLC})
 
 if(NOT EXISTS ${GLSLC_COMMAND})
     message(FATAL_ERROR "glslc.exe not found: ${GLSLC_COMMAND}")

@@ -1,16 +1,18 @@
 #ifndef XJ_RENDER_TARGET_H
 #define XJ_RENDER_TARGET_H
 
-
-#include "Graphic/XJVulkanFrameBuffer.h"
 #include "XJRenderContext.h"
 #include "ECS/XJSystem.h"
-#include "ECS/XJEntity.h"
-#include "ECS/System/XJMaterialSystem.h"
+#include "Render/System/XJMaterialSystem.h"
 
 namespace XJ
 {
     //class XJVulkanRenderPass;
+
+    class XJEntity;
+    class XJVulkanFrameBuffer;
+    class XJVulkanImage;
+    class XJVulkanDepthImage;
 
     class XJRenderTarget
     {

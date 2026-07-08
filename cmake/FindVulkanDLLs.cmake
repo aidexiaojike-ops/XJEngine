@@ -11,16 +11,18 @@ function(copy_vulkan_runtime_dlls)
     endif()
 
     # ---------------------------------------------
-    # Vulkan Runtime DLL (from bundled VulkanSDK)
+    # Vulkan Runtime DLL resolved by SetupVulkanSDK.cmake
     # ---------------------------------------------
-    set(VULKAN_DLL
-        ${CMAKE_SOURCE_DIR}/ThirdParty/VulkanSDK/Dll/vulkan-1.dll
-    )
+    if(NOT DEFINED XJ_VULKAN_DLL)
+        message(FATAL_ERROR "XJ_VULKAN_DLL is not defined. Include SetupVulkanSDK before FindVulkanDLLs.cmake")
+    endif()
+
+    set(VULKAN_DLL ${XJ_VULKAN_DLL})
 
     if(NOT EXISTS ${VULKAN_DLL})
         message(FATAL_ERROR
             "Vulkan runtime DLL not found:\n  ${VULKAN_DLL}\n"
-            "Please check ThirdParty/VulkanSDK/Dll/"
+            "Please check the resolved Vulkan SDK path."
         )
     endif()
 

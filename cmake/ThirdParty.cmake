@@ -1,6 +1,10 @@
 set(THIRD_PARTY_DIR ${CMAKE_SOURCE_DIR}/ThirdParty)
 
-add_subdirectory(${THIRD_PARTY_DIR}/VulkanSDK)
+# Vulkan SDK is resolved by cmake/SetupVulkanSDK.cmake. Do not add the local
+# SDK directory directly here because it is optional and ignored by Git.
+if(NOT TARGET Vulkan::Vulkan)
+    message(FATAL_ERROR "Vulkan::Vulkan target is missing. Include SetupVulkanSDK before ThirdParty.cmake")
+endif()
 
 add_subdirectory(${THIRD_PARTY_DIR}/glfw)
 

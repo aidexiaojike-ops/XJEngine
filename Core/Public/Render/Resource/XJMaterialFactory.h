@@ -2,9 +2,9 @@
 #define XJ_MATERIAL_FACTORY_H
 
 #include "Render/Resource/XJMaterial.h"
-#include "Asset\XJMaterialAsset.h"
+#include "Asset/XJMaterialAsset.h"
 #include <unordered_map>
-#include "ECS\Component\Material\XJUnlitMaterialComponent.h"
+#include "ECS/Component/Material/XJUnlitMaterialComponent.h"
 
 namespace XJ
 {

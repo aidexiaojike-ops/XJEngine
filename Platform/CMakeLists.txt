@@ -67,15 +67,3 @@ target_link_libraries(Platform
         spdlog
         stb
 )
-
-set(SHADER_ROOT ${CMAKE_SOURCE_DIR}/Resource/Shader)
-#shader Files
-set(SHADERS
-    ${SHADER_ROOT}/BaseVertex.vert
-    ${SHADER_ROOT}/BaseVertex.frag
-    ${SHADER_ROOT}/Descriptor.vert
-    ${SHADER_ROOT}/Descriptor.frag
-    ${SHADER_ROOT}/Unlit.vert
-    ${SHADER_ROOT}/Unlit.frag
-)
-

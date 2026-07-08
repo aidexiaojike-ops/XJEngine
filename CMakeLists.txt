@@ -45,6 +45,7 @@ list(APPEND CMAKE_MODULE_PATH
 # ------------------------------------------------------------
 # 引入 CMake 功能模块
 # ------------------------------------------------------------
+include(SetupVulkanSDK)  # Resolve Vulkan SDK from env/local cache/download
 include(SPIR-V)          # Shader → SPIR-V 编译
 include(FindVulkanDLLs)  # Vulkan Runtime DLL 查找 / 拷贝
 

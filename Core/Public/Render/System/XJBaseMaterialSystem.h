@@ -1,22 +1,24 @@
 #ifndef XJ_BASEMATERIALSYSTEM_H
 #define XJ_BASEMATERIALSYSTEM_H
 
-#include "ECS/System/XJMaterialSystem.h"
+#include "Render/System/XJMaterialSystem.h"
 #include "ECS/Component/Material/XJBaseMaterialComponent.h"
 // #include "ECS/Component/Material/XJMeshComponent.h"
 #include "ECS/Component/XJTransformComponent.h"
 
-#include "Graphic/XJVulkanDescriptorSet.h"  // 解决 XJVulkanDescriptorPool 定义
-#include "Render//Resource/XJTexture.h"          // 解决 XJTexture 定义
-#include "Render/XJSampler.h"
+//#include "Graphic/XJVulkanDescriptorSet.h"  // 解决 XJVulkanDescriptorPool 定义
+//#include "Render/Resource/XJTexture.h"          // 解决 XJTexture 定义
+//#include "Render/XJSampler.h"
 
 namespace XJ
 {
     class XJVulkanPipelineLayout;
     class XJVulkanPipeline;
     class XJVulkanDescriptorSetLayout;
-    class VulkanImageView;
-
+    class XJVulkanDescriptorPool;
+    class XJVulkanBuffer;
+    class XJTexture;
+    class XJSampler;
 
     struct GlobalUbo
     {
