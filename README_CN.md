@@ -146,11 +146,13 @@ XJEngine/
 │   │   ├── Material/        # 材质参数（ParameterBlock/Layout）
 │   │   └── Shader/          # 着色器资产（Schema/Parameter/Asset）
 │   └── Public/Render/Resource/ # GPU 资源
-├── Platform/                # Vulkan、GLFW、External
+├── Platform/                # Vulkan、GLFW 封装
+├── ThirdParty/              # 第三方库（glfw、imgui、glm、spdlog、entt、json、tinygltf 等）
 ├── Editor/                  # ImGui 编辑器（MVVM 架构）
 │   ├── Public/Controllers/  # Camera/Scene 控制器
 │   └── Public/Services/     # 编辑器服务层
 ├── Src/                     # 应用入口
+├── cmake/                    # CMake 模块
 ├── Resource/                # Shader、Mesh、Material、Scenes、Config
 └── bin/                     # 运行时输出
 ```

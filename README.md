@@ -331,16 +331,29 @@ XJEngine/
 │   │   ├── Controllers/      # 编辑器控制器（Camera、Scene）
 │   │   └── Services/         # 编辑器服务层
 │
-├── Platform/               # 平台相关代码
-│   ├── External/           # 第三方库
+├── Platform/               # 平台相关代码（Vulkan/GLFW 封装）
 │   ├── Public/             # 平台公共接口
 │   │   ├── Graphic/        # 图形 API 封装
 │   │   ├── Edit/           # 编辑器和工具
 │   │   └── Event/          # 事件系统
 │   └── Private/            # 平台具体实现
 │
+├── ThirdParty/              # 第三方库
+│   ├── glfw/               # 窗口管理
+│   ├── imgui/              # 编辑器 UI
+│   ├── glm/                # 数学库
+│   ├── spdlog/             # 日志
+│   ├── stb/                # 图像加载
+│   ├── entt/               # ECS
+│   ├── json/               # JSON 序列化
+│   ├── tinygltf/           # glTF 加载
+│   ├── tinyobjloader/      # OBJ 加载
+│   └── SPIRV-Reflect/      # Shader 反射
+│
 ├── Src/                    # 应用程序源代码
 │   └── main.cpp            # 主程序入口
+│
+├── cmake/                    # CMake 模块（VulkanSDK、SPIR-V、ThirdParty 配置）
 │
 ├── Resource/               # 资源文件
 │   ├── Shader/             # GLSL 着色器 + Shader Schema + Shader 资产 (.schema, .xjshader)
