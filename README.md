@@ -70,8 +70,8 @@ cd ../bin
 ```
 
 **Prerequisites:**
-- [Vulkan SDK](https://vulkan.lunarg.com/) installed
 - CMake 3.10+ and C++17 compatible compiler
+- Vulkan SDK is resolved automatically by CMake: `VULKAN_SDK` environment variable -> `ThirdParty/VulkanSDK` cache -> auto-download LunarG Vulkan SDK 1.3.283.0
 
 ## 🏗️ Engine Architecture
 
@@ -190,7 +190,7 @@ Swapchain
 ### Development Environment
 - **CMake** 3.10 or higher
 - **C++17** compatible compiler (MSVC, GCC, Clang)
-- **Vulkan SDK** 1.2 or higher
+- **Vulkan SDK**: optional manual install. CMake auto-resolves `VULKAN_SDK`, `ThirdParty/VulkanSDK`, or downloads LunarG Vulkan SDK 1.3.283.0.
 
 ### Supported Platforms
 - **Windows** (10/11) with Visual Studio 2019/2022
@@ -221,7 +221,8 @@ cd XJEngine
 # Create build directory
 mkdir build && cd build
 
-# Configure CMake (ensure VULKAN_SDK environment variable is set)
+# Configure CMake
+# Vulkan SDK is resolved automatically. First configure may download 200MB+.
 cmake .. -G "Visual Studio 17 2022" -A x64
 
 # Build using CMake
@@ -261,6 +262,20 @@ make -j$(sysctl -n hw.ncpu)
 | `-DXJ_BUILD_EXAMPLES=ON` | Build example applications | `OFF` |
 | `-DXJ_ENABLE_VALIDATION=ON` | Enable Vulkan validation layers | `OFF` |
 | `-DXJ_USE_IMGUI=ON` | Enable Dear ImGui integration | `ON` |
+
+### Vulkan SDK Resolution
+
+CMake resolves Vulkan SDK in this order:
+
+1. `VULKAN_SDK` environment variable
+2. `ThirdParty/VulkanSDK` local cache
+3. Auto-download LunarG Vulkan SDK `1.3.283.0`
+
+The first configure may download a 200MB+ installer. You can override the URL or timeout:
+
+```bash
+cmake .. -DXJ_VULKAN_SDK_URL=<url> -DXJ_VULKAN_DOWNLOAD_TIMEOUT=3600
+```
 
 ## 📁 Project Structure
 

@@ -57,9 +57,9 @@ cd ../bin
 ```
 
 **前置要求：**
-- Vulkan SDK
 - CMake 3.10+
 - 支持 C++17 的编译器
+- Vulkan SDK 可选手动安装；CMake 会自动按顺序解析：`VULKAN_SDK` 环境变量 -> `ThirdParty/VulkanSDK` 本地缓存 -> 自动下载 LunarG Vulkan SDK 1.3.283.0
 
 ## 🏗️ 引擎架构
 
@@ -118,6 +118,8 @@ mkdir build && cd build
 cmake .. -G "Visual Studio 17 2022" -A x64
 cmake --build . --config Release
 ```
+
+首次配置如果本机没有 Vulkan SDK，CMake 会自动下载约 200MB+ 的 LunarG Vulkan SDK 1.3.283.0，耗时取决于网络。
 
 ### Linux
 
@@ -192,6 +194,20 @@ mEditorRenderer->Init(kUIRendererInfo);
 - nlohmann/json
 - SPIRV-Reflect
 - Vulkan SDK（自动解析：环境变量 → 本地缓存 → 自动下载 1.3.283.0）
+
+### Vulkan SDK 自动解析
+
+CMake 会按以下顺序解析 Vulkan SDK：
+
+1. `VULKAN_SDK` 环境变量
+2. `ThirdParty/VulkanSDK` 本地缓存
+3. 自动下载 LunarG Vulkan SDK `1.3.283.0`
+
+首次配置可能下载 200MB+ 安装包。可通过以下参数覆盖 URL 或超时：
+
+```bash
+cmake .. -DXJ_VULKAN_SDK_URL=<url> -DXJ_VULKAN_DOWNLOAD_TIMEOUT=3600
+```
 
 ### 开发方向
 
