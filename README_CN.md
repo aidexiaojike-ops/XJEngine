@@ -142,6 +142,8 @@ XJEngine/
 │   │   ├── Instantiation/   # 场景实例化器
 │   │   └── Register/        # 资产引导注册/扫描
 │   ├── Public/Render/       # 渲染接口
+│   │   ├── System/          # 渲染系统（材质系统）
+│   │   ├── Material/        # 材质参数（ParameterBlock/Layout）
 │   │   └── Shader/          # 着色器资产（Schema/Parameter/Asset）
 │   └── Public/Render/Resource/ # GPU 资源
 ├── Platform/                # Vulkan、GLFW、External
@@ -187,6 +189,7 @@ mEditorRenderer->Init(kUIRendererInfo);
 - Dear ImGui
 - nlohmann/json
 - SPIRV-Reflect
+- Vulkan SDK（自动解析：环境变量 → 本地缓存 → 自动下载 1.3.283.0）
 
 ### 开发方向
 

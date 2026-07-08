@@ -138,6 +138,7 @@ Swapchain
 
 #### **Material System**
 - **XJMaterialSystem Base Class**: Provides helper methods (`XJGetDevice`, `XJGetProjMat`, `XJGetViewMat`, `XJGetScene`, `XJGetApp`) for material systems
+- **Material Parameter System**: `XJMaterialParameterBlock` and `XJMaterialParameterLayout` for structured material parameter management
 - **Base Material System**: Dynamic uniform buffer instancing with global/per-instance UBOs
 - **Unlit Material System**: Complete unlit pipeline with Frame UBO (proj/view/resolution/time), material parameter UBO (colors, mix, texture params), and combined image samplers
 - **DescriptorSetWriter**: Utility class providing static helpers for descriptor buffer/image info creation and descriptor set writes
@@ -207,6 +208,7 @@ Swapchain
 - **Dear ImGui**: Editor UI framework with Vulkan backend
 - **nlohmann/json**: JSON serialization for assets and scenes
 - **SPIRV-Reflect**: SPIR-V shader introspection and reflection
+- **Vulkan SDK**: Auto-resolved via `cmake/SetupVulkanSDK.cmake` (env var → local cache → auto-download 1.3.283.0)
 
 ## 🚀 Building
 
@@ -277,9 +279,6 @@ XJEngine/
 │   │   │   │       ├── XJBaseMaterialComponent.h
 │   │   │   │       └── XJUnlitMaterialComponent.h
 │   │   │   └── System/             # 具体系统
-│   │   │       ├── XJMaterialSystem.h       # 材质系统基类
-│   │   │       ├── XJBaseMaterialSystem.h
-│   │   │       ├── XJUnlitMaterialSystem.h
 │   │   │       └── XJCameraSystem.h
 │   │   ├── Camera/          # 摄像机模块（独立于 ECS）
 │   │   │   └── XJCameraController.h
@@ -287,6 +286,13 @@ XJEngine/
 │   │       ├── XJSampler.h
 │   │       ├── XJRenderTarget.h
 │   │       ├── XJRenderer.h
+│   │       ├── System/      # 渲染系统（材质系统）
+│   │       │   ├── XJMaterialSystem.h
+│   │       │   ├── XJBaseMaterialSystem.h
+│   │       │   └── XJUnlitMaterialSystem.h
+│   │       ├── Material/    # 材质参数
+│   │       │   ├── XJMaterialParameterBlock.h
+│   │       │   └── XJMaterialParameterLayout.h
 │   │       ├── Resource/    # GPU 渲染资源
 │   │       │   ├── XJMesh.h / XJMeshFactory.h
 │   │       │   ├── XJTexture.h / XJTextureFactory.h
