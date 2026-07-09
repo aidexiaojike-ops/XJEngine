@@ -1,4 +1,5 @@
 #include "Render/Shader/XJShaderSchemaValidator.h"
+#include "Render/Shader/XJShaderReflectionUtils.h"
 
 #include <fstream>
 #include <regex>
@@ -9,6 +10,7 @@
 
 namespace XJ
 {
+
     namespace
     {
         struct XJSourceShaderInfo
@@ -134,69 +136,7 @@ namespace XJ
             result.Messages.push_back(validationMessage);
         }
 
-        bool IsTextureParameter(XJShaderParameterType type)//是否 贴图 参数？
-        {
-            return type == XJShaderParameterType::Texture2D;
-        }
-
-
-        uint32_t ExpectedMinimumParameterSize(XJShaderParameterType type)//
-        {
-            switch (type)
-            {
-                case XJShaderParameterType::Float:
-                case XJShaderParameterType::Int:
-                case XJShaderParameterType::Bool:
-                    return 4;
-            
-                case XJShaderParameterType::Vec2:
-                    return 8;
-            
-                case XJShaderParameterType::Vec3:
-                case XJShaderParameterType::Color3:
-                case XJShaderParameterType::Vec4:
-                case XJShaderParameterType::Color4:
-                    return 16;
-            
-                default:
-                    return 0;
-            }
-        }
-
-        const XJShaderReflectedUbo* FindUbo(const XJShaderReflectionResult& reflection, const std::string& name)//找ubo
-        {
-            for (const auto& ubo : reflection.Ubos)
-            {
-                if (ubo.Name == name)
-                    return &ubo;
-            }
-        
-            return nullptr;
-        }
-
-        const XJShaderReflectedMember* FindMember(const XJShaderReflectedUbo& ubo, const std::string& name)
-        {
-            for (const auto& member : ubo.Members)
-            {
-                if (member.Name == name)
-                    return &member;
-            }
-        
-            return nullptr;
-        }
-
-        const XJShaderReflectedSampler* FindSampler(const XJShaderReflectionResult& reflection, const std::string& name)
-        {
-            for (const auto& sampler : reflection.Samplers)
-            {
-                if (sampler.Name == name)
-                    return &sampler;
-            }
-        
-            return nullptr;
-        }
     }
-
 
     XJShaderValidationResult XJShaderSchemaValidator::ValidateFromSourceFiles(const XJShaderSchema& schema, const std::filesystem::path& vertexPath, const std::filesystem::path& fragmentPath)
     {

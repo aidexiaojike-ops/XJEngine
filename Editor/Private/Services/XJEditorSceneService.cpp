@@ -173,6 +173,7 @@ namespace XJ
                 case XJShaderParameterType::Color3: return XJEditorMaterialParameterType::Color3;
                 case XJShaderParameterType::Color4: return XJEditorMaterialParameterType::Color4;
                 case XJShaderParameterType::Texture2D: return XJEditorMaterialParameterType::Texture2D;
+                case XJShaderParameterType::TextureCube: return XJEditorMaterialParameterType::TextureCube;
                 default: return XJEditorMaterialParameterType::None;
             }
         }

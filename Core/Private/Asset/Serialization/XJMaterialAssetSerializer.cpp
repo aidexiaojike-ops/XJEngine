@@ -1,6 +1,7 @@
 #include "Asset/Serialization/XJMaterialAssetSerializer.h"
-
+#include "Render/Shader/XJShaderParameterValueIO.h"
 #include "Asset/Serialization/XJShaderAssetSerializer.h"
+#include "Asset/XJAssetPathUtils.h"
 
 #include <fstream>
 #include <nlohmann/json.hpp>
@@ -10,7 +11,7 @@ namespace XJ
     namespace
     {
 
-        std::string ToProjectRelativePathString(const std::filesystem::path& path)
+        std::string ToProjectRelativePathString(const std::filesystem::path& path)//将路径转换为项目相对路径字符串
         {
             if (path.empty())
                 return {};
@@ -64,110 +65,6 @@ namespace XJ
             return false;
         }
 
-        std::filesystem::path ResolveRelativePath(const std::filesystem::path& ownerFile, const std::filesystem::path& referencedPath)//路径解析
-        {
-            if (referencedPath.empty())
-                return referencedPath;      
-
-            if (referencedPath.is_absolute())
-                return referencedPath.lexically_normal();       
-
-            if (std::filesystem::exists(referencedPath))
-                return referencedPath.lexically_normal();       
-
-            std::filesystem::path resolved = ownerFile.parent_path() / referencedPath;
-            return resolved.lexically_normal();
-        }
-
-        XJMaterialParameterValue ReadValueByType(const nlohmann::json& value, XJShaderParameterType type)//读取参数？
-        {
-            switch (type)
-            {
-                case XJShaderParameterType::Float:
-                    return value.is_number() ? value.get<float>() : 0.0f;
-
-                case XJShaderParameterType::Int:
-                    return value.is_number_integer() ? value.get<int>() : 0;
-
-                case XJShaderParameterType::Bool:
-                    return value.is_boolean() ? value.get<bool>() : false;
-
-                case XJShaderParameterType::Vec2:
-                {
-                    if (!value.is_array() || value.size() < 2)
-                        return glm::vec2(0.0f);
-
-                    return glm::vec2(value[0].get<float>(), value[1].get<float>());
-                }
-
-                case XJShaderParameterType::Vec3:
-                case XJShaderParameterType::Color3:
-                {
-                    if (!value.is_array() || value.size() < 3)
-                        return glm::vec3(0.0f);
-
-                    return glm::vec3(value[0].get<float>(), value[1].get<float>(), value[2].get<float>());
-                }
-
-                case XJShaderParameterType::Vec4:
-                case XJShaderParameterType::Color4:
-                {
-                    if (!value.is_array() || value.size() < 4)
-                        return glm::vec4(1.0f);
-
-                    return glm::vec4(value[0].get<float>(), value[1].get<float>(), value[2].get<float>(), value[3].get<float>());
-                }
-
-                case XJShaderParameterType::Texture2D:
-                {
-                    if (value.is_number_unsigned())
-                        return static_cast<XJAssetHandle>(value.get<uint64_t>());
-
-                    if (value.is_number_integer())
-                        return static_cast<XJAssetHandle>(value.get<int64_t>());
-
-                    return static_cast<XJAssetHandle>(0);
-                }
-
-                default:
-                    return std::monostate{};
-            }
-        }
-
-        nlohmann::json WriteValue(const XJMaterialParameterValue& value)//写入参数
-        {
-            if (std::holds_alternative<float>(value))
-                return std::get<float>(value);
-
-            if (std::holds_alternative<int>(value))
-                return std::get<int>(value);
-
-            if (std::holds_alternative<bool>(value))
-                return std::get<bool>(value);
-
-            if (std::holds_alternative<glm::vec2>(value))
-            {
-                const auto& v = std::get<glm::vec2>(value);
-                return nlohmann::json::array({ v.x, v.y });
-            }
-
-            if (std::holds_alternative<glm::vec3>(value))
-            {
-                const auto& v = std::get<glm::vec3>(value);
-                return nlohmann::json::array({ v.x, v.y, v.z });
-            }
-
-            if (std::holds_alternative<glm::vec4>(value))
-            {
-                const auto& v = std::get<glm::vec4>(value);
-                return nlohmann::json::array({ v.x, v.y, v.z, v.w });
-            }
-
-            if (std::holds_alternative<XJAssetHandle>(value))
-                return static_cast<uint64_t>(std::get<XJAssetHandle>(value));
-
-            return nullptr;
-        }
 
         void LoadLegacyFields(const nlohmann::json& root, XJMaterialAsset& asset)
         {
@@ -237,7 +134,7 @@ namespace XJ
 
                 if (parametersJson.contains(def.Name))
                 {
-                    XJMaterialParameterValue overrideValue = ReadValueByType(parametersJson[def.Name], def.Type);
+                    XJMaterialParameterValue overrideValue = ReadShaderParameterValue(parametersJson[def.Name], def.Type, glm::vec4(1.0f));
                 
                     if (!MaterialParameterValueEquals(overrideValue, def.DefaultValue))
                     {
@@ -304,7 +201,7 @@ namespace XJ
                     continue;
             }
 
-            root["parameters"][name]  = WriteValue(value);
+            root["parameters"][name] = WriteShaderParameterValue(value);
         }
 
         std::ofstream out(path);

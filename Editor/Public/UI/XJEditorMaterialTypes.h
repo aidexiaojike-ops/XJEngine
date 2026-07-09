@@ -23,7 +23,8 @@ namespace XJ
         Color3,
         Color4,
 
-        Texture2D
+        Texture2D,
+        TextureCube
     };
 
     using XJEditorMaterialParameterValue = std::variant<

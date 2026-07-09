@@ -24,7 +24,8 @@ namespace XJ//shader 用到的参数
         Color3,
         Color4,
 
-        Texture2D
+        Texture2D,
+        TextureCube
     };
 
     using XJMaterialParameterValue = std::variant<std::monostate, float, int, bool, glm::vec2, glm::vec3, glm::vec4, XJAssetHandle>;
@@ -64,6 +65,7 @@ namespace XJ//shader 用到的参数
             case XJShaderParameterType::Color3: return "color3";
             case XJShaderParameterType::Color4: return "color4";
             case XJShaderParameterType::Texture2D: return "texture2D";
+            case XJShaderParameterType::TextureCube: return "textureCube";
             default: return "none";
         }
     }
@@ -79,6 +81,7 @@ namespace XJ//shader 用到的参数
         if (type == "color3") return XJShaderParameterType::Color3;
         if (type == "color4") return XJShaderParameterType::Color4;
         if (type == "texture2D") return XJShaderParameterType::Texture2D;
+        if (type == "textureCube") return XJShaderParameterType::TextureCube;
 
         return XJShaderParameterType::None;
     }

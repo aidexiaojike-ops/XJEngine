@@ -4,7 +4,6 @@
 #include "Edit/Mathinclude.h"
 
 #include <cstdint>
-#include <cstring>
 #include <vector>
 
 namespace XJ

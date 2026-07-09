@@ -1,4 +1,6 @@
 #include "Render/Material/XJMaterialParameterBlock.h"
+#include <algorithm>
+#include <cstring>
 
 namespace XJ
 {

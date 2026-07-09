@@ -2,30 +2,13 @@
 #include "Asset/Serialization/XJShaderSchemaSerializer.h"
 #include "Render/Shader/XJShaderSchemaValidator.h"
 #include "Render/Shader/XJShaderReflector.h"
+#include "Asset/XJAssetPathUtils.h" 
 
 #include <fstream>
 #include <nlohmann/json.hpp>
 
 namespace XJ
 {
-    namespace
-    {
-       
-        std::filesystem::path ResolveRelativePath(const std::filesystem::path& ownerFile, const std::filesystem::path& referencedPath)
-        {
-            if (referencedPath.empty())
-                return referencedPath;
-        
-            if (referencedPath.is_absolute())
-                return referencedPath.lexically_normal();
-        
-            if (std::filesystem::exists(referencedPath))
-                return referencedPath.lexically_normal();
-        
-            std::filesystem::path resolved = ownerFile.parent_path() / referencedPath;
-            return resolved.lexically_normal();
-        }
-    }
 
     std::shared_ptr<XJShaderAsset> XJShaderAssetSerializer::LoadFromFile(const std::filesystem::path& path)
     {

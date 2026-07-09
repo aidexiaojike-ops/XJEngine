@@ -860,6 +860,7 @@ namespace XJ
             }
 
             case XJEditorMaterialParameterType::Texture2D:
+            case XJEditorMaterialParameterType::TextureCube:
             {
                 XJAssetHandle value = 0;
                 if (std::holds_alternative<XJAssetHandle>(parameter.Value))
