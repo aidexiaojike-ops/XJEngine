@@ -138,7 +138,7 @@ Swapchain
 
 #### **Material System**
 - **XJMaterialSystem Base Class**: Provides helper methods (`XJGetDevice`, `XJGetProjMat`, `XJGetViewMat`, `XJGetScene`, `XJGetApp`) for material systems
-- **Material Parameter System**: `XJMaterialParameterBlock` and `XJMaterialParameterLayout` for structured material parameter management
+- **Material Parameter System**: `XJMaterialParameterBlock`/`Layout`/`Builder`/`Writer` — build from shader schema, write to GPU buffers
 - **Base Material System**: Dynamic uniform buffer instancing with global/per-instance UBOs
 - **Unlit Material System**: Complete unlit pipeline with Frame UBO (proj/view/resolution/time), material parameter UBO (colors, mix, texture params), and combined image samplers
 - **DescriptorSetWriter**: Utility class providing static helpers for descriptor buffer/image info creation and descriptor set writes
@@ -305,7 +305,7 @@ XJEngine/
 │   │       │   ├── XJMaterialSystem.h
 │   │       │   ├── XJBaseMaterialSystem.h
 │   │       │   └── XJUnlitMaterialSystem.h
-│   │       ├── Material/    # 材质参数
+│   │       ├── Material/    # 材质参数（Block/Layout/Builder/Writer）
 │   │       │   ├── XJMaterialParameterBlock.h
 │   │       │   └── XJMaterialParameterLayout.h
 │   │       ├── Resource/    # GPU 渲染资源

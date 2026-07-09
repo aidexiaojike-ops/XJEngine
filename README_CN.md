@@ -102,7 +102,7 @@ File -> Importer -> Asset (CPU) -> Factory -> Resource (GPU) -> Renderer
 
 ### 主要模块
 
-- **材质系统**：`XJBaseMaterialSystem`、`XJUnlitMaterialSystem`
+- **材质系统**：`XJBaseMaterialSystem`、`XJUnlitMaterialSystem`、`XJMaterialParameterBlock`/`Builder`/`Writer`
 - **摄像机系统**：`XJCameraController`（Core/Camera）、`XJCameraSystem`（ECS 适配）
 - **资产系统**：`XJModelImporter`、`XJTextureImporter`、`XJAssetRegistry`、`XJAssetRegistryScanner`、`XJAssetBootstrap`、`XJSceneRuntimeUtil`、`XJMeshAssetLoader`
 - **编辑器系统**：`XJEditorSceneController`、`XJEditorCameraManager`、`XJEditorSceneService`、`XJUIContext`、`XJEditorRenderer`、`XJEditorUILayer`、编辑器面板
@@ -145,7 +145,7 @@ XJEngine/
 │   │   └── Register/        # 资产引导注册/扫描
 │   ├── Public/Render/       # 渲染接口
 │   │   ├── System/          # 渲染系统（材质系统）
-│   │   ├── Material/        # 材质参数（ParameterBlock/Layout）
+│   │   ├── Material/        # 材质参数（Block/Layout/Builder/Writer）
 │   │   └── Shader/          # 着色器资产（Schema/Parameter/Asset）
 │   └── Public/Render/Resource/ # GPU 资源
 ├── Platform/                # Vulkan、GLFW 封装
