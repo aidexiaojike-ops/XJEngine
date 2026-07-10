@@ -49,6 +49,9 @@ namespace XJ
             std::vector<VkDescriptorSet> mMaterialResourceDescSets;//
             std::vector<std::shared_ptr<XJVulkanBuffer>> mMaterialBuffers;//所有材质参数
 
+            void EnsureMaterialBuffer(uint32_t materialIndex, uint32_t requiredSize);//确保材质缓冲区的大小足够
+            std::vector<uint32_t> mMaterialBufferSizes;
+
 
             //std::shared_ptr<XJ::XJVulkanBuffer> mGlobalBuffer;
             //std::shared_ptr<XJ::XJVulkanBuffer> mInstanceBuffer;

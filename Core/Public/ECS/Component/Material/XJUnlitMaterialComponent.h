@@ -2,6 +2,7 @@
 #define XJ_UNLIT_MATERIAL_COMPONENT_H
 
 #include "ECS/Component/Material/XJMaterialComponent.h"
+#include <spdlog/spdlog.h>
 
 
 namespace XJ
@@ -12,6 +13,7 @@ namespace XJ
         UNLIT_MAT_BASE_COLOR_A,
         UNLIT_MAT_BASE_COLOR_B
     };
+
     struct FrameUbo
     {
         glm::mat4  projMat{ 1.f };
@@ -20,34 +22,28 @@ namespace XJ
         alignas(4) uint32_t frameId;
         alignas(4) float time;
     };
-    struct UnlitMaterialUbo
-    {
-        alignas(16) glm::vec4 baseColorA;
-        alignas(16) glm::vec4 baseColorB;
-        alignas(4) float mixValue;
-        alignas(16) TextureParam textureParamA;
-        alignas(16) TextureParam textureParamB;
-    };
 
     
     class XJUnlitMaterial : public XJMaterial
     {
         public:
-        const  UnlitMaterialUbo &XJGetParams() const { return mParams; }
-        const  glm::vec4 XJGetBaseColorA() const {return mParams.baseColorA;};
-        const  glm::vec4 XJGetBaseColorB() const {return mParams.baseColorB;};
-        float XJGetMixValue() const{return mParams.mixValue;};
-        const  TextureParam &XJGetTextureParamA() const {return mParams.textureParamA;};
-        const  TextureParam &XJGetTextureParamB() const {return mParams.textureParamB;};
-
-        void XJSetBaseColorA(const glm::vec4 &color){    mParams.baseColorA = color; bShouldFlushParams = true;}
-        void XJSetBaseColorB(const glm::vec4 &color){    mParams.baseColorB = color; bShouldFlushParams = true;}
-        void XJSetMixValue(float mixValue){    mParams.mixValue = mixValue; bShouldFlushParams = true;}
-        void XJSetTextureParamA(const TextureParam &texParam){    mParams.textureParamA = texParam; bShouldFlushParams = true;}
-        void XJSetTextureParamB(const TextureParam &texParam){    mParams.textureParamB = texParam; bShouldFlushParams = true;}
+            //设置材质参数值
+            void SetBaseColorA(const glm::vec4 &color)
+            { 
+                spdlog::info("SetBaseColorA rgba=({}, {}, {}, {})", color.r, color.g, color.b, color.a);
+                SetUboMemberValue("MaterialUbo", "baseColorA", XJShaderParameterType::Color4, color);
+            }
+            void SetBaseColorB(const glm::vec4 &color)
+            { 
+                spdlog::info("SetBaseColorB rgba=({}, {}, {}, {})", color.r, color.g, color.b, color.a);
+                SetUboMemberValue("MaterialUbo", "baseColorB", XJShaderParameterType::Color4, color);
+            }
+            void SetMixValue(float mixValue){ SetUboMemberValue("MaterialUbo", "mixValue", XJShaderParameterType::Float, mixValue);}
+            void SetTextureParamA(const TextureParam &texParam){ SetUboMemberBytes("MaterialUbo", "textureParamA", &texParam, sizeof(texParam));}
+            void SetTextureParamB(const TextureParam &texParam){ SetUboMemberBytes("MaterialUbo", "textureParamB", &texParam, sizeof(texParam));}
 
         private:
-            UnlitMaterialUbo mParams{};//材质参数
+          
     };
 
     class XJUnlitMaterialComponent : public XJMaterialComponent<XJUnlitMaterial>//runtime render data

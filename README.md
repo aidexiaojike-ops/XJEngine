@@ -437,7 +437,7 @@ unlitMat->XJSetBaseColorB(glm::vec3(0.0f, 0.0f, 1.0f));
 unlitMat->XJSetMixValue(0.5f);
 
 // Set texture
-unlitMat->XJSetTextureView(XJ::UNLIT_MAT_BASE_COLOR_A, texture, sampler);
+unlitMat->SetTextureView(XJ::UNLIT_MAT_BASE_COLOR_A, texture, sampler);
 unlitMat->UpdateTextureViewEnable(XJ::UNLIT_MAT_BASE_COLOR_A, true);
 
 // Add to entity

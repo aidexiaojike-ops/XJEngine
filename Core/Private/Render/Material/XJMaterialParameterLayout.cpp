@@ -19,8 +19,25 @@ namespace XJ
                 AddMaterialBuildError(buildResult, error);
 
             return buildResult;
+        }   
+        //遍历 reflection 的所有 UBO members，全部存进去
+        for(const auto& ubo : reflection.Ubos)
+        {
+            for(const auto& member : ubo.Members)
+            {
+                XJMaterialUboMemberBinding uboMemberBinding;
+                uboMemberBinding.UboName = ubo.Name;
+                uboMemberBinding.MemberName = member.Name;
+                uboMemberBinding.Set = ubo.Set;
+                uboMemberBinding.Binding = ubo.Binding;
+                uboMemberBinding.Offset = member.Offset;
+                uboMemberBinding.Size = member.Size;
+
+                mUboMemberBindings.push_back(uboMemberBinding);
+            }
         }
 
+        //遍历 schema 的所有参数，检查是否在 reflection 中有对应的 UBO member 或 sampler
         for(const auto& parameter : schema.Parameters)
         {
             if(IsTextureParameter(parameter.Type))
@@ -51,7 +68,7 @@ namespace XJ
 
             if (parameter.UboName.empty() || parameter.MemberName.empty())
             {
-                AddMaterialBuildError(buildResult, "Non-texture parameter has no ubo/member binding: " + parameter.Name);
+                AddMaterialBuildWarning(buildResult, "Non-texture parameter has no ubo/member binding: " + parameter.Name);
                 continue;
             }
             const XJShaderReflectedUbo* ubo = FindUbo(reflection, parameter.UboName);
@@ -75,13 +92,13 @@ namespace XJ
             }
             else if (mUboName != ubo->Name)
             {
-                AddMaterialBuildError(buildResult, "Multiple material UBOs are not fully supported yet. Parameter uses UBO: " + parameter.UboName);
+                AddMaterialBuildWarning(buildResult, "Multiple material UBOs are not fully supported yet. Parameter uses UBO: " + parameter.UboName);
             }
 
             const uint32_t expectedSize = ExpectedMinimumParameterSize(parameter.Type);
             if (expectedSize != 0 && member->Size != 0 && member->Size < expectedSize)
             {
-                AddMaterialBuildError(buildResult, "Reflected member size is smaller than expected for parameter: " + parameter.Name);
+                AddMaterialBuildWarning(buildResult, "Reflected member size is smaller than expected for parameter: " + parameter.Name);
             }
 
             XJMaterialParameterBinding parameterBinding;
@@ -112,6 +129,7 @@ namespace XJ
         mUboName.clear();
         mParameterBindings.clear();
         mTextureBindings.clear();
+        mUboMemberBindings.clear();
     }
 
     const XJMaterialParameterBinding* XJMaterialParameterLayout::FindParameterBinding(const std::string& parameterName) const
@@ -135,5 +153,15 @@ namespace XJ
         return nullptr;
     }
 
+    const XJMaterialUboMemberBinding* XJMaterialParameterLayout::FindUboMemberBinding(const std::string& uboName, const std::string& memberName) const
+    {
+        for (const auto& binding : mUboMemberBindings)
+        {
+            if (binding.UboName == uboName && binding.MemberName == memberName)
+                return &binding;
+        }
+
+        return nullptr;
+    }
 
 }

@@ -4,7 +4,7 @@ layout(location = 1) in vec2 v_Texcoord;
 
 struct TextureParam
 {
-    bool  enable;
+    uint  enable;
     float uvRotation;//
     vec4  uvTransform;//x,y  ->scale, z,w->translation
 };
@@ -50,14 +50,14 @@ void main()
     vec4 colorA = materialUbo.baseColorA;
     vec4 colorB = materialUbo.baseColorB;
 
-    if(materialUbo.textureParamA.enable)
+    if(materialUbo.textureParamA.enable != 0)
     {
         TextureParam param = materialUbo.textureParamA;
         param.uvTransform.w = -frameUbo.time;
         colorA = texture(textureA, getTextureUV(param, v_Texcoord));
     }
 
-    if(materialUbo.textureParamB.enable)
+    if(materialUbo.textureParamB.enable != 0)
     {
         colorB = texture(textureB, getTextureUV(materialUbo.textureParamB, v_Texcoord));
     }

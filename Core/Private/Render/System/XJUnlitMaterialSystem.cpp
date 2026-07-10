@@ -323,14 +323,29 @@ namespace XJ
         assert(mMaterialResourceDescSets.size() == kNewDescriptorSetCount && "Failed to allocateDescriptorSet");
 
         //差值用来创建uinform buffer
-        uint32_t kDiffCount = kNewDescriptorSetCount - mLastDescriptorSetCount;
-        for(int i = 0; i < kDiffCount; i++)
-        {
-            mMaterialBuffers.push_back(std::make_shared<XJVulkanBuffer>(kDevice, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, sizeof(UnlitMaterialUbo), nullptr, true));
-        }
+        mMaterialBuffers.resize(kNewDescriptorSetCount);
+        mMaterialBufferSizes.resize(kNewDescriptorSetCount, 0);
         //更新上一次的数量
         mLastDescriptorSetCount = kNewDescriptorSetCount;
     
+    }
+
+    void XJUnlitMaterialSystem::EnsureMaterialBuffer(uint32_t materialIndex, uint32_t requiredSize)//确保材质缓冲区的大小足够
+    {
+        if(requiredSize == 0) { return; }
+
+        if(materialIndex >= mMaterialBuffers.size())
+        {
+            spdlog::error("Material index {} is out of bounds (max {}).", materialIndex, mMaterialBuffers.size());
+            return;
+        }
+
+        if(mMaterialBuffers[materialIndex] && mMaterialBufferSizes[materialIndex] == requiredSize)
+            return; 
+        //
+        XJVulkanDevice* kDevice = XJGetDevice();
+        mMaterialBuffers[materialIndex] = std::make_shared<XJVulkanBuffer>(kDevice, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, requiredSize, nullptr, true);
+        mMaterialBufferSizes[materialIndex] = requiredSize;
     }
 
 
@@ -355,44 +370,97 @@ namespace XJ
         VkWriteDescriptorSet bufferWrite = DescriptorSetWriter::WriteBuffer(mFrameUboDescSet, 0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, &bufferInfo);//写buffer
         DescriptorSetWriter::UpdateDescriptorSets(kDevice->XJGetDevice(), { bufferWrite });
     }
+
     void XJUnlitMaterialSystem::UpdateMaterialParamsDescSet(VkDescriptorSet descSet, XJUnlitMaterial *material)//更新材质参数
     {
-        XJVulkanDevice *kDevice = XJGetDevice();//逻辑设备
-        XJVulkanBuffer *kMaterialBuffer = mMaterialBuffers[material->XJGetIndex()].get();
-
-        UnlitMaterialUbo kParams = material->XJGetParams();
+        XJVulkanDevice *device  = XJGetDevice();
+        XJMaterialParameterBlock& block = material->GetParameterBlock();
+        if (block.Empty())// block 为空就直接 return，会导致 descriptor 没更新
+        {
+            spdlog::warn("Skip material params update: material {} has empty parameter block.", material->GetIndex());
+            return;
+        }
 
         //纹理参数更新
-        const TextureView *kTextureA = material->XJGetTextureView(UNLIT_MAT_BASE_COLOR_A);
-        if(kTextureA)
+        const TextureView *textureA  = material->GetTextureView(UNLIT_MAT_BASE_COLOR_A);
+        if(textureA )
         {
-            XJMaterial::UpdateTextureParams(kTextureA, &kParams.textureParamA);
+            spdlog::info("TextureA: valid={}, enable={}", textureA->IsValid(), textureA->bEnable);
+            TextureParam texParamA{};
+            XJMaterial::UpdateTextureParams(textureA, &texParamA);
+            material->SetTextureParamA(texParamA);
         }
 
-        const TextureView *kTextureB = material->XJGetTextureView(UNLIT_MAT_BASE_COLOR_B);
-        if(kTextureB)
+        const TextureView* textureB = material->GetTextureView(UNLIT_MAT_BASE_COLOR_B);
+        if (textureB)
         {
-            XJMaterial::UpdateTextureParams(kTextureB, &kParams.textureParamB);
+            TextureParam paramB{};
+            XJMaterial::UpdateTextureParams(textureB, &paramB);
+            material->SetTextureParamB(paramB);
         }
 
-        kMaterialBuffer->WriteData(&kParams);
-        VkDescriptorBufferInfo kBufferInfo = DescriptorSetWriter::BuildBufferInfo(kMaterialBuffer->XJGetBuffer(), 0, sizeof(kParams));
+        EnsureMaterialBuffer(material->GetIndex(), block.GetSize());
+
+        XJVulkanBuffer* materialBuffer = mMaterialBuffers[material->GetIndex()].get();
+        if (!materialBuffer)
+            return;
+        materialBuffer->WriteData(const_cast<uint8_t*>(block.GetDataPtr()));
+        spdlog::info("Upload material block: material={}, blockSize={}", material->GetIndex(), block.GetSize());
+
+        VkDescriptorBufferInfo kBufferInfo = DescriptorSetWriter::BuildBufferInfo(materialBuffer->XJGetBuffer(), 0, block.GetSize());
         VkWriteDescriptorSet kBufferWrite = DescriptorSetWriter::WriteBuffer(descSet, 0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, &kBufferInfo);
-        DescriptorSetWriter::UpdateDescriptorSets(kDevice->XJGetDevice(), { kBufferWrite });
+        DescriptorSetWriter::UpdateDescriptorSets(device->XJGetDevice(), { kBufferWrite });
     }
+
     void XJUnlitMaterialSystem::UpdateMaterialResourceDescSet(VkDescriptorSet descSet, XJUnlitMaterial *material)//材质资源更新
     {
-        XJVulkanDevice *kDevice = XJGetDevice();//逻辑设备
+        XJVulkanDevice *device = XJGetDevice();//逻辑设备
         //优化
-        const TextureView *kTextureA = material->XJGetTextureView(UNLIT_MAT_BASE_COLOR_A);
-        const TextureView *kTextureB = material->XJGetTextureView(UNLIT_MAT_BASE_COLOR_B);
 
-        VkDescriptorImageInfo kTextureInfoA = DescriptorSetWriter::BuildImageInfo(kTextureA->sampler->XJGetSampler(), kTextureA->texture->XJGetImageView()->XJGetImageView());
-        VkDescriptorImageInfo kTextureInfoB = DescriptorSetWriter::BuildImageInfo(kTextureB->sampler->XJGetSampler(), kTextureB->texture->XJGetImageView()->XJGetImageView());
-        //
-        VkWriteDescriptorSet kTextureWriteA = DescriptorSetWriter::WriteImage(descSet, 0, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, &kTextureInfoA);
-        VkWriteDescriptorSet kTextureWriteB = DescriptorSetWriter::WriteImage(descSet, 1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, &kTextureInfoB);
+        std::vector<VkDescriptorImageInfo> imageInfos;
+        std::vector<uint32_t> bindings;
 
-        DescriptorSetWriter::UpdateDescriptorSets(kDevice->XJGetDevice(), { kTextureWriteA, kTextureWriteB });
+        for(const auto& textureBinding : material -> GetTextureBindings())
+        {
+            const TextureView* textureView = nullptr;
+            if (textureBinding.ParameterName == "AlbedoTexture")
+            textureView = material->GetTextureView(UNLIT_MAT_BASE_COLOR_A);
+
+            if (!textureView || !textureView->texture || !textureView->sampler)
+                continue;
+
+            imageInfos.push_back(DescriptorSetWriter::BuildImageInfo(
+                textureView->sampler->XJGetSampler(),
+                textureView->texture->XJGetImageView()->XJGetImageView()));
+
+            bindings.push_back(textureBinding.Binding);
+        }
+
+        if (imageInfos.empty())
+        {
+            const TextureView* textureView = material->GetTextureView(UNLIT_MAT_BASE_COLOR_A);
+            if (!textureView || !textureView->texture || !textureView->sampler)
+                return;
+        
+            imageInfos.push_back(DescriptorSetWriter::BuildImageInfo(
+                textureView->sampler->XJGetSampler(),
+                textureView->texture->XJGetImageView()->XJGetImageView()));
+            
+            bindings.push_back(0);
+        }
+
+        std::vector<VkWriteDescriptorSet> writes;
+        writes.reserve(imageInfos.size());
+
+        for (size_t index = 0; index < imageInfos.size(); ++index)
+        {
+            writes.push_back(DescriptorSetWriter::WriteImage(
+                descSet,
+                bindings[index],
+                VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+                &imageInfos[index]));
+        }
+
+        DescriptorSetWriter::UpdateDescriptorSets(device->XJGetDevice(), writes);
     }
 }

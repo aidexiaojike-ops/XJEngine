@@ -25,7 +25,7 @@ namespace XJ
 
         if (layout.GetUboSize() == 0)
         {
-            AddMaterialBuildError(result, "Material parameter layout has no UBO data.");
+            AddMaterialBuildWarning(result, "Material parameter layout has no UBO data.");
             result.Valid = result.Errors.empty();
             return result;
         }
@@ -35,7 +35,7 @@ namespace XJ
             const XJMaterialParameterValue* value = material.FindParameter(binding.ParameterName);
             if (!value)
             {
-                AddMaterialBuildError(result, "Material parameter value not found: " + binding.ParameterName);
+                AddMaterialBuildWarning(result, "Material parameter value not found: " + binding.ParameterName);
                 continue;
             }
 

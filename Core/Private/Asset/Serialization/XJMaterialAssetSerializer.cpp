@@ -79,13 +79,13 @@ namespace XJ
                 asset.ParameterOverrides["BaseColor"] = asset.BaseColorFactor;
             }
 
-            asset.MetallicFactor = root.value("metallic", asset.MetallicFactor);
-            asset.RoughnessFactor = root.value("roughness", asset.RoughnessFactor);
+            // asset.MetallicFactor = root.value("metallic", asset.MetallicFactor);
+            // asset.RoughnessFactor = root.value("roughness", asset.RoughnessFactor);
             asset.AlbedoTexture = root.value("albedoTexture", static_cast<XJAssetHandle>(0));
 
             asset.ParameterOverrides["BaseColor"] = asset.BaseColorFactor;
-            asset.ParameterOverrides["Metallic"] = asset.MetallicFactor;
-            asset.ParameterOverrides["Roughness"] = asset.RoughnessFactor;
+            // asset.ParameterOverrides["Metallic"] = asset.MetallicFactor;
+            // asset.ParameterOverrides["Roughness"] = asset.RoughnessFactor;
             asset.ParameterOverrides["AlbedoTexture"] = asset.AlbedoTexture;
 
             asset.Parameters = asset.ParameterOverrides;
@@ -155,17 +155,17 @@ namespace XJ
                 materialAsset->BaseColorFactor = std::get<glm::vec4>(*value);
         }
 
-        if (auto* value = materialAsset->FindParameter("Metallic"))
-        {
-            if (std::holds_alternative<float>(*value))
-                materialAsset->MetallicFactor = std::get<float>(*value);
-        }
-
-        if (auto* value = materialAsset->FindParameter("Roughness"))
-        {
-            if (std::holds_alternative<float>(*value))
-                materialAsset->RoughnessFactor = std::get<float>(*value);
-        }
+        //if (auto* value = materialAsset->FindParameter("Metallic"))
+        //{
+        //    if (std::holds_alternative<float>(*value))
+        //        materialAsset->MetallicFactor = std::get<float>(*value);
+        //}
+//
+        //if (auto* value = materialAsset->FindParameter("Roughness"))
+        //{
+        //    if (std::holds_alternative<float>(*value))
+        //        materialAsset->RoughnessFactor = std::get<float>(*value);
+        //}
 
         if (auto* value = materialAsset->FindParameter("AlbedoTexture"))
         {

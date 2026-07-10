@@ -31,8 +31,8 @@ namespace XJ
             XJAssetHandle MetallicRoughnessTexture = 0; 
             // PBR 参数
             glm::vec4 BaseColorFactor  = glm::vec4(1.0f);
-            float MetallicFactor       = 1.0f;      
-            float RoughnessFactor      = 1.0f;       
+            // float MetallicFactor       = 1.0f;      
+            // float RoughnessFactor      = 1.0f;       
 
             const XJMaterialParameterValue* FindParameter(const std::string& name) const//获取参数
             {

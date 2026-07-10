@@ -27,7 +27,7 @@ namespace XJ
         uint32_t Size = 0;
     };
 
-    struct XJMaterialTextureBinding
+    struct XJMaterialTextureBinding//材质纹理绑定
     {
         std::string ParameterName;
         XJShaderParameterType Type = XJShaderParameterType::None;
@@ -37,6 +37,17 @@ namespace XJ
 
         uint32_t Set = 0;
         uint32_t Binding = 0;
+    };
+
+    struct XJMaterialUboMemberBinding//材质 UBO 成员绑定
+    {
+        std::string UboName;
+        std::string MemberName;
+
+        uint32_t Set = 0;
+        uint32_t Binding = 0;
+        uint32_t Offset = 0;
+        uint32_t Size = 0;
     };
 
     struct XJMaterialParameterLayoutBuildResult//材质参数布局构建结果
@@ -70,6 +81,8 @@ namespace XJ
             const XJMaterialParameterBinding* FindParameterBinding(const std::string& parameterName) const;//查找材质参数绑定
             const XJMaterialTextureBinding* FindTextureBinding(const std::string& parameterName) const;//查找材质纹理绑定
 
+            const std::vector<XJMaterialUboMemberBinding>& GetUboMemberBindings() const { return mUboMemberBindings; }//获取 UBO 成员绑定
+            const XJMaterialUboMemberBinding* FindUboMemberBinding(const std::string& uboName, const std::string& memberName) const;//查找 UBO 成员绑定
 
         private:
             bool mValid = false;
@@ -79,6 +92,7 @@ namespace XJ
 
             std::vector<XJMaterialParameterBinding> mParameterBindings;
             std::vector<XJMaterialTextureBinding> mTextureBindings;
+            std::vector<XJMaterialUboMemberBinding> mUboMemberBindings;
     };
     
 }

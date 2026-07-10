@@ -111,6 +111,7 @@ namespace XJ
 
 
             auto& renderComponent = entity.AddComponent<XJUnlitMaterialComponent>();
+            spdlog::info("RebuildUnlitMeshRenderData material index={}", material->GetIndex());
             renderComponent.AddMesh(gpuMesh.get(), material.get());
 
             return true;

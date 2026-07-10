@@ -5,6 +5,8 @@
 #include "Asset/XJMaterialAsset.h"
 #include <unordered_map>
 #include "ECS/Component/Material/XJUnlitMaterialComponent.h"
+#include "Asset/Serialization/XJShaderAssetSerializer.h"
+#include "Render/Material/XJMaterialParameterBlockBuilder.h"
 
 namespace XJ
 {
