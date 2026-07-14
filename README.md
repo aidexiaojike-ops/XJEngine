@@ -146,7 +146,7 @@ Swapchain
 - **Texture Management**: Per-material texture views with sampler state, UV transform support
 - **Push Constants**: `ModelPC` struct for per-draw model and normal matrix updates
 - **Shader Pipeline**: SPIR-V shader compilation and pipeline state management
-- **Shader Schema System**: JSON-defined parameters (Unlit.schema) with types (color4, float, texture2D), defaults, min/max ranges, schema validation via `XJShaderSchemaValidator`
+- **Shader Schema System**: JSON-defined parameters (Unlit.schema), schema validation via `XJShaderSchemaValidator`, binding resolution via `XJShaderSchemaBindingResolver`
 - **Material Serializers**: `XJMaterialAssetSerializer`, `XJShaderAssetSerializer`, `XJShaderSchemaSerializer`
 - **Inspector Material Editing**: Parameter editing with `XJEditorMaterialParameterType` (Float, Color3, Texture2D, etc.)
 
