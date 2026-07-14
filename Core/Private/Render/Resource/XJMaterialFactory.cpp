@@ -3,6 +3,10 @@
 #include "Asset/Serialization/XJShaderAssetSerializer.h"
 #include "Render/Material/XJMaterialParameterBlockBuilder.h"
 
+#include "Asset/XJAssetRegistry.h"
+#include "Asset/Importer/XJTextureImporter.h"
+#include "Render/Resource/XJTextureFactory.h"
+
 #include <spdlog/spdlog.h>
 namespace XJ
 {
@@ -126,26 +130,101 @@ namespace XJ
         
            return BuildRuntimeMaterialData(asset, material);
         }
+
+        uint32_t ResolveUnlitTextureSlot(const XJMaterialTextureBinding& binding)
+        {
+            if (binding.ParameterName == "AlbedoTexture" || binding.SamplerName == "textureA")
+                return UNLIT_MAT_BASE_COLOR_A;
+        
+            if (binding.SamplerName == "textureB")
+                return UNLIT_MAT_BASE_COLOR_B;
+        
+            return UNLIT_MAT_BASE_COLOR_A;
+        }
+
+        void ApplyFallbackUnlitTextureViews(XJUnlitMaterial& material, const std::shared_ptr<XJTexture>& defaultTexture, const std::shared_ptr<XJSampler>& defaultSampler)
+        {
+            material.SetTextureView(UNLIT_MAT_BASE_COLOR_A, defaultTexture, defaultSampler);
+            material.UpdateTextureViewEnable(UNLIT_MAT_BASE_COLOR_A, false);
+        
+            material.SetTextureView(UNLIT_MAT_BASE_COLOR_B, defaultTexture, defaultSampler);
+            material.UpdateTextureViewEnable(UNLIT_MAT_BASE_COLOR_B, false);
+        }
+
     }
 
     XJMaterialFactory XJMaterialFactory::mMaterialFactory{};
 
     std::shared_ptr<XJTexture> XJMaterialFactory::GetOrLoadTexture(XJAssetHandle handle, const std::shared_ptr<XJTexture>& fallback)
     {
-        // 检查 cache
-        auto kTextureCache = mTextureCache.find(handle);
-        if(kTextureCache != mTextureCache.end())
+        if (handle == 0)
+            return fallback;
+
+        auto cacheIt = mTextureCache.find(handle);
+        if (cacheIt != mTextureCache.end())
         {
-            if (auto kTex = kTextureCache->second.lock())
-            return kTex;
-            // weak_ptr 过期 → 移除
-            mTextureCache.erase(kTextureCache);
+            if (auto texture = cacheIt->second.lock())
+                return texture;
+
+            mTextureCache.erase(cacheIt);
         }
-         // 暂时返回 fallback（实现 AssetManager 路径查询后改）
-        if (handle != 0)
-            mTextureCache[handle] = fallback; // 占位
-        return fallback;
+
+        if (!mAssetRegistry)
+        {
+            spdlog::warn("Texture load fallback: material factory has no asset registry, handle={}", handle);
+            return fallback;
+        }
+
+        auto meta = mAssetRegistry->GetMeta(handle);
+        if (!meta || meta->Type != XJAssetType::Texture)
+        {
+            spdlog::warn("Texture load fallback: invalid texture handle={}", handle);
+            return fallback;
+        }
+
+        auto textureAsset = XJTextureImporter::ImportTexture(meta->SourcePath.string());
+        if (!textureAsset)
+        {
+            spdlog::warn("Texture load fallback: failed to import texture: {}", meta->SourcePath.string());
+            return fallback;
+        }
+
+        auto texture = XJTextureFactory::CreateTextureFromAsset(*textureAsset);
+        if (!texture)
+        {
+            spdlog::warn("Texture load fallback: failed to create runtime texture: {}", meta->SourcePath.string());
+            return fallback;
+        }
+
+        mTextureCache[handle] = texture;
+        return texture;
     }
+
+    void XJMaterialFactory::ApplyTextureBindings(XJUnlitMaterial& material, const XJMaterialAsset& asset, const std::shared_ptr<XJTexture>& defaultTexture, const std::shared_ptr<XJSampler>& defaultSampler)
+    {
+        ApplyFallbackUnlitTextureViews(material, defaultTexture, defaultSampler);
+        
+        for(const auto& binding : material.GetTextureBindings())
+        {
+            const XJAssetHandle textureHandle = ReadTextureParameter(asset, binding.ParameterName, static_cast<XJAssetHandle>(0));
+            
+            const uint32_t slot = ResolveUnlitTextureSlot(binding);
+            if(textureHandle == 0)
+            {
+                material.SetTextureView(slot, defaultTexture, defaultSampler);
+                material.UpdateTextureViewEnable(slot, false);
+                continue;
+            }
+
+            std::shared_ptr<XJTexture> texture = GetOrLoadTexture(textureHandle, defaultTexture);
+            material.SetTextureView(slot, texture, defaultSampler);
+            const bool loadedRealTexture = texture != nullptr && texture != defaultTexture;
+            material.UpdateTextureViewEnable(slot, loadedRealTexture && defaultSampler != nullptr);
+        }
+
+    }
+
+
     std::shared_ptr<XJUnlitMaterial> XJMaterialFactory::CreateFromAsset(const XJMaterialAsset& asset,
                                     const std::shared_ptr<XJTexture>& defaultTex,
                                     const std::shared_ptr<XJSampler>& defaultSampler)
@@ -156,7 +235,7 @@ namespace XJ
 
         // PBR BaseColor → A/B（一期：A/B 同色）
         glm::vec4 baseColor = ReadVec4Parameter(asset, "BaseColor", asset.BaseColorFactor);
-        XJAssetHandle albedoTexture = ReadTextureParameter(asset, "AlbedoTexture", asset.AlbedoTexture);
+        // XJAssetHandle albedoTexture = ReadTextureParameter(asset, "AlbedoTexture", asset.AlbedoTexture);
         spdlog::info(
                     "CreateFromAsset BaseColor: material='{}', rgba=({}, {}, {}, {}), index={}",
                     asset.mPath.string(),
@@ -176,20 +255,7 @@ namespace XJ
             spdlog::warn("CreateFromAsset produced material without runtime parameter block: {}", asset.mPath.string());
         }
          // Albedo 贴图 → TextureViewA
-        if (albedoTexture != 0)
-        {
-            auto kTex = GetOrLoadTexture(albedoTexture, defaultTex);
-            kMat->SetTextureView(UNLIT_MAT_BASE_COLOR_A, kTex, defaultSampler);
-            kMat->UpdateTextureViewEnable(UNLIT_MAT_BASE_COLOR_A, true);
-        }
-        else
-        {
-            kMat->SetTextureView(UNLIT_MAT_BASE_COLOR_A, defaultTex, defaultSampler);
-            kMat->UpdateTextureViewEnable(UNLIT_MAT_BASE_COLOR_A, false);
-        }
-
-        kMat->SetTextureView(UNLIT_MAT_BASE_COLOR_B, defaultTex, defaultSampler);
-        kMat->UpdateTextureViewEnable(UNLIT_MAT_BASE_COLOR_B, false);
+        ApplyTextureBindings(*kMat, asset, defaultTex, defaultSampler);
     
         return kMat;
         
@@ -211,11 +277,7 @@ namespace XJ
     
         if (defaultTexture && defaultSampler)
         {
-            mat->SetTextureView(UNLIT_MAT_BASE_COLOR_A, defaultTexture, defaultSampler);
-            mat->UpdateTextureViewEnable(UNLIT_MAT_BASE_COLOR_A, false);
-        
-            mat->SetTextureView(UNLIT_MAT_BASE_COLOR_B, defaultTexture, defaultSampler);
-            mat->UpdateTextureViewEnable(UNLIT_MAT_BASE_COLOR_B, false);
+            ApplyFallbackUnlitTextureViews(*mat, defaultTexture, defaultSampler);
         }
     
         return mat;

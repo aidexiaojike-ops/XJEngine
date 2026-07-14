@@ -10,13 +10,17 @@
 
 namespace XJ
 {
+
+    class XJAssetRegistry;
+
     //材质工厂
     class XJMaterialFactory
     {
         public:
             XJMaterialFactory(const XJMaterialFactory&) = delete;
             XJMaterialFactory &operator = (const XJMaterialFactory&) = delete;
-
+            
+            void SetAssetRegistry(XJAssetRegistry* registry) { mAssetRegistry = registry; }
 
             std::shared_ptr<XJUnlitMaterial> CreateFromAsset(const XJMaterialAsset& asset,
                                     const std::shared_ptr<XJTexture>& defaultTex,
@@ -70,10 +74,13 @@ namespace XJ
         private:
             XJMaterialFactory() = default;
             static XJMaterialFactory mMaterialFactory;
+            XJAssetRegistry* mAssetRegistry = nullptr;
             std::unordered_map<uint32_t, std::vector<std::shared_ptr<XJMaterial>>> mMaterials;//所有材质放到这个数据结构里面
             
             std::unordered_map<XJAssetHandle, std::weak_ptr<XJTexture>> mTextureCache;
             std::shared_ptr<XJTexture> GetOrLoadTexture(XJAssetHandle handle, const std::shared_ptr<XJTexture>& fallback);
+
+            void ApplyTextureBindings(XJUnlitMaterial& material, const XJMaterialAsset& asset, const std::shared_ptr<XJTexture>& defaultTexture, const std::shared_ptr<XJSampler>& defaultSampler);
 
         } ;
     

@@ -9,6 +9,7 @@ namespace XJ
 {
     namespace
     {
+   
         std::filesystem::path ResolveSpirvPath(const std::filesystem::path& path)//解析 SPIR-V 文件路径
         {
             if (path.empty())
@@ -84,6 +85,28 @@ namespace XJ
             return member.padded_size;
         }
 
+
+        XJShaderDescriptorType ConvertDescriptorType(SpvReflectDescriptorType type)//转换描述符类型
+        {
+            switch (type)
+            {
+                case SPV_REFLECT_DESCRIPTOR_TYPE_UNIFORM_BUFFER:
+                    return XJShaderDescriptorType::UniformBuffer;
+
+                case SPV_REFLECT_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER:
+                    return XJShaderDescriptorType::CombinedImageSampler;
+
+                case SPV_REFLECT_DESCRIPTOR_TYPE_SAMPLER:
+                    return XJShaderDescriptorType::Sampler;
+
+                case SPV_REFLECT_DESCRIPTOR_TYPE_SAMPLED_IMAGE:
+                    return XJShaderDescriptorType::SampledImage;
+
+                default:
+                    return XJShaderDescriptorType::Unknown;
+            }
+        }
+
         void AddUbo(const SpvReflectDescriptorBinding& binding, XJShaderStage stage, XJShaderReflectionResult& result)//添加 UBO
         {
             XJShaderReflectedUbo ubo;
@@ -92,6 +115,7 @@ namespace XJ
             ubo.Binding = binding.binding;
             ubo.Size = binding.block.size;
             ubo.Stage = stage;
+            ubo.DescriptorType = ConvertDescriptorType(binding.descriptor_type);
 
             for(uint32_t index = 0; index < binding.block.member_count; ++index)
             {
@@ -118,6 +142,7 @@ namespace XJ
             sampler.Set = binding.set;
             sampler.Binding = binding.binding;
             sampler.Stage = stage;
+            sampler.DescriptorType = ConvertDescriptorType(binding.descriptor_type);
 
             if (!sampler.Name.empty())
                 result.Samplers.push_back(sampler);

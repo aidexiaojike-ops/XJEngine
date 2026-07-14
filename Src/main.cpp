@@ -11,6 +11,7 @@
 #include "Render/XJRenderTarget.h"
 #include "Render/XJRenderer.h"
 #include "Render/Resource/XJTextureFactory.h"
+#include "Render/Resource/XJMaterialFactory.h"
 
 #include "Asset/Importer/XJTextureImporter.h"
 #include "Asset/XJAssetRegistry.h"
@@ -32,6 +33,7 @@
 #include "UI/Viewports/XJGamePreview.h"
 #include "UI/XJEditorUILayer.h"
 #include "UI/XJEditorDragPayload.h"
+
 
 #include <filesystem>
     
@@ -185,6 +187,7 @@ protected:
         //初始化设置
         mRuntimeScene = scene;
         mEditorUIState.AssetRegistry = &mAssetRegistry;
+        XJ::XJMaterialFactory::GetInstance()->SetAssetRegistry(&mAssetRegistry);
 
         mEditorSceneController.SetScene(scene);
         mEditorSceneController.SetAssetRegistry(&mAssetRegistry);
@@ -240,6 +243,7 @@ protected:
             spdlog::error("Default scene initialization failed");
             return;
         }
+
 
         if (mScenePreview)
         {

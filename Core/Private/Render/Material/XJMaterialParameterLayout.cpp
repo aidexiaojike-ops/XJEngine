@@ -1,6 +1,7 @@
 #include "Render/Material/XJMaterialParameterLayout.h"
 #include "Render/Shader/XJShaderReflectionUtils.h"
 #include "Render/Material/XJMaterialBuildResultUtils.h"
+#include "Render/Shader/XJShaderSchemaBindingResolver.h"
 
 namespace XJ
 {
@@ -38,78 +39,56 @@ namespace XJ
         }
 
         //遍历 schema 的所有参数，检查是否在 reflection 中有对应的 UBO member 或 sampler
-        for(const auto& parameter : schema.Parameters)
+
+        const XJShaderSchemaBindingResolveResult resolveResult = ResolveShaderSchemaBindings(schema, reflection);
+
+        for (const auto& error : resolveResult.Errors)
+            AddMaterialBuildError(buildResult, error);
+
+        for (const auto& warning : resolveResult.Warnings)
+            AddMaterialBuildWarning(buildResult, warning);
+
+        for(const auto& resolvedBinding  : resolveResult.Bindings)
         {
-            if(IsTextureParameter(parameter.Type))
+            if(resolvedBinding.Kind == XJShaderResolvedBindingKind::Texture)
             {
-                if(parameter.SamplerName.empty())
-                {
-                    AddMaterialBuildError(buildResult, "Texture parameter '" + parameter.Name + "' is missing a sampler name.");
-                    continue;
-                }
-
-                const XJShaderReflectedSampler* sampler = FindSampler(reflection, parameter.SamplerName);
-                if (!sampler)
-                {
-                    AddMaterialBuildError(buildResult, "Sampler not found in reflection for parameter: " + parameter.Name + " -> " + parameter.SamplerName);
-                    continue;
-                }
-
+               
                 XJMaterialTextureBinding textureBinding;
-                textureBinding.Type = parameter.Type;
-                textureBinding.ParameterName = parameter.Name;
-                textureBinding.SamplerName = parameter.SamplerName;
-                textureBinding.Set = sampler->Set;
-                textureBinding.Binding = sampler->Binding;
+                textureBinding.Type = resolvedBinding.Type;
+                textureBinding.ParameterName = resolvedBinding.ParameterName;
+                textureBinding.SamplerName = resolvedBinding.SamplerName;
+                textureBinding.Set = resolvedBinding.Set;
+                textureBinding.Binding = resolvedBinding.Binding;
 
                 mTextureBindings.push_back(textureBinding);
                 continue;
             }
 
-            if (parameter.UboName.empty() || parameter.MemberName.empty())
-            {
-                AddMaterialBuildWarning(buildResult, "Non-texture parameter has no ubo/member binding: " + parameter.Name);
+            if (resolvedBinding.Kind != XJShaderResolvedBindingKind::UboMember)
                 continue;
-            }
-            const XJShaderReflectedUbo* ubo = FindUbo(reflection, parameter.UboName);
-            if (!ubo)
-            {
-                AddMaterialBuildError(buildResult, "UBO not found in reflection for parameter: " + parameter.Name + " -> " + parameter.UboName);
-                continue;
-            }
-
-            const XJShaderReflectedMember* member = FindMember(*ubo, parameter.MemberName);
-            if (!member)
-            {
-                AddMaterialBuildError(buildResult, "UBO member not found in reflection for parameter: " + parameter.Name + " -> " + parameter.UboName + "." + parameter.MemberName);
-                continue;
-            }
 
             if (mUboName.empty())
             {
-                mUboName = ubo->Name;
-                mUboSize = ubo->Size;
+                mUboName = resolvedBinding.UboName;
+
+                if (const XJShaderReflectedUbo* ubo = FindUbo(reflection, resolvedBinding.UboName))
+                    mUboSize = ubo->Size;
             }
-            else if (mUboName != ubo->Name)
+            else if (mUboName != resolvedBinding.UboName)
             {
-                AddMaterialBuildWarning(buildResult, "Multiple material UBOs are not fully supported yet. Parameter uses UBO: " + parameter.UboName);
+                AddMaterialBuildWarning(buildResult, "Multiple material UBOs are not fully supported yet. Parameter uses UBO: " + resolvedBinding.UboName);
             }
 
-            const uint32_t expectedSize = ExpectedMinimumParameterSize(parameter.Type);
-            if (expectedSize != 0 && member->Size != 0 && member->Size < expectedSize)
-            {
-                AddMaterialBuildWarning(buildResult, "Reflected member size is smaller than expected for parameter: " + parameter.Name);
-            }
 
             XJMaterialParameterBinding parameterBinding;
-            parameterBinding.ParameterName = parameter.Name;
-            parameterBinding.Type = parameter.Type;
-            parameterBinding.UboName = parameter.UboName;
-            parameterBinding.MemberName = parameter.MemberName;
-            parameterBinding.Set = ubo->Set;
-            parameterBinding.Binding = ubo->Binding;
-            parameterBinding.Offset = member->Offset;
-            parameterBinding.Size = member->Size;
+            parameterBinding.ParameterName = resolvedBinding.ParameterName;
+            parameterBinding.Type = resolvedBinding.Type;
+            parameterBinding.UboName = resolvedBinding.UboName;
+            parameterBinding.MemberName = resolvedBinding.MemberName;
+            parameterBinding.Set = resolvedBinding.Set;
+            parameterBinding.Binding = resolvedBinding.Binding;
+            parameterBinding.Offset = resolvedBinding.Offset;
+            parameterBinding.Size = resolvedBinding.Size;
 
             mParameterBindings.push_back(parameterBinding);
         }

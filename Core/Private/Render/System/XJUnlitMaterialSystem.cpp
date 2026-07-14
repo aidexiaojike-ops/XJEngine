@@ -383,9 +383,9 @@ namespace XJ
 
         //纹理参数更新
         const TextureView *textureA  = material->GetTextureView(UNLIT_MAT_BASE_COLOR_A);
-        if(textureA )
+        if(textureA)
         {
-            spdlog::info("TextureA: valid={}, enable={}", textureA->IsValid(), textureA->bEnable);
+            //spdlog::info("TextureA: valid={}, enable={}", textureA->IsValid(), textureA->bEnable);
             TextureParam texParamA{};
             XJMaterial::UpdateTextureParams(textureA, &texParamA);
             material->SetTextureParamA(texParamA);
@@ -405,7 +405,7 @@ namespace XJ
         if (!materialBuffer)
             return;
         materialBuffer->WriteData(const_cast<uint8_t*>(block.GetDataPtr()));
-        spdlog::info("Upload material block: material={}, blockSize={}", material->GetIndex(), block.GetSize());
+        //spdlog::info("Upload material block: material={}, blockSize={}", material->GetIndex(), block.GetSize());
 
         VkDescriptorBufferInfo kBufferInfo = DescriptorSetWriter::BuildBufferInfo(materialBuffer->XJGetBuffer(), 0, block.GetSize());
         VkWriteDescriptorSet kBufferWrite = DescriptorSetWriter::WriteBuffer(descSet, 0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, &kBufferInfo);
@@ -419,35 +419,56 @@ namespace XJ
 
         std::vector<VkDescriptorImageInfo> imageInfos;
         std::vector<uint32_t> bindings;
-
-        for(const auto& textureBinding : material -> GetTextureBindings())
+        //只有真的 push 了 descriptor 才标记 wroteBindingX = true
+        auto addTextureWrite = [&](uint32_t binding, const TextureView* textureView) -> bool
         {
-            const TextureView* textureView = nullptr;
-            if (textureBinding.ParameterName == "AlbedoTexture")
-            textureView = material->GetTextureView(UNLIT_MAT_BASE_COLOR_A);
-
             if (!textureView || !textureView->texture || !textureView->sampler)
-                continue;
-
-            imageInfos.push_back(DescriptorSetWriter::BuildImageInfo(
-                textureView->sampler->XJGetSampler(),
-                textureView->texture->XJGetImageView()->XJGetImageView()));
-
-            bindings.push_back(textureBinding.Binding);
-        }
-
-        if (imageInfos.empty())
-        {
-            const TextureView* textureView = material->GetTextureView(UNLIT_MAT_BASE_COLOR_A);
-            if (!textureView || !textureView->texture || !textureView->sampler)
-                return;
+                return false;
         
             imageInfos.push_back(DescriptorSetWriter::BuildImageInfo(
                 textureView->sampler->XJGetSampler(),
                 textureView->texture->XJGetImageView()->XJGetImageView()));
             
-            bindings.push_back(0);
+            bindings.push_back(binding);
+            return true;
+        };
+
+        const TextureView* textureA = material->GetTextureView(UNLIT_MAT_BASE_COLOR_A);
+        const TextureView* textureB = material->GetTextureView(UNLIT_MAT_BASE_COLOR_B);
+
+        bool wroteBinding0 = false;
+        bool wroteBinding1 = false;
+
+        for (const auto& textureBinding : material->GetTextureBindings())
+        {
+            const TextureView* textureView = nullptr;
+
+            if (textureBinding.ParameterName == "AlbedoTexture" || textureBinding.SamplerName == "textureA")
+                textureView = textureA;
+            else if (textureBinding.SamplerName == "textureB")
+                textureView = textureB;
+
+            if (!textureView)
+                continue;
+
+            if (addTextureWrite(textureBinding.Binding, textureView))
+            {
+                if (textureBinding.Binding == 0)
+                    wroteBinding0 = true;
+                else if (textureBinding.Binding == 1)
+                    wroteBinding1 = true;
+            }
         }
+
+        // Unlit.frag statically declares both textureA and textureB, so both descriptors must be valid.
+        if (!wroteBinding0)
+           wroteBinding0 = addTextureWrite(0, textureA);
+
+        if (!wroteBinding1)
+           wroteBinding1 = addTextureWrite(1, textureB ? textureB : textureA);
+
+        if (imageInfos.empty())
+            return;
 
         std::vector<VkWriteDescriptorSet> writes;
         writes.reserve(imageInfos.size());

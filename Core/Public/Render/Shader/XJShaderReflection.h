@@ -7,6 +7,15 @@
 
 namespace XJ
 {
+    enum class XJShaderDescriptorType//描述符
+    {
+        Unknown = 0,
+        UniformBuffer,
+        CombinedImageSampler,
+        Sampler,
+        SampledImage
+    };
+
     enum class XJShaderStage//SHADER阶段？
     {
         Unknown = 0,
@@ -30,6 +39,7 @@ namespace XJ
         uint32_t Size = 0;
         XJShaderStage Stage = XJShaderStage::Unknown;
         std::vector<XJShaderReflectedMember> Members;
+        XJShaderDescriptorType DescriptorType = XJShaderDescriptorType::UniformBuffer;
     };
 
     struct XJShaderReflectedSampler//反射采样器
@@ -38,6 +48,7 @@ namespace XJ
         uint32_t Set = 0;
         uint32_t Binding = 0;
         XJShaderStage Stage = XJShaderStage::Unknown;
+        XJShaderDescriptorType DescriptorType = XJShaderDescriptorType::Unknown;
     };
 
     struct XJShaderReflectionResult//反射结果
@@ -47,6 +58,8 @@ namespace XJ
         std::vector<XJShaderReflectedSampler> Samplers;
         std::vector<std::string> Errors;
     };
+
+
 }
 
 
