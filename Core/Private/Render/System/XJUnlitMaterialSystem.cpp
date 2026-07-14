@@ -6,7 +6,11 @@
 #include "Graphic/VulkanImageView.h"
 #include "Graphic/XJVulkanFrameBuffer.h"//获取帧缓冲信息
 #include "Render/XJRenderTarget.h"//获取渲染目标信息
+#include "Asset/Serialization/XJShaderAssetSerializer.h"
+#include "Render/Material/XJMaterialShaderRuntimeLayoutBuilder.h"
+#include "Render/Shader/XJShaderDescriptorLayoutBuilder.h"
 #include "Render/Resource/XJMaterialFactory.h"
+#include "Render/Material/XJUnlitMaterialBindingUtils.h"
 #include "Graphic/XJVulkanFrameBuffer.h"
 #include "XJApplication.h"
 
@@ -18,10 +22,45 @@
 
 namespace XJ
 {
+    namespace
+    {
+        std::string ToPipelineShaderSourcePath(const std::filesystem::path& shaderPath)
+        {
+            std::filesystem::path path = shaderPath;
+            if (path.extension() == ".spv")
+                path.replace_extension();
+
+            return path.generic_string();
+        }
+
+        bool IsSameShaderPath(const std::filesystem::path& lhs, const std::filesystem::path& rhs)
+        {
+            if (lhs.empty() || rhs.empty())
+                return false;
+
+            std::error_code ec;
+            if (std::filesystem::equivalent(lhs, rhs, ec))
+                return true;
+
+            return lhs.lexically_normal().generic_string() == rhs.lexically_normal().generic_string() ||
+                   lhs.filename() == rhs.filename();
+        }
+    }
+
     void XJUnlitMaterialSystem::OnInit(XJVulkanRenderPass *renderPass) 
     {//添加内容查看shader Uniform  UBO
 
         XJVulkanDevice *kDevice = XJGetDevice();
+
+        auto shaderAsset = XJShaderAssetSerializer::LoadFromFile("Resource/Shader/Unlit.xjshader");
+        if (!shaderAsset || !XJMaterialShaderRuntimeLayoutBuilder::BuildFromShaderAsset(*shaderAsset, mShaderRuntimeLayout))
+        {
+            spdlog::error("Unlit material system failed to build shader runtime layout.");
+            return;
+        }
+
+        mShaderReflection = mShaderRuntimeLayout.Reflection;
+
         //Frame Ubo
         {
             const std::vector<VkDescriptorSetLayoutBinding> kBindings = 
@@ -39,38 +78,15 @@ namespace XJ
 
         //材质参数
         {
-            const std::vector<VkDescriptorSetLayoutBinding> kBindings = 
-            {
-                {
-                    .binding = 0,
-                    .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,//UNIFORM_BUFFER
-                    .descriptorCount = 1,
-                    .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,//  片源作色
-                    // kBindings.pImmutableSamplers = 
-                }
-
-            };
-            mMaterialParamDescSetLayout = std::make_shared<XJVulkanDescriptorSetLayout>(kDevice, kBindings);
+            mMaterialParamDescSetLayout = std::make_shared<XJVulkanDescriptorSetLayout>(
+                kDevice,
+                mShaderRuntimeLayout.MaterialParameterBindings);
         }
 
-        //材质纹理
         {
-            const std::vector<VkDescriptorSetLayoutBinding> kBindings = 
-            {
-                {
-                    .binding = 0,
-                    .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,//纹理采样
-                    .descriptorCount = 1,
-                    .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,//顶点着色  片源作色
-                },
-                {
-                    .binding = 1,
-                    .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,//纹理采样
-                    .descriptorCount = 1,
-                    .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,//顶点着色  片源作色
-                },
-            };
-            mMaterialResourceDescSetLayout = std::make_shared<XJVulkanDescriptorSetLayout>(kDevice, kBindings);
+            mMaterialResourceDescSetLayout = std::make_shared<XJVulkanDescriptorSetLayout>(
+                kDevice,
+                mShaderRuntimeLayout.MaterialResourceBindings);
         }
         //常量
         VkPushConstantRange kModelPC = 
@@ -88,10 +104,11 @@ namespace XJ
                                       mMaterialResourceDescSetLayout->XJGetDescriptorSet()},
             .pushConstantRanges = { kModelPC}
         };
+        
         //资源
         mPipelineLayout = std::make_shared<XJVulkanPipelineLayout>(kDevice,
-                                                                   XJ_RES_SHADER_DIR"Unlit.vert",
-                                                                   XJ_RES_SHADER_DIR"Unlit.frag", kShaderLayout);
+                                                                   ToPipelineShaderSourcePath(mShaderRuntimeLayout.VertexPath),
+                                                                   ToPipelineShaderSourcePath(mShaderRuntimeLayout.FragmentPath), kShaderLayout);
 
         std::vector<VkVertexInputBindingDescription> kVertexBindings{};
         kVertexBindings.resize(1);
@@ -141,21 +158,15 @@ namespace XJ
         mPipeline->Create();
 
         //描述符 池子
-        std::vector<VkDescriptorPoolSize> kPoolSizes = 
+        std::vector<VkDescriptorPoolSize> framePoolSizes =
         {
             {
-                //.type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC,
                 .type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-                .descriptorCount = 2
-            },
-            {
-                .type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-                .descriptorCount = 2
+                .descriptorCount = 1
             },
         };
 
-
-        mDescriptorPool = std::make_shared<XJ::XJVulkanDescriptorPool>(kDevice, 1, kPoolSizes);
+        mDescriptorPool = std::make_shared<XJ::XJVulkanDescriptorPool>(kDevice, 1, framePoolSizes);
         mFrameUboDescSet = mDescriptorPool->AllocateDescriptorSet(mFrameUboDescSetLayout.get(), 1)[0];
         mFrameUboBuffer = std::make_shared<XJ::XJVulkanBuffer>(kDevice, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, sizeof(FrameUbo), nullptr, true);
         //重新创建材质
@@ -237,7 +248,17 @@ namespace XJ
                     spdlog::error("TODO: Default material of error material ?");
                     continue;
                 }
-                
+
+                if (!kMaterial->GetShaderPath().empty() &&
+                    !IsSameShaderPath(kMaterial->GetShaderPath(), mShaderRuntimeLayout.ShaderPath))
+                {
+                    spdlog::warn("Skip material {}: shader path '{}' does not match Unlit pipeline shader '{}'.",
+                        kMaterial->GetIndex(),
+                        kMaterial->GetShaderPath().generic_string(),
+                        mShaderRuntimeLayout.ShaderPath.generic_string());
+                    continue;
+                }
+                 
                 VkDescriptorSet kParamsDescSet = mMaterialDescSets[kMaterialIndex];
                 VkDescriptorSet kResourceDescSet = mMaterialResourceDescSets[kMaterialIndex];
 
@@ -301,18 +322,16 @@ namespace XJ
         mMaterialResourceDescSets.clear();
         if(mMaterialDescriptorPool){mMaterialDescriptorPool.reset();}
         //从新申请池子
-        std::vector<VkDescriptorPoolSize> kPoolSizes = 
-        {
-            {
-                // .type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC,
-                .type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-                .descriptorCount = kNewDescriptorSetCount
-            },
-            {
-                .type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-                .descriptorCount = kNewDescriptorSetCount * 2//因为有两个贴图
-            },
-        };
+        std::vector<VkDescriptorPoolSize> kPoolSizes;
+
+        auto paramPoolSizes = BuildDescriptorPoolSizes(mShaderReflection, mShaderRuntimeLayout.MaterialParameterSet, kNewDescriptorSetCount);
+        auto resourcePoolSizes = BuildDescriptorPoolSizes(mShaderReflection, mShaderRuntimeLayout.MaterialResourceSet, kNewDescriptorSetCount);
+
+        kPoolSizes.insert(kPoolSizes.end(), paramPoolSizes.begin(), paramPoolSizes.end());
+
+        for (const auto& poolSize : resourcePoolSizes)
+            AddDescriptorPoolSize(kPoolSizes, poolSize.type, poolSize.descriptorCount);
+
         mMaterialDescriptorPool = std::make_shared<XJ::XJVulkanDescriptorPool>(kDevice, kNewDescriptorSetCount *2, kPoolSizes);
     
 
@@ -366,6 +385,7 @@ namespace XJ
         };
 
         mFrameUboBuffer->WriteData(&kFrameUbo);//写数据Ubo
+
         VkDescriptorBufferInfo bufferInfo = DescriptorSetWriter::BuildBufferInfo(mFrameUboBuffer->XJGetBuffer(), 0, sizeof(kFrameUbo));//ubobuffer
         VkWriteDescriptorSet bufferWrite = DescriptorSetWriter::WriteBuffer(mFrameUboDescSet, 0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, &bufferInfo);//写buffer
         DescriptorSetWriter::UpdateDescriptorSets(kDevice->XJGetDevice(), { bufferWrite });
@@ -406,9 +426,17 @@ namespace XJ
             return;
         materialBuffer->WriteData(const_cast<uint8_t*>(block.GetDataPtr()));
         //spdlog::info("Upload material block: material={}, blockSize={}", material->GetIndex(), block.GetSize());
+        const XJMaterialUboMemberBinding* uboBinding =
+            material->GetParameterLayout().FindFirstUboBinding(material->GetParameterLayout().GetUboName());        
+
+        if (!uboBinding)
+        {
+            spdlog::warn("Skip material params update: material {} has no UBO binding.", material->GetIndex());
+            return;
+        }
 
         VkDescriptorBufferInfo kBufferInfo = DescriptorSetWriter::BuildBufferInfo(materialBuffer->XJGetBuffer(), 0, block.GetSize());
-        VkWriteDescriptorSet kBufferWrite = DescriptorSetWriter::WriteBuffer(descSet, 0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, &kBufferInfo);
+        VkWriteDescriptorSet kBufferWrite = DescriptorSetWriter::WriteBuffer(descSet, uboBinding->Binding, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, &kBufferInfo);
         DescriptorSetWriter::UpdateDescriptorSets(device->XJGetDevice(), { kBufferWrite });
     }
 
@@ -433,40 +461,20 @@ namespace XJ
             return true;
         };
 
-        const TextureView* textureA = material->GetTextureView(UNLIT_MAT_BASE_COLOR_A);
-        const TextureView* textureB = material->GetTextureView(UNLIT_MAT_BASE_COLOR_B);
-
-        bool wroteBinding0 = false;
-        bool wroteBinding1 = false;
-
         for (const auto& textureBinding : material->GetTextureBindings())
         {
-            const TextureView* textureView = nullptr;
-
-            if (textureBinding.ParameterName == "AlbedoTexture" || textureBinding.SamplerName == "textureA")
-                textureView = textureA;
-            else if (textureBinding.SamplerName == "textureB")
-                textureView = textureB;
+            const TextureView* textureView = material->GetSamplerTextureView(textureBinding.SamplerName);
 
             if (!textureView)
-                continue;
+                textureView = GetUnlitTextureViewForBinding(*material, textureBinding);
 
-            if (addTextureWrite(textureBinding.Binding, textureView))
+            if (!addTextureWrite(textureBinding.Binding, textureView))
             {
-                if (textureBinding.Binding == 0)
-                    wroteBinding0 = true;
-                else if (textureBinding.Binding == 1)
-                    wroteBinding1 = true;
+               spdlog::warn("Skip texture descriptor write: material={}, sampler='{}', binding={}", material->GetIndex(), textureBinding.SamplerName, textureBinding.Binding);
             }
         }
 
         // Unlit.frag statically declares both textureA and textureB, so both descriptors must be valid.
-        if (!wroteBinding0)
-           wroteBinding0 = addTextureWrite(0, textureA);
-
-        if (!wroteBinding1)
-           wroteBinding1 = addTextureWrite(1, textureB ? textureB : textureA);
-
         if (imageInfos.empty())
             return;
 

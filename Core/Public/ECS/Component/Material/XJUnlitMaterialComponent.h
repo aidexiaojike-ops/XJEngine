@@ -31,16 +31,16 @@ namespace XJ
             void SetBaseColorA(const glm::vec4 &color)
             { 
                 spdlog::info("SetBaseColorA rgba=({}, {}, {}, {})", color.r, color.g, color.b, color.a);
-                SetUboMemberValue("MaterialUbo", "baseColorA", XJShaderParameterType::Color4, color);
+                SetPrimaryUboMemberValue("baseColorA", XJShaderParameterType::Color4, color);
             }
             void SetBaseColorB(const glm::vec4 &color)
             { 
                 spdlog::info("SetBaseColorB rgba=({}, {}, {}, {})", color.r, color.g, color.b, color.a);
-                SetUboMemberValue("MaterialUbo", "baseColorB", XJShaderParameterType::Color4, color);
+                SetPrimaryUboMemberValue("baseColorB", XJShaderParameterType::Color4, color);
             }
-            void SetMixValue(float mixValue){ SetUboMemberValue("MaterialUbo", "mixValue", XJShaderParameterType::Float, mixValue);}
-            void SetTextureParamA(const TextureParam &texParam){ SetUboMemberBytes("MaterialUbo", "textureParamA", &texParam, sizeof(texParam));}
-            void SetTextureParamB(const TextureParam &texParam){ SetUboMemberBytes("MaterialUbo", "textureParamB", &texParam, sizeof(texParam));}
+            void SetMixValue(float mixValue){ SetPrimaryUboMemberValue( "mixValue", XJShaderParameterType::Float, mixValue);}
+            void SetTextureParamA(const TextureParam &texParam){ SetPrimaryUboMemberBytes("textureParamA", &texParam, sizeof(texParam));}
+            void SetTextureParamB(const TextureParam &texParam){ SetPrimaryUboMemberBytes( "textureParamB", &texParam, sizeof(texParam));}
 
         private:
           

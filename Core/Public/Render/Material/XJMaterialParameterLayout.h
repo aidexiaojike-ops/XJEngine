@@ -37,6 +37,8 @@ namespace XJ
 
         uint32_t Set = 0;
         uint32_t Binding = 0;
+
+        bool ExposedBySchema = false;//标签
     };
 
     struct XJMaterialUboMemberBinding//材质 UBO 成员绑定
@@ -80,6 +82,8 @@ namespace XJ
 
             const XJMaterialParameterBinding* FindParameterBinding(const std::string& parameterName) const;//查找材质参数绑定
             const XJMaterialTextureBinding* FindTextureBinding(const std::string& parameterName) const;//查找材质纹理绑定
+            const XJMaterialTextureBinding* FindTextureBindingBySampler(const std::string& samplerName) const;
+            const XJMaterialUboMemberBinding* FindFirstUboBinding(const std::string& uboName) const;
 
             const std::vector<XJMaterialUboMemberBinding>& GetUboMemberBindings() const { return mUboMemberBindings; }//获取 UBO 成员绑定
             const XJMaterialUboMemberBinding* FindUboMemberBinding(const std::string& uboName, const std::string& memberName) const;//查找 UBO 成员绑定

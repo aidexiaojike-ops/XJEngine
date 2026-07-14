@@ -37,6 +37,16 @@ namespace XJ
                 mUboMemberBindings.push_back(uboMemberBinding);
             }
         }
+        for (const auto& sampler : reflection.Samplers)
+        {
+            XJMaterialTextureBinding textureBinding;
+            textureBinding.SamplerName = sampler.Name;
+            textureBinding.Set = sampler.Set;
+            textureBinding.Binding = sampler.Binding;
+            textureBinding.ExposedBySchema = false;
+        
+            mTextureBindings.push_back(textureBinding);
+        }
 
         //遍历 schema 的所有参数，检查是否在 reflection 中有对应的 UBO member 或 sampler
 
@@ -52,15 +62,34 @@ namespace XJ
         {
             if(resolvedBinding.Kind == XJShaderResolvedBindingKind::Texture)
             {
-               
-                XJMaterialTextureBinding textureBinding;
-                textureBinding.Type = resolvedBinding.Type;
-                textureBinding.ParameterName = resolvedBinding.ParameterName;
-                textureBinding.SamplerName = resolvedBinding.SamplerName;
-                textureBinding.Set = resolvedBinding.Set;
-                textureBinding.Binding = resolvedBinding.Binding;
+                bool updatedExistingBinding = false;
+                for (auto& textureBinding : mTextureBindings)
+                {
+                    if (textureBinding.SamplerName == resolvedBinding.SamplerName)
+                    {
+                        textureBinding.Type = resolvedBinding.Type;
+                        textureBinding.ParameterName = resolvedBinding.ParameterName;
+                        textureBinding.Set = resolvedBinding.Set;
+                        textureBinding.Binding = resolvedBinding.Binding;
+                        textureBinding.ExposedBySchema = true;
+                        updatedExistingBinding = true;
+                        break;
+                    }
+                }
 
-                mTextureBindings.push_back(textureBinding);
+                if (!updatedExistingBinding)
+                {
+                    XJMaterialTextureBinding textureBinding;
+                    textureBinding.Type = resolvedBinding.Type;
+                    textureBinding.ParameterName = resolvedBinding.ParameterName;
+                    textureBinding.SamplerName = resolvedBinding.SamplerName;
+                    textureBinding.Set = resolvedBinding.Set;
+                    textureBinding.Binding = resolvedBinding.Binding;
+                    textureBinding.ExposedBySchema = true;
+                
+                    mTextureBindings.push_back(textureBinding);
+                }
+
                 continue;
             }
 
@@ -137,6 +166,28 @@ namespace XJ
         for (const auto& binding : mUboMemberBindings)
         {
             if (binding.UboName == uboName && binding.MemberName == memberName)
+                return &binding;
+        }
+
+        return nullptr;
+    }
+
+    const XJMaterialTextureBinding* XJMaterialParameterLayout::FindTextureBindingBySampler(const std::string& samplerName) const
+    {
+        for(const auto& binding : mTextureBindings)
+        {
+            if(binding.SamplerName == samplerName)
+                return &binding;
+        }
+
+        return nullptr;
+    }
+    
+    const XJMaterialUboMemberBinding* XJMaterialParameterLayout::FindFirstUboBinding(const std::string& uboName) const
+    {
+        for (const auto& binding : mUboMemberBindings)
+        {
+            if (binding.UboName == uboName)
                 return &binding;
         }
 

@@ -185,4 +185,83 @@ namespace XJ
         MarkParameterDirty();
     }
 
+    const std::string& XJMaterial::GetPrimaryUboName() const
+    {
+        return mParameterLayout.GetUboName();
+    }   
+
+    bool XJMaterial::SetPrimaryUboMemberValue(
+        const std::string& memberName,
+        XJShaderParameterType type,
+        const XJMaterialParameterValue& value)
+    {
+        const std::string& uboName = GetPrimaryUboName();
+        if (uboName.empty())
+        {
+            spdlog::warn("SetPrimaryUboMemberValue failed: primary UBO name is empty: {}", memberName);
+            return false;
+        }   
+
+        return SetUboMemberValue(uboName, memberName, type, value);
+    }   
+
+    bool XJMaterial::SetPrimaryUboMemberBytes(
+        const std::string& memberName,
+        const void* data,
+        uint32_t size)
+    {
+        const std::string& uboName = GetPrimaryUboName();
+        if (uboName.empty())
+        {
+            spdlog::warn("SetPrimaryUboMemberBytes failed: primary UBO name is empty: {}", memberName);
+            return false;
+        }   
+
+        return SetUboMemberBytes(uboName, memberName, data, size);
+    }
+
+
+    bool XJMaterial::HasSamplerTexture(const std::string& samplerName) const
+    {
+        return mSamplerTextures.find(samplerName) != mSamplerTextures.end();
+    }
+    
+    const TextureView* XJMaterial::GetSamplerTextureView(const std::string& samplerName) const
+    {
+        auto it = mSamplerTextures.find(samplerName);
+        if (it == mSamplerTextures.end())
+            return nullptr;
+    
+        return &it->second;
+    }
+    
+    void XJMaterial::SetSamplerTextureView(
+        const std::string& samplerName,
+        const std::shared_ptr<XJTexture>& texture,
+        const std::shared_ptr<XJSampler>& sampler)
+    {
+        auto it = mSamplerTextures.find(samplerName);
+        if (it != mSamplerTextures.end())
+        {
+            it->second.texture = texture;
+            it->second.sampler = sampler;
+        }
+        else
+        {
+            mSamplerTextures[samplerName] = { texture, sampler };
+        }
+    
+        MarkTextureDirty();
+    }
+    
+    void XJMaterial::UpdateSamplerTextureViewEnable(const std::string& samplerName, bool enable)
+    {
+        auto it = mSamplerTextures.find(samplerName);
+        if (it == mSamplerTextures.end())
+            return;
+    
+        it->second.bEnable = enable;
+        MarkParameterDirty();
+    }
+
 }

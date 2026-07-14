@@ -3,6 +3,8 @@
 
 #include "Render/System/XJMaterialSystem.h"
 #include "ECS/Component/Material/XJUnlitMaterialComponent.h"
+#include "Render/Material/XJMaterialShaderRuntimeLayout.h"
+#include "Render/Shader/XJShaderReflection.h"
 
 namespace XJ
 {
@@ -51,6 +53,9 @@ namespace XJ
 
             void EnsureMaterialBuffer(uint32_t materialIndex, uint32_t requiredSize);//确保材质缓冲区的大小足够
             std::vector<uint32_t> mMaterialBufferSizes;
+
+            XJMaterialShaderRuntimeLayout mShaderRuntimeLayout;
+            XJShaderReflectionResult mShaderReflection;
 
 
             //std::shared_ptr<XJ::XJVulkanBuffer> mGlobalBuffer;

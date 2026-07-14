@@ -1,8 +1,9 @@
 #include "Render/Resource/XJMaterialFactory.h"
 
-#include "Asset/Serialization/XJShaderAssetSerializer.h"
 #include "Render/Material/XJMaterialParameterBlockBuilder.h"
+#include "Render/Material/XJUnlitMaterialBindingUtils.h"
 
+#include "Asset/Serialization/XJShaderAssetSerializer.h"
 #include "Asset/XJAssetRegistry.h"
 #include "Asset/Importer/XJTextureImporter.h"
 #include "Render/Resource/XJTextureFactory.h"
@@ -109,6 +110,7 @@ namespace XJ
             material.SetParameterLayout(layout);
             material.SetParameterBlock(block);
             material.SetTextureBindings(layout.GetTextureBindings());
+            material.SetShaderPath(asset.ShaderPath);
         
             spdlog::info(
                 "Material runtime build ok: ubo='{}', size={}, params={}, textures={}",
@@ -131,16 +133,6 @@ namespace XJ
            return BuildRuntimeMaterialData(asset, material);
         }
 
-        uint32_t ResolveUnlitTextureSlot(const XJMaterialTextureBinding& binding)
-        {
-            if (binding.ParameterName == "AlbedoTexture" || binding.SamplerName == "textureA")
-                return UNLIT_MAT_BASE_COLOR_A;
-        
-            if (binding.SamplerName == "textureB")
-                return UNLIT_MAT_BASE_COLOR_B;
-        
-            return UNLIT_MAT_BASE_COLOR_A;
-        }
 
         void ApplyFallbackUnlitTextureViews(XJUnlitMaterial& material, const std::shared_ptr<XJTexture>& defaultTexture, const std::shared_ptr<XJSampler>& defaultSampler)
         {
@@ -151,6 +143,17 @@ namespace XJ
             material.UpdateTextureViewEnable(UNLIT_MAT_BASE_COLOR_B, false);
         }
 
+        void ApplyFallbackSamplerTextureViews(XJUnlitMaterial& material, const std::shared_ptr<XJTexture>& defaultTexture, const std::shared_ptr<XJSampler>& defaultSampler)
+        {
+            for (const auto& binding : material.GetTextureBindings())
+            {
+                if (binding.SamplerName.empty())
+                    continue;
+
+                material.SetSamplerTextureView(binding.SamplerName, defaultTexture, defaultSampler);
+                material.UpdateSamplerTextureViewEnable(binding.SamplerName, false);
+            }
+        }
     }
 
     XJMaterialFactory XJMaterialFactory::mMaterialFactory{};
@@ -200,25 +203,41 @@ namespace XJ
         return texture;
     }
 
+
+
     void XJMaterialFactory::ApplyTextureBindings(XJUnlitMaterial& material, const XJMaterialAsset& asset, const std::shared_ptr<XJTexture>& defaultTexture, const std::shared_ptr<XJSampler>& defaultSampler)
     {
+        ApplyFallbackSamplerTextureViews(material, defaultTexture, defaultSampler);
         ApplyFallbackUnlitTextureViews(material, defaultTexture, defaultSampler);
+
         
-        for(const auto& binding : material.GetTextureBindings())
+        for (const auto& binding : material.GetTextureBindings())
         {
-            const XJAssetHandle textureHandle = ReadTextureParameter(asset, binding.ParameterName, static_cast<XJAssetHandle>(0));
-            
-            const uint32_t slot = ResolveUnlitTextureSlot(binding);
-            if(textureHandle == 0)
+            if (!binding.ExposedBySchema || binding.ParameterName.empty())
+                continue;       
+
+            const XJAssetHandle textureHandle =
+                ReadTextureParameter(asset, binding.ParameterName, static_cast<XJAssetHandle>(0));      
+
+            const uint32_t slot = ResolveUnlitTextureSlot(binding);     
+
+            if (textureHandle == 0)
             {
+                material.SetSamplerTextureView(binding.SamplerName, defaultTexture, defaultSampler);
+                material.UpdateSamplerTextureViewEnable(binding.SamplerName, false);        
+
                 material.SetTextureView(slot, defaultTexture, defaultSampler);
                 material.UpdateTextureViewEnable(slot, false);
                 continue;
-            }
+            }       
 
             std::shared_ptr<XJTexture> texture = GetOrLoadTexture(textureHandle, defaultTexture);
+            const bool loadedRealTexture = texture != nullptr && texture != defaultTexture;     
+
+            material.SetSamplerTextureView(binding.SamplerName, texture, defaultSampler);
+            material.UpdateSamplerTextureViewEnable(binding.SamplerName, loadedRealTexture && defaultSampler != nullptr);       
+
             material.SetTextureView(slot, texture, defaultSampler);
-            const bool loadedRealTexture = texture != nullptr && texture != defaultTexture;
             material.UpdateTextureViewEnable(slot, loadedRealTexture && defaultSampler != nullptr);
         }
 
@@ -246,7 +265,9 @@ namespace XJ
                     kMat->GetIndex());
         if (runtimeReady)
         {
-            kMat->SetBaseColorA(baseColor);
+            kMat->SetParameterValue("BaseColor", baseColor);
+
+            // Unlit compatibility: current shader still blends A/B.
             kMat->SetBaseColorB(baseColor);
             kMat->SetMixValue(0.0f);
         }

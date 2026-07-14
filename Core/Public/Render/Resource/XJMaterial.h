@@ -14,6 +14,7 @@
 #include <unordered_map>
 #include <vector>
 #include <cstdint>
+#include <filesystem>
 
 namespace XJ
 {
@@ -63,6 +64,9 @@ namespace XJ
             XJMaterialParameterLayout mParameterLayout;
             XJMaterialParameterBlock mParameterBlock;
             std::vector<XJMaterialTextureBinding> mTextureBindings;
+            std::filesystem::path mShaderPath;
+
+            std::unordered_map<std::string, TextureView> mSamplerTextures;
 
 
             friend class XJMaterialFactory;
@@ -79,6 +83,9 @@ namespace XJ
 
             int32_t XJGetIndex() const {return mIndex;}
             uint32_t GetIndex() const { return static_cast<uint32_t>(mIndex); }
+
+            const std::filesystem::path& GetShaderPath() const { return mShaderPath; }
+            void SetShaderPath(const std::filesystem::path& path) { mShaderPath = path; }
 
             bool SetParameterValue(const std::string& parameterName, const XJMaterialParameterValue& value);//设置材质参数值
             bool SetUboMemberValue(const std::string& uboName,const std::string& memberName,XJShaderParameterType type,const XJMaterialParameterValue& value);//设置材质UBO成员值
@@ -137,16 +144,27 @@ namespace XJ
 
             void FinishFlushParams() { ClearParameterDirty(); }
             void FinishFlushResoure() { ClearTextureDirty(); }
+            //UboUnlit 手动 setter 仍保留，但不再写死 UBO 名称，而是使用当前 runtime layout 的 UBO 名称。
+            const std::string& GetPrimaryUboName() const;
+            bool SetPrimaryUboMemberValue(const std::string& memberName, XJShaderParameterType type, const XJMaterialParameterValue& value);
+            bool SetPrimaryUboMemberBytes(const std::string& memberName, const void* data, uint32_t size);
+            //
+            bool HasSamplerTexture(const std::string& samplerName) const;
+            const TextureView* GetSamplerTextureView(const std::string& samplerName) const;
 
+            void SetSamplerTextureView(
+                const std::string& samplerName,
+                const std::shared_ptr<XJTexture>& texture,
+                const std::shared_ptr<XJSampler>& sampler);
+            
+            void UpdateSamplerTextureViewEnable(const std::string& samplerName, bool enable);
 
-
-
-        
         protected:
             XJMaterial() = default;
             // Compatibility names for current material setters. 当前材质设置器的兼容名称
             bool bShouldFlushParams = false;
             bool bShouldFlushResoure = false;
+            
     };
 
     
