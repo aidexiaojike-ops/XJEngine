@@ -147,7 +147,7 @@ Swapchain
 - **Push Constants**: `ModelPC` struct for per-draw model and normal matrix updates
 - **Shader Pipeline**: SPIR-V shader compilation and pipeline state management
 - **Shader Schema System**: JSON-defined parameters (Unlit.schema), schema validation via `XJShaderSchemaValidator`, binding resolution via `XJShaderSchemaBindingResolver`, descriptor layout via `XJShaderDescriptorLayoutBuilder`
-- **Shader Runtime Layout**: `XJMaterialShaderRuntimeLayout`/`Builder`, `XJUnlitMaterialBindingUtils` — runtime shader-material binding and descriptor set wiring
+- **Shader Runtime Layout**: `XJMaterialShaderRuntimeLayout`/`Builder`, `XJMaterialPipelineRuntime`, `XJUnlitMaterialBindingUtils` — runtime shader-material binding and descriptor set wiring
 - **Material Serializers**: `XJMaterialAssetSerializer`, `XJShaderAssetSerializer`, `XJShaderSchemaSerializer`
 - **Inspector Material Editing**: Parameter editing with `XJEditorMaterialParameterType` (Float, Color3, Texture2D, etc.)
 

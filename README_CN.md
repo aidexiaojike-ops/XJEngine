@@ -89,7 +89,7 @@ File -> Importer -> Asset (CPU) -> Factory -> Resource (GPU) -> Renderer
 - **运行时工具**：`XJSceneRuntimeUtil` 提供主摄像机查找等运行时辅助功能
 
 - **Shader Schema 系统**：JSON 定义的着色器参数，`XJShaderSchemaValidator` 验证 + `XJShaderSchemaBindingResolver` 绑定解析 + `XJShaderDescriptorLayoutBuilder` 描述符布局构建
-- **Shader 运行时布局**：`XJMaterialShaderRuntimeLayout`/`Builder`、`XJUnlitMaterialBindingUtils` — 运行时 Shader-材质绑定和描述符集连接
+- **Shader 运行时布局**：`XJMaterialShaderRuntimeLayout`/`Builder`、`XJMaterialPipelineRuntime`、`XJUnlitMaterialBindingUtils` — 运行时 Shader-材质绑定和描述符集连接
 - **材质序列化**：`XJMaterialAssetSerializer`、`XJShaderAssetSerializer`、`XJShaderSchemaSerializer`
 - **Inspector 材质编辑**：通过 `XJEditorMaterialParameterType` 编辑 Float、Color3、Texture2D 等参数
 
