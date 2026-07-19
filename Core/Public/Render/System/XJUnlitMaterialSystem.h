@@ -3,15 +3,15 @@
 
 #include "Render/System/XJMaterialSystem.h"
 #include "ECS/Component/Material/XJUnlitMaterialComponent.h"
-#include "Render/Material/XJMaterialShaderRuntimeLayout.h"
-#include "Render/Shader/XJShaderReflection.h"
+#include "Render/Material/XJMaterialPipelineRuntime.h"
+
+#include <filesystem>
+#include <string>
+#include <unordered_map>
+#include <unordered_set>
 
 namespace XJ
 {
-    
-    class XJVulkanPipelineLayout;
-    class XJVulkanPipeline;
-    class XJVulkanDescriptorSetLayout;
     class XJVulkanDescriptorPool;
     class XJVulkanFrameBuffer;
 
@@ -25,47 +25,36 @@ namespace XJ
             VkSampleCountFlagBits mSampleCount = VK_SAMPLE_COUNT_1_BIT;// 多重采样数量  minmap levels
 
         private:
-            //动态创建材质集   动态扩容
-            void ReCreateMaterialDescPool(uint32_t materialCount);
-            //更新数据
-            void UpdateFrameUboDescSet(XJRenderTarget *renderTarget);
-            void UpdateMaterialParamsDescSet(VkDescriptorSet descSet, XJUnlitMaterial *material);
-            void UpdateMaterialResourceDescSet(VkDescriptorSet descSet, XJUnlitMaterial *material);
+            void ReCreateMaterialDescPool(XJMaterialPipelineRuntime& runtime, uint32_t materialCount);
 
-            //shader 里面的三个输入
-            std::shared_ptr<XJVulkanDescriptorSetLayout> mFrameUboDescSetLayout;
-            std::shared_ptr<XJVulkanDescriptorSetLayout> mMaterialParamDescSetLayout;
-            std::shared_ptr<XJVulkanDescriptorSetLayout> mMaterialResourceDescSetLayout;
-            //渲染管线
-            std::shared_ptr<XJVulkanPipelineLayout> mPipelineLayout;
-            std::shared_ptr<XJVulkanPipeline> mPipeline;
-            //描述符集
-            std::shared_ptr<XJVulkanDescriptorPool> mDescriptorPool;
-            std::shared_ptr<XJVulkanDescriptorPool> mMaterialDescriptorPool;
+            void UpdateFrameUboDescSet(XJMaterialPipelineRuntime& runtime, XJRenderTarget *renderTarget);
+            void UpdateMaterialParamsDescSet(
+                XJMaterialPipelineRuntime& runtime,
+                VkDescriptorSet descSet,
+                XJUnlitMaterial *material);
+            void UpdateMaterialResourceDescSet(
+                XJMaterialPipelineRuntime& runtime,
+                VkDescriptorSet descSet,
+                XJUnlitMaterial *material);
 
-            VkDescriptorSet mFrameUboDescSet;
-            std::shared_ptr<XJVulkanBuffer> mFrameUboBuffer;
+            XJMaterialPipelineRuntime* GetOrCreatePipelineRuntime(
+                const std::filesystem::path& shaderPath,
+                XJVulkanRenderPass* renderPass);
 
-            uint32_t mLastDescriptorSetCount = 0;//DescriptorSet 数量
-            std::vector<VkDescriptorSet> mMaterialDescSets;//所有的材质描述符集
-            std::vector<VkDescriptorSet> mMaterialResourceDescSets;//
-            std::vector<std::shared_ptr<XJVulkanBuffer>> mMaterialBuffers;//所有材质参数
+            XJMaterialPipelineRuntime* ResolveMaterialPipelineRuntime(
+                const XJUnlitMaterial* material);
 
-            void EnsureMaterialBuffer(uint32_t materialIndex, uint32_t requiredSize);//确保材质缓冲区的大小足够
-            std::vector<uint32_t> mMaterialBufferSizes;
+            XJVulkanRenderPass* mRenderPass = nullptr;
 
-            XJMaterialShaderRuntimeLayout mShaderRuntimeLayout;
-            XJShaderReflectionResult mShaderReflection;
+            std::unordered_map<std::string, XJMaterialPipelineRuntime> mPipelineRuntimes;
+            XJMaterialPipelineRuntime* mDefaultPipelineRuntime = nullptr;
+            std::unordered_set<std::string> mWarnedFallbackShaderPaths;
+  
+
+            void EnsureMaterialBuffer(XJMaterialPipelineRuntime& runtime, uint32_t materialIndex, uint32_t requiredSize);//确保材质缓冲区的大小足够
 
 
-            //std::shared_ptr<XJ::XJVulkanBuffer> mGlobalBuffer;
-            //std::shared_ptr<XJ::XJVulkanBuffer> mInstanceBuffer;
-
-            //GlobalUbo mGlobalUbo;
-            //InstanceUbo mInstanceUbo;
     };
-
 }
-
 
 #endif

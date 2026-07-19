@@ -52,9 +52,10 @@ void main()
 
     if(materialUbo.textureParamA.enable != 0)
     {
-        TextureParam param = materialUbo.textureParamA;
-        param.uvTransform.w = -frameUbo.time;
-        colorA = texture(textureA, getTextureUV(param, v_Texcoord));
+        //TextureParam param = materialUbo.textureParamA;
+        //param.uvTransform.w = -frameUbo.time;
+        //colorA = texture(textureA, getTextureUV(param, v_Texcoord));
+        colorA = texture(textureA, getTextureUV(materialUbo.textureParamA, v_Texcoord));
     }
 
     if(materialUbo.textureParamB.enable != 0)

@@ -47,68 +47,123 @@ namespace XJ
         }
     }
 
-    void XJUnlitMaterialSystem::OnInit(XJVulkanRenderPass *renderPass) 
-    {//添加内容查看shader Uniform  UBO
+    XJMaterialPipelineRuntime* XJUnlitMaterialSystem::GetOrCreatePipelineRuntime(const std::filesystem::path& shaderPath, XJVulkanRenderPass* renderPass)
+    {
+        const std::string runtimeKey = shaderPath.lexically_normal().generic_string();
+
+        auto runtimeIt = mPipelineRuntimes.find(runtimeKey);
+        if (runtimeIt != mPipelineRuntimes.end())
+            return &runtimeIt->second;
+
+        auto shaderAsset = XJShaderAssetSerializer::LoadFromFile(shaderPath);
+        if (!shaderAsset)
+        {
+            spdlog::error("Material pipeline runtime failed to load shader asset: {}", shaderPath.generic_string());
+            return nullptr;
+        }
+
+        XJMaterialPipelineRuntime runtime{};
+
+        if (!XJMaterialShaderRuntimeLayoutBuilder::BuildFromShaderAsset(*shaderAsset, runtime.ShaderLayout))
+        {
+            spdlog::error("Material pipeline runtime failed to build shader runtime layout: {}", shaderPath.generic_string());
+            return nullptr;
+        }
+
+        if (!runtime.ShaderLayout.HasPrimaryFrameUbo())
+        {
+            spdlog::error("Material pipeline runtime has no primary frame UBO: {}", shaderPath.generic_string());
+            return nullptr;
+        }
+
+        if (!runtime.ShaderLayout.HasFrameSet())
+        {
+            spdlog::error("Material pipeline runtime has no frame descriptor set: {}", shaderPath.generic_string());
+            return nullptr;
+        }
+
+        if (!runtime.ShaderLayout.HasPrimaryMaterialUbo())
+        {
+            spdlog::error("Material pipeline runtime has no primary material UBO: {}", shaderPath.generic_string());
+            return nullptr;
+        }
+
+        if (!runtime.ShaderLayout.HasMaterialParameterSet())
+        {
+            spdlog::error("Material pipeline runtime has no material parameter descriptor set: {}", shaderPath.generic_string());
+            return nullptr;
+        }
+
+        if (!runtime.ShaderLayout.HasMaterialResourceSet())
+        {
+            spdlog::error("Material pipeline runtime has no material resource descriptor set: {}", shaderPath.generic_string());
+            return nullptr;
+        }
 
         XJVulkanDevice *kDevice = XJGetDevice();
-
-        auto shaderAsset = XJShaderAssetSerializer::LoadFromFile("Resource/Shader/Unlit.xjshader");
-        if (!shaderAsset || !XJMaterialShaderRuntimeLayoutBuilder::BuildFromShaderAsset(*shaderAsset, mShaderRuntimeLayout))
+         //Frame Ubo
+        runtime.FrameUboDescSetLayout = std::make_shared<XJVulkanDescriptorSetLayout>(kDevice, runtime.ShaderLayout.FrameBindings);
+        //描述符集
+        std::vector<VkDescriptorPoolSize> framePoolSizes =
         {
-            spdlog::error("Unlit material system failed to build shader runtime layout.");
-            return;
-        }
-
-        mShaderReflection = mShaderRuntimeLayout.Reflection;
-
-        //Frame Ubo
-        {
-            const std::vector<VkDescriptorSetLayoutBinding> kBindings = 
             {
-                {
-                    .binding = 0,
-                    .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,//UNIFORM_BUFFER
-                    .descriptorCount = 1,
-                    .stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,//顶点着色  片源作色
-                    // kBindings.pImmutableSamplers = 
-                }
-            };
-            mFrameUboDescSetLayout = std::make_shared<XJVulkanDescriptorSetLayout>(kDevice, kBindings);
-        }
+                .type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+                .descriptorCount = 1
+            },
+        };
+
+        runtime.FrameDescriptorPool =
+            std::make_shared<XJ::XJVulkanDescriptorPool>(
+                kDevice,
+                1,
+                framePoolSizes);
+            
+        runtime.FrameUboDescSet =
+            runtime.FrameDescriptorPool->AllocateDescriptorSet(
+                runtime.FrameUboDescSetLayout.get(),
+                1)[0];
+            
+        runtime.FrameUboBuffer =
+            std::make_shared<XJ::XJVulkanBuffer>(
+                kDevice,
+                VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+                sizeof(FrameUbo),
+                nullptr,
+                true);
 
         //材质参数
-        {
-            mMaterialParamDescSetLayout = std::make_shared<XJVulkanDescriptorSetLayout>(
+        runtime.MaterialParamDescSetLayout =
+            std::make_shared<XJVulkanDescriptorSetLayout>(
                 kDevice,
-                mShaderRuntimeLayout.MaterialParameterBindings);
-        }
+                runtime.ShaderLayout.MaterialParameterBindings);
 
-        {
-            mMaterialResourceDescSetLayout = std::make_shared<XJVulkanDescriptorSetLayout>(
+        runtime.MaterialResourceDescSetLayout =
+            std::make_shared<XJVulkanDescriptorSetLayout>(
                 kDevice,
-                mShaderRuntimeLayout.MaterialResourceBindings);
-        }
+                runtime.ShaderLayout.MaterialResourceBindings);
         //常量
-        VkPushConstantRange kModelPC = 
+        VkPushConstantRange kModelPC =
         {
             .stageFlags = VK_SHADER_STAGE_VERTEX_BIT,
             .offset = 0,
             .size = sizeof(ModelPC)
         };
-
-        //shader
-        ShaderLayout kShaderLayout = 
+         //shader
+        ShaderLayout kShaderLayout =
         {
-            .descriptorSetLayouts = { mFrameUboDescSetLayout->XJGetDescriptorSet(), 
-                                      mMaterialParamDescSetLayout->XJGetDescriptorSet(),
-                                      mMaterialResourceDescSetLayout->XJGetDescriptorSet()},
-            .pushConstantRanges = { kModelPC}
+            .descriptorSetLayouts = {
+                runtime.FrameUboDescSetLayout->XJGetDescriptorSet(),
+                runtime.MaterialParamDescSetLayout->XJGetDescriptorSet(),
+                runtime.MaterialResourceDescSetLayout->XJGetDescriptorSet()
+            },
+            .pushConstantRanges = { kModelPC }
         };
-        
         //资源
-        mPipelineLayout = std::make_shared<XJVulkanPipelineLayout>(kDevice,
-                                                                   ToPipelineShaderSourcePath(mShaderRuntimeLayout.VertexPath),
-                                                                   ToPipelineShaderSourcePath(mShaderRuntimeLayout.FragmentPath), kShaderLayout);
+        runtime.PipelineLayout = std::make_shared<XJVulkanPipelineLayout>(
+            kDevice,
+            ToPipelineShaderSourcePath(runtime.ShaderLayout.VertexPath),
+            ToPipelineShaderSourcePath(runtime.ShaderLayout.FragmentPath),
+            kShaderLayout);
 
         std::vector<VkVertexInputBindingDescription> kVertexBindings{};
         kVertexBindings.resize(1);
@@ -116,7 +171,7 @@ namespace XJ
         kVertexBindings[0].stride = sizeof(XJ::XJVulkanVertex);//步幅为顶点结构体大小
         kVertexBindings[0].inputRate = VK_VERTEX_INPUT_RATE_VERTEX;//每个顶点一个数据
         //顶点输入的状态
-        std::vector<VkVertexInputAttributeDescription> kVertexAttributes = 
+        std::vector<VkVertexInputAttributeDescription> kVertexAttributes =
         {
             {
                 .location = 0,
@@ -136,47 +191,112 @@ namespace XJ
                 .format = VK_FORMAT_R32G32B32_SFLOAT,
                 .offset = offsetof(XJVulkanVertex, normal)
             }
-        
         };
 
-        mPipeline = std::make_shared<XJVulkanPipeline>(kDevice, renderPass, mPipelineLayout.get());
+        runtime.Pipeline =
+            std::make_shared<XJVulkanPipeline>(kDevice, renderPass, runtime.PipelineLayout.get());
         // 仅当 render pass 有深度附件时才启用深度测试
         {
             bool hasDepth = false;
             const auto& attachments = renderPass->XJGetAttachments();
             for (const auto& att : attachments)
             {
-                if (IsDepthStencilFormat(att.format)) { hasDepth = true; break; }
+                if (IsDepthStencilFormat(att.format))
+                {
+                    hasDepth = true;
+                    break;
+                }
             }
+
             if (hasDepth)
-                mPipeline->EnableDepthTest(VK_TRUE);
+                runtime.Pipeline->EnableDepthTest(VK_TRUE);
         }
-        mPipeline->SetVertexInputState(kVertexBindings, kVertexAttributes);//设置顶点输入状态
-        mPipeline->SetInputAssemblyState(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST);//设置输入装配状态 三角形列表
-        mPipeline->SetDynamicState({VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR});
-        mPipeline->SetMultisampleState(mSampleCount, VK_FALSE, 0.2f);//设置多重采样状态  4倍采样  不启用样本着色
-        mPipeline->Create();
 
-        //描述符 池子
-        std::vector<VkDescriptorPoolSize> framePoolSizes =
+        runtime.Pipeline->SetVertexInputState(kVertexBindings, kVertexAttributes);//设置顶点输入状态
+        runtime.Pipeline->SetInputAssemblyState(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST);//设置输入装配状态 三角形列表
+        runtime.Pipeline->SetDynamicState({VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR});
+        runtime.Pipeline->SetMultisampleState(mSampleCount, VK_FALSE, 0.2f);//设置多重采样状态  4倍采样  不启用样本着色
+        runtime.Pipeline->Create();
+
+        spdlog::info(
+            "Material pipeline runtime created: shader='{}', materialUbo='{}', set={}, binding={}, size={}, samplers={}",
+            runtime.ShaderLayout.ShaderPath.generic_string(),
+            runtime.ShaderLayout.PrimaryFrameUboName,
+            runtime.ShaderLayout.PrimaryFrameUboSet,
+            runtime.ShaderLayout.PrimaryFrameUboBinding,
+            runtime.ShaderLayout.PrimaryMaterialUboName,
+            runtime.ShaderLayout.PrimaryMaterialUboSet,
+            runtime.ShaderLayout.PrimaryMaterialUboBinding,
+            runtime.ShaderLayout.PrimaryMaterialUboSize,
+            runtime.ShaderLayout.MaterialSamplerBindings.size());
+
+        auto [insertIt, inserted] = mPipelineRuntimes.emplace(runtimeKey, std::move(runtime));
+        return &insertIt->second;
+    }
+
+    XJMaterialPipelineRuntime* XJUnlitMaterialSystem::ResolveMaterialPipelineRuntime(const XJUnlitMaterial* material)
+    {
+        if (!mDefaultPipelineRuntime || !mDefaultPipelineRuntime->IsValid())
+            return nullptr;
+
+        if (!material || material->GetShaderPath().empty())
+            return mDefaultPipelineRuntime;
+
+        if (!mRenderPass)
         {
-            {
-                .type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-                .descriptorCount = 1
-            },
-        };
+            spdlog::warn("Resolve material pipeline runtime fallback: render pass is null.");
+            return mDefaultPipelineRuntime;
+        }
 
-        mDescriptorPool = std::make_shared<XJ::XJVulkanDescriptorPool>(kDevice, 1, framePoolSizes);
-        mFrameUboDescSet = mDescriptorPool->AllocateDescriptorSet(mFrameUboDescSetLayout.get(), 1)[0];
-        mFrameUboBuffer = std::make_shared<XJ::XJVulkanBuffer>(kDevice, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, sizeof(FrameUbo), nullptr, true);
+        XJMaterialPipelineRuntime* runtime =
+            GetOrCreatePipelineRuntime(material->GetShaderPath(), mRenderPass);
+
+        if (!runtime || !runtime->IsValid())
+        {
+            const std::string shaderPath = material->GetShaderPath().lexically_normal().generic_string();
+
+            if (mWarnedFallbackShaderPaths.insert(shaderPath).second)
+            {
+                spdlog::warn(
+                    "Resolve material pipeline runtime fallback: shader '{}' failed to create runtime.",
+                    shaderPath);
+            }
+
+            return mDefaultPipelineRuntime;
+        }
+
+        return runtime;
+    }
+
+    void XJUnlitMaterialSystem::OnInit(XJVulkanRenderPass *renderPass) 
+    {//添加内容查看shader Uniform  UBO
+        mRenderPass = renderPass;
+        XJVulkanDevice *kDevice = XJGetDevice();
+
+        mDefaultPipelineRuntime = GetOrCreatePipelineRuntime(
+            "Resource/Shader/Unlit.xjshader",
+            renderPass);
+
+        if (!mDefaultPipelineRuntime || !mDefaultPipelineRuntime->IsValid())
+        {
+            spdlog::error("Unlit material system failed to create default pipeline runtime.");
+            return;
+        }
+
         //重新创建材质
-        ReCreateMaterialDescPool(NUM_MATERIAL_BATCH);
+        ReCreateMaterialDescPool(*mDefaultPipelineRuntime, NUM_MATERIAL_BATCH);
     }
     void XJUnlitMaterialSystem::OnRender(XJVulkanCommandBuffer cmdBuffer, XJRenderTarget* renderTarget) 
     {
         XJScene *kScene = XJGetScene();
 
         if(!kScene){return;}//如果场景不存在，直接返回
+
+        if (!mDefaultPipelineRuntime || !mDefaultPipelineRuntime->IsValid())
+        {
+            spdlog::error("Unlit material system has no valid default pipeline runtime.");
+            return;
+        }
 
         entt::registry &kReg =  kScene->XJGetEcsRegistry();//拿到注射器
         auto kView = kReg.view<XJTransformComponent, XJUnlitMaterialComponent>();//获取视图，包含有变换组件、网格组件和基础材质组件的实体
@@ -186,9 +306,8 @@ namespace XJ
            return;   // 视图确实为空
         }
       
-
          //bind pipeline
-        mPipeline->BindPipeline(cmdBuffer);//绑定管线
+        //runtime->Pipeline->BindPipeline(cmdBuffer);//绑定管线
         //vkCmdBindDescriptorSets(cmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, mPipelineLayout->XJGetPipelineLayout(), 0, 1,  mDescriptorSets.data(), 0, nullptr);
         XJ::XJVulkanFrameBuffer *kFrameBuffer = renderTarget->XJGetCurrentFrameBuffer();
         if (!kFrameBuffer) 
@@ -211,32 +330,23 @@ namespace XJ
         scissor.extent = {kFrameBuffer->XJGetWidth(), kFrameBuffer->XJGetHeight()};
         vkCmdSetScissor(cmdBuffer, 0, 1, &scissor);
 
-        //每一帧渲染开始
-        UpdateFrameUboDescSet(renderTarget);
-
-        bool bShouldForceUpdateMaterial = false;//是否动态扩容材质
         uint32_t kMaterialCount = XJMaterialFactory::GetInstance()->GetMaterialSize<XJUnlitMaterial>();//材质数量
+        std::unordered_set<XJMaterialPipelineRuntime*> forceUpdateRuntimes;
 
-        if(kMaterialCount > mLastDescriptorSetCount)//做扩容
+        if(kMaterialCount > mDefaultPipelineRuntime->LastDescriptorSetCount)
         {
-            spdlog::info("Unlit: pool resize, count={}→{}", mLastDescriptorSetCount, kMaterialCount);
-            ReCreateMaterialDescPool(kMaterialCount);
-            bShouldForceUpdateMaterial = true;
+            spdlog::info("Unlit: pool resize, count={} -> {}", mDefaultPipelineRuntime->LastDescriptorSetCount, kMaterialCount);
+
+            ReCreateMaterialDescPool(*mDefaultPipelineRuntime, kMaterialCount);
+            forceUpdateRuntimes.insert(mDefaultPipelineRuntime);
         }
 
-         //更新推送常量  旋转矩阵
-        //透视投影矩阵   CameraCompionent 里设置投影矩阵和视图矩阵
-        //glm::mat4 kProjMat = XJGetProjMat(renderTarget);
-        //glm::mat4 kViewMat = XJGetViewMat(renderTarget);
-        // 将投影和视图矩阵赋值给全局UBO
-        //mGlobalUbo.projMat = projMat;
-        //mGlobalUbo.viewMat = viewMat;
-
-
         uint32_t kEntityIndex = 0; // 实体索引，用于动态UBO偏移计算
+        XJMaterialPipelineRuntime* boundRuntime = nullptr;
+        std::unordered_set<XJMaterialPipelineRuntime*> updatedFrameRuntimes;
         //材质是否更新
-        std::vector<bool> kUpdateFlags(kMaterialCount);
-        kView.each([this, &cmdBuffer, &kUpdateFlags, bShouldForceUpdateMaterial, &kEntityIndex](const auto &entity, const XJTransformComponent& transComp, const XJUnlitMaterialComponent& matComp)
+        std::unordered_map<XJMaterialPipelineRuntime*, std::vector<bool>> updateFlagsByRuntime;
+        kView.each([this, &cmdBuffer, &updateFlagsByRuntime, &forceUpdateRuntimes, &kEntityIndex, &boundRuntime, &updatedFrameRuntimes, renderTarget, kMaterialCount](const auto &entity, const XJTransformComponent& transComp, const XJUnlitMaterialComponent& matComp)
         {
             auto kMeshMaterials = matComp.XJGetMeshMaterials();
             for(const auto&entry :kMeshMaterials)//要是没有材质酒放弃渲染
@@ -248,38 +358,74 @@ namespace XJ
                     spdlog::error("TODO: Default material of error material ?");
                     continue;
                 }
-
-                if (!kMaterial->GetShaderPath().empty() &&
-                    !IsSameShaderPath(kMaterial->GetShaderPath(), mShaderRuntimeLayout.ShaderPath))
+                //runtime resolve 
+                XJMaterialPipelineRuntime* runtime = ResolveMaterialPipelineRuntime(kMaterial);
+                if (!runtime || !runtime->IsValid())
                 {
-                    spdlog::warn("Skip material {}: shader path '{}' does not match Unlit pipeline shader '{}'.",
-                        kMaterial->GetIndex(),
-                        kMaterial->GetShaderPath().generic_string(),
-                        mShaderRuntimeLayout.ShaderPath.generic_string());
+                    spdlog::warn("Skip material {}: failed to resolve valid pipeline runtime.", kMaterial->GetIndex());
                     continue;
                 }
-                 
-                VkDescriptorSet kParamsDescSet = mMaterialDescSets[kMaterialIndex];
-                VkDescriptorSet kResourceDescSet = mMaterialResourceDescSets[kMaterialIndex];
-
-                if(!kUpdateFlags[kMaterialIndex])
+                
+                if (updatedFrameRuntimes.insert(runtime).second)
+                    UpdateFrameUboDescSet(*runtime, renderTarget);
+                //bind pipeline 
+                if (kMaterialIndex >= runtime->LastDescriptorSetCount)
                 {
-                    UpdateMaterialParamsDescSet(kParamsDescSet, kMaterial);
+                    spdlog::info(
+                        "Unlit: runtime pool resize, shader='{}', count={} -> {}",
+                        runtime->ShaderLayout.ShaderPath.generic_string(),
+                        runtime->LastDescriptorSetCount,
+                        kMaterialCount);
+                    
+                    ReCreateMaterialDescPool(*runtime, kMaterialCount);
+                    forceUpdateRuntimes.insert(runtime);
+                }
+                
+                if (boundRuntime != runtime)
+                {
+                    runtime->Pipeline->BindPipeline(cmdBuffer);//绑定管线
+                    boundRuntime = runtime;
+                }
+                 
+                if (kMaterialIndex >= runtime->MaterialParamDescSets.size() ||
+                    kMaterialIndex >= runtime->MaterialResourceDescSets.size())
+                {
+                    spdlog::warn(
+                        "Skip material {}: descriptor set index is out of bounds.",
+                        kMaterial->GetIndex());
+                    continue;
+                }
+
+                auto& runtimeUpdateFlags = updateFlagsByRuntime[runtime];
+                if (runtimeUpdateFlags.size() < kMaterialCount)
+                    runtimeUpdateFlags.resize(kMaterialCount, false);
+
+                const bool forceUpdateRuntime =
+                    forceUpdateRuntimes.find(runtime) != forceUpdateRuntimes.end();
+
+                VkDescriptorSet kParamsDescSet = runtime->MaterialParamDescSets[kMaterialIndex];
+                VkDescriptorSet kResourceDescSet = runtime->MaterialResourceDescSets[kMaterialIndex];
+
+
+                if(!runtimeUpdateFlags[kMaterialIndex] || forceUpdateRuntime)
+                {
+                    UpdateMaterialParamsDescSet(*runtime, kParamsDescSet, kMaterial);
                     kMaterial->FinishFlushParams();
                     
                      // 无条件更新 texture/sampler descriptor（防止首次创建后从未更新）
-                    UpdateMaterialResourceDescSet(kResourceDescSet, kMaterial);
+                    UpdateMaterialResourceDescSet(*runtime, kResourceDescSet, kMaterial);
                     kMaterial -> FinishFlushResoure();
-                    kUpdateFlags[kMaterialIndex] = true;
+                    
+                    runtimeUpdateFlags[kMaterialIndex] = true;
                 }
 
-                VkDescriptorSet kDescriptorSet[] = { mFrameUboDescSet, kParamsDescSet, kResourceDescSet};
-                vkCmdBindDescriptorSets(cmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, mPipelineLayout->XJGetPipelineLayout(),
+                VkDescriptorSet kDescriptorSet[] = { runtime->FrameUboDescSet, kParamsDescSet, kResourceDescSet};
+                vkCmdBindDescriptorSets(cmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, runtime->PipelineLayout->XJGetPipelineLayout(),
                                         0, ARRAY_SIZE(kDescriptorSet), kDescriptorSet, 0, nullptr);
                 
                 ModelPC kPC = {transComp.GetModelMatrix()};
                 //推送常量
-                vkCmdPushConstants(cmdBuffer, mPipelineLayout->XJGetPipelineLayout(), VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(kPC), &kPC);
+                vkCmdPushConstants(cmdBuffer, runtime->PipelineLayout->XJGetPipelineLayout(), VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(kPC), &kPC);
                 //spdlog::warn("Draw: inst={} matIdx={} meshCnt={}",(void*)this, kMaterialIndex, entry.second.size());
                 for(const auto&kMeshIndex : entry.second)
                 {
@@ -291,19 +437,36 @@ namespace XJ
         });
 
     }
+
     void XJUnlitMaterialSystem::OnDestroy() 
     {
 
+        mDefaultPipelineRuntime = nullptr;
+
+        for (auto& entry : mPipelineRuntimes)
+            entry.second.Clear();
+
+        mPipelineRuntimes.clear();
+        mWarnedFallbackShaderPaths.clear();
+
+        mRenderPass = nullptr;
+
     }
-    void XJUnlitMaterialSystem::ReCreateMaterialDescPool(uint32_t materialCount) //动态扩容
+
+    void XJUnlitMaterialSystem::ReCreateMaterialDescPool(XJMaterialPipelineRuntime& runtime, uint32_t materialCount) //动态扩容
     {
         XJVulkanDevice *kDevice = XJGetDevice();
 
-        uint32_t kNewDescriptorSetCount = mLastDescriptorSetCount;//最新池子需要放多少个
-        if(mLastDescriptorSetCount == 0)
+        if (!runtime.IsValid())
         {
-            kNewDescriptorSetCount = NUM_MATERIAL_BATCH;
+            spdlog::error("ReCreateMaterialDescPool failed: pipeline runtime is invalid.");
+            return;
         }
+
+        //最新池子需要放多少个
+        uint32_t kNewDescriptorSetCount = runtime.LastDescriptorSetCount;
+        if (runtime.LastDescriptorSetCount == 0)
+            kNewDescriptorSetCount = NUM_MATERIAL_BATCH;
 
         while(kNewDescriptorSetCount < materialCount)
         {
@@ -318,58 +481,65 @@ namespace XJ
         }
 
         //销毁老参数
-        mMaterialDescSets.clear();
-        mMaterialResourceDescSets.clear();
-        if(mMaterialDescriptorPool){mMaterialDescriptorPool.reset();}
+        runtime.MaterialParamDescSets.clear();
+        runtime.MaterialResourceDescSets.clear();
+        runtime.MaterialDescriptorPool.reset();
         //从新申请池子
         std::vector<VkDescriptorPoolSize> kPoolSizes;
 
-        auto paramPoolSizes = BuildDescriptorPoolSizes(mShaderReflection, mShaderRuntimeLayout.MaterialParameterSet, kNewDescriptorSetCount);
-        auto resourcePoolSizes = BuildDescriptorPoolSizes(mShaderReflection, mShaderRuntimeLayout.MaterialResourceSet, kNewDescriptorSetCount);
+        auto paramPoolSizes = BuildDescriptorPoolSizes(runtime.ShaderLayout.Reflection, runtime.ShaderLayout.MaterialParameterSet, kNewDescriptorSetCount);
+        auto resourcePoolSizes = BuildDescriptorPoolSizes(runtime.ShaderLayout.Reflection, runtime.ShaderLayout.MaterialResourceSet, kNewDescriptorSetCount);
 
         kPoolSizes.insert(kPoolSizes.end(), paramPoolSizes.begin(), paramPoolSizes.end());
 
         for (const auto& poolSize : resourcePoolSizes)
             AddDescriptorPoolSize(kPoolSizes, poolSize.type, poolSize.descriptorCount);
 
-        mMaterialDescriptorPool = std::make_shared<XJ::XJVulkanDescriptorPool>(kDevice, kNewDescriptorSetCount *2, kPoolSizes);
+        runtime.MaterialDescriptorPool = std::make_shared<XJ::XJVulkanDescriptorPool>(kDevice, kNewDescriptorSetCount *2, kPoolSizes);
     
 
         //申请材质
-        mMaterialDescSets = mMaterialDescriptorPool->AllocateDescriptorSet(mMaterialParamDescSetLayout.get(), kNewDescriptorSetCount);
-        mMaterialResourceDescSets =  mMaterialDescriptorPool->AllocateDescriptorSet(mMaterialResourceDescSetLayout.get(), kNewDescriptorSetCount);
-        assert(mMaterialDescSets.size() == kNewDescriptorSetCount && "Failed to allocateDescriptorset");
-        assert(mMaterialResourceDescSets.size() == kNewDescriptorSetCount && "Failed to allocateDescriptorSet");
+        runtime.MaterialParamDescSets = runtime.MaterialDescriptorPool->AllocateDescriptorSet(runtime.MaterialParamDescSetLayout.get(), kNewDescriptorSetCount);
+        runtime.MaterialResourceDescSets =  runtime.MaterialDescriptorPool->AllocateDescriptorSet(runtime.MaterialResourceDescSetLayout.get(), kNewDescriptorSetCount);
+        assert(runtime.MaterialParamDescSets.size() == kNewDescriptorSetCount && "Failed to allocateDescriptorset");
+        assert(runtime.MaterialResourceDescSets.size() == kNewDescriptorSetCount && "Failed to allocateDescriptorSet");
 
         //差值用来创建uinform buffer
-        mMaterialBuffers.resize(kNewDescriptorSetCount);
-        mMaterialBufferSizes.resize(kNewDescriptorSetCount, 0);
+        runtime.MaterialBuffers.resize(kNewDescriptorSetCount);
+        runtime.MaterialBufferSizes.resize(kNewDescriptorSetCount, 0);
         //更新上一次的数量
-        mLastDescriptorSetCount = kNewDescriptorSetCount;
+        runtime.LastDescriptorSetCount = kNewDescriptorSetCount;
     
     }
 
-    void XJUnlitMaterialSystem::EnsureMaterialBuffer(uint32_t materialIndex, uint32_t requiredSize)//确保材质缓冲区的大小足够
+    void XJUnlitMaterialSystem::EnsureMaterialBuffer(XJMaterialPipelineRuntime& runtime, uint32_t materialIndex, uint32_t requiredSize)//确保材质缓冲区的大小足够
     {
         if(requiredSize == 0) { return; }
 
-        if(materialIndex >= mMaterialBuffers.size())
+        if(materialIndex >= runtime.MaterialBuffers.size())
         {
-            spdlog::error("Material index {} is out of bounds (max {}).", materialIndex, mMaterialBuffers.size());
+            spdlog::error("Material index {} is out of bounds (max {}).", materialIndex, runtime.MaterialBuffers.size());
             return;
         }
 
-        if(mMaterialBuffers[materialIndex] && mMaterialBufferSizes[materialIndex] == requiredSize)
+        if(runtime.MaterialBuffers[materialIndex] && runtime.MaterialBufferSizes[materialIndex] == requiredSize)
             return; 
         //
         XJVulkanDevice* kDevice = XJGetDevice();
-        mMaterialBuffers[materialIndex] = std::make_shared<XJVulkanBuffer>(kDevice, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, requiredSize, nullptr, true);
-        mMaterialBufferSizes[materialIndex] = requiredSize;
+        runtime.MaterialBuffers[materialIndex] = std::make_shared<XJVulkanBuffer>(kDevice, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, requiredSize, nullptr, true);
+        runtime.MaterialBufferSizes[materialIndex] = requiredSize;
     }
 
 
-    void XJUnlitMaterialSystem::UpdateFrameUboDescSet(XJRenderTarget *renderTarget)//更新UBO的结构
+    void XJUnlitMaterialSystem::UpdateFrameUboDescSet(XJMaterialPipelineRuntime& runtime, XJRenderTarget *renderTarget)//更新UBO的结构
     {
+
+        if (!runtime.FrameUboBuffer || runtime.FrameUboDescSet == VK_NULL_HANDLE || !runtime.ShaderLayout.HasPrimaryFrameUbo())
+        {
+            spdlog::warn("Skip frame UBO update: pipeline runtime frame resources are invalid.");
+            return;
+        }
+
         XJApplication *kApp = XJGetApp();
         XJVulkanDevice *kDevice = XJGetDevice();//逻辑设备
 
@@ -384,14 +554,14 @@ namespace XJ
             .time = kApp->XJGetStartTimeSecond()//时间
         };
 
-        mFrameUboBuffer->WriteData(&kFrameUbo);//写数据Ubo
+        runtime.FrameUboBuffer->WriteData(&kFrameUbo);//写数据Ubo
 
-        VkDescriptorBufferInfo bufferInfo = DescriptorSetWriter::BuildBufferInfo(mFrameUboBuffer->XJGetBuffer(), 0, sizeof(kFrameUbo));//ubobuffer
-        VkWriteDescriptorSet bufferWrite = DescriptorSetWriter::WriteBuffer(mFrameUboDescSet, 0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, &bufferInfo);//写buffer
+        VkDescriptorBufferInfo bufferInfo = DescriptorSetWriter::BuildBufferInfo(runtime.FrameUboBuffer->XJGetBuffer(), 0, sizeof(kFrameUbo));//ubobuffer
+        VkWriteDescriptorSet bufferWrite = DescriptorSetWriter::WriteBuffer(runtime.FrameUboDescSet, runtime.ShaderLayout.PrimaryFrameUboBinding, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, &bufferInfo);//写buffer
         DescriptorSetWriter::UpdateDescriptorSets(kDevice->XJGetDevice(), { bufferWrite });
     }
 
-    void XJUnlitMaterialSystem::UpdateMaterialParamsDescSet(VkDescriptorSet descSet, XJUnlitMaterial *material)//更新材质参数
+    void XJUnlitMaterialSystem::UpdateMaterialParamsDescSet(XJMaterialPipelineRuntime& runtime, VkDescriptorSet descSet, XJUnlitMaterial *material)//更新材质参数
     {
         XJVulkanDevice *device  = XJGetDevice();
         XJMaterialParameterBlock& block = material->GetParameterBlock();
@@ -419,29 +589,29 @@ namespace XJ
             material->SetTextureParamB(paramB);
         }
 
-        EnsureMaterialBuffer(material->GetIndex(), block.GetSize());
+        EnsureMaterialBuffer(runtime, material->GetIndex(), block.GetSize());
 
-        XJVulkanBuffer* materialBuffer = mMaterialBuffers[material->GetIndex()].get();
+        XJVulkanBuffer* materialBuffer = runtime.MaterialBuffers[material->GetIndex()].get();
         if (!materialBuffer)
             return;
         materialBuffer->WriteData(const_cast<uint8_t*>(block.GetDataPtr()));
         //spdlog::info("Upload material block: material={}, blockSize={}", material->GetIndex(), block.GetSize());
-        const XJMaterialUboMemberBinding* uboBinding =
-            material->GetParameterLayout().FindFirstUboBinding(material->GetParameterLayout().GetUboName());        
-
-        if (!uboBinding)
+        if (!runtime.ShaderLayout.HasPrimaryMaterialUbo())
         {
-            spdlog::warn("Skip material params update: material {} has no UBO binding.", material->GetIndex());
+            spdlog::warn("Skip material params update: shader runtime layout has no primary material UBO.");
             return;
         }
 
+
         VkDescriptorBufferInfo kBufferInfo = DescriptorSetWriter::BuildBufferInfo(materialBuffer->XJGetBuffer(), 0, block.GetSize());
-        VkWriteDescriptorSet kBufferWrite = DescriptorSetWriter::WriteBuffer(descSet, uboBinding->Binding, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, &kBufferInfo);
+        VkWriteDescriptorSet kBufferWrite = DescriptorSetWriter::WriteBuffer(descSet, runtime.ShaderLayout.PrimaryMaterialUboBinding, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, &kBufferInfo);
         DescriptorSetWriter::UpdateDescriptorSets(device->XJGetDevice(), { kBufferWrite });
     }
 
-    void XJUnlitMaterialSystem::UpdateMaterialResourceDescSet(VkDescriptorSet descSet, XJUnlitMaterial *material)//材质资源更新
+    void XJUnlitMaterialSystem::UpdateMaterialResourceDescSet(XJMaterialPipelineRuntime& runtime, VkDescriptorSet descSet, XJUnlitMaterial *material)//材质资源更新
     {
+        (void)runtime;
+
         XJVulkanDevice *device = XJGetDevice();//逻辑设备
         //优化
 

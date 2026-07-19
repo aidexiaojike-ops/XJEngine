@@ -298,6 +298,7 @@ namespace XJ
     
         if (defaultTexture && defaultSampler)
         {
+            ApplyFallbackSamplerTextureViews(*mat, defaultTexture, defaultSampler);
             ApplyFallbackUnlitTextureViews(*mat, defaultTexture, defaultSampler);
         }
     
