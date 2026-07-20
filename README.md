@@ -140,6 +140,7 @@ Swapchain
 - **XJMaterialSystem Base Class**: Provides helper methods (`XJGetDevice`, `XJGetProjMat`, `XJGetViewMat`, `XJGetScene`, `XJGetApp`) for material systems
 - **Material Parameter System**: `XJMaterialParameterBlock`/`Layout`/`Builder`/`Writer` — build from shader schema, write to GPU buffers
 - **Base Material System**: Dynamic uniform buffer instancing with global/per-instance UBOs
+- **Material Render System**: `XJMaterialRenderSystemBase` — base class for material-driven render systems, `XJMaterialRenderItem` — render item abstraction
 - **Unlit Material System**: Complete unlit pipeline with Frame UBO (proj/view/resolution/time), material parameter UBO (colors, mix, texture params), and combined image samplers
 - **DescriptorSetWriter**: Utility class providing static helpers for descriptor buffer/image info creation and descriptor set writes
 - **Dynamic Descriptor Pool**: Automatic expansion of material descriptor sets on demand (up to 2048)
@@ -147,7 +148,7 @@ Swapchain
 - **Push Constants**: `ModelPC` struct for per-draw model and normal matrix updates
 - **Shader Pipeline**: SPIR-V shader compilation and pipeline state management
 - **Shader Schema System**: JSON-defined parameters (Unlit.schema), schema validation via `XJShaderSchemaValidator`, binding resolution via `XJShaderSchemaBindingResolver`, descriptor layout via `XJShaderDescriptorLayoutBuilder`
-- **Shader Runtime Layout**: `XJMaterialShaderRuntimeLayout`/`Builder`, `XJMaterialPipelineRuntime`, `XJUnlitMaterialBindingUtils` — runtime shader-material binding and descriptor set wiring
+- **Shader Runtime Layout**: `XJMaterialShaderRuntimeLayout`/`Builder`, `XJMaterialPipelineRuntime`/`Builder`/`Cache`/`Descriptor`, `XJMaterialRuntimeUploader`, `XJUnlitMaterialBindingUtils` — runtime shader-material binding, descriptor set wiring, pipeline caching, GPU upload
 - **Material Serializers**: `XJMaterialAssetSerializer`, `XJShaderAssetSerializer`, `XJShaderSchemaSerializer`
 - **Inspector Material Editing**: Parameter editing with `XJEditorMaterialParameterType` (Float, Color3, Texture2D, etc.)
 
