@@ -32,7 +32,8 @@ namespace XJ
         VkBool32 rasterizerDiscardEnable = VK_FALSE;//是否启用光栅化丢弃
         VkPolygonMode polygonMode = VK_POLYGON_MODE_FILL;//多边形模式
         VkCullModeFlags cullMode = VK_CULL_MODE_BACK_BIT;//剔除模式
-        VkFrontFace frontFace = VK_FRONT_FACE_CLOCKWISE;//前面朝向
+        //VkFrontFace frontFace = VK_FRONT_FACE_CLOCKWISE;//前面朝向
+        VkFrontFace frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
         //VkFrontFace frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;// 改为逆时针为正面
         VkBool32 depthBiasEnable = VK_FALSE;//是否启用深度偏移
         float depthBiasConstantFactor = 0.0f;//深度偏移常数因子

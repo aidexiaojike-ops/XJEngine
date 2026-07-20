@@ -142,13 +142,7 @@ namespace XJ
         auto mat = CreateMaterialForSlot(data.MeshRenderer.Materials, 0, ctx);
         if (!mat)
             return;
-        //auto mat = XJMaterialFactory::GetInstance()->CreateDefaultMaterial(ctx.DefaultTexture, ctx.DefaultSampler);//创建一个基础的 Unlit 材质
-        //mat->XJSetBaseColorA(glm::vec3(0.8f, 0.6f, 0.2f));
-        //mat->XJSetBaseColorB(glm::vec3(0.8f, 0.6f, 0.2f));
-        //mat->XJSetTextureView(UNLIT_MAT_BASE_COLOR_A, ctx.DefaultTexture, ctx.DefaultSampler);
-        //mat->UpdateTextureViewEnable(UNLIT_MAT_BASE_COLOR_A, false);
-        //mat->XJSetTextureView(UNLIT_MAT_BASE_COLOR_B, ctx.DefaultTexture, ctx.DefaultSampler);
-        //mat->UpdateTextureViewEnable(UNLIT_MAT_BASE_COLOR_B, false);
+            
         comp.AddMesh(gpuMesh.get(), mat.get());
     }
 

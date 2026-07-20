@@ -62,7 +62,7 @@ namespace XJ
             return false;
         }
 
-        spdlog::info(
+        spdlog::debug(
             "SetUboMemberValue ok: {}.{}, offset={}, size={}, blockSize={}",
             uboName,
             memberName,
@@ -73,7 +73,7 @@ namespace XJ
         if (std::holds_alternative<glm::vec4>(value))
         {
             const glm::vec4& v = std::get<glm::vec4>(value);
-            spdlog::info(
+            spdlog::debug(
                 "Write UBO vec4: {}.{}, rgba=({}, {}, {}, {}), offset={}",
                 uboName,
                 memberName,
