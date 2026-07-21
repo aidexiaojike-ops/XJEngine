@@ -55,117 +55,144 @@ namespace XJ
         }
     }
 
-    bool XJRenderer::XJRendererBegin(int32_t *outImageIndex, std::vector<VkCommandBuffer> mCommandBuffers)
+    XJFrameAcquireResult XJRenderer::XJRendererBegin(const std::vector<VkCommandBuffer>& commandBuffers)
     {
+        XJFrameAcquireResult result{};
+
         XJ::XJRenderContext *kRenderCxt = XJ::XJApplication::XJGetAppContext()->renderContext;
         XJ::XJVulkanDevice *kDevice = kRenderCxt->XJGetDevice();
         XJ::XJVulkanSwapchain *kSwapchain = kRenderCxt->XJGetSwapchain();
-     
-        bool bShouldUpdateTarget = false;
-        //swapchain 重新创建  render target也做对应的更新
         
         // 等待上一帧的提交围栏完成
         VkResult fenceResult = vkWaitForFences(kDevice->XJGetDevice(), RENDERER_NUM_BUFFER, mSubmitFences.data(), VK_TRUE, UINT64_MAX);//等待上一帧的提交围栏完成
         if(fenceResult == VK_ERROR_DEVICE_LOST)
         {
             spdlog::critical("WaitForFences: 设备丢失，无法继续渲染");
-            return false;
+            return result;
         }
-        XJDebug_Log(fenceResult);
-        // XJDebug_Log(vkWaitForFences(kDevice->XJGetDevice(), 1, &mSubmitFences[mCurrentBuffer], VK_TRUE, UINT64_MAX));//等待上一帧
-        XJDebug_Log(vkResetFences(kDevice->XJGetDevice(), 1, &mSubmitFences[mCurrentBuffer]));
-        // 等待图像获取围栏完成（如果存在未完成的获取操作）
+        if (fenceResult != VK_SUCCESS)
+        {
+            spdlog::error("WaitForFences failed: {}", vk_result_string(fenceResult));
+            return result;
+        }
+
         if (mAcquireFences[mCurrentBuffer] != VK_NULL_HANDLE)
         {
-            XJDebug_Log(vkWaitForFences(kDevice->XJGetDevice(), 1, &mAcquireFences[mCurrentBuffer], VK_TRUE, UINT64_MAX));
+            // 等待图像获取围栏完成（如果存在未完成的获取操作）
+            VkResult acquireFenceWait = vkWaitForFences(
+                kDevice->XJGetDevice(),
+                1,
+                &mAcquireFences[mCurrentBuffer],
+                VK_TRUE,
+                UINT64_MAX);
+            
+            if (acquireFenceWait != VK_SUCCESS)
+            {
+                spdlog::error("Wait acquire fence failed: {}", vk_result_string(acquireFenceWait));
+                return result;
+            }
+        
             XJDebug_Log(vkResetFences(kDevice->XJGetDevice(), 1, &mAcquireFences[mCurrentBuffer]));
         }
 
+        int32_t imageIndex = -1;
         //交换链 获取图片
-        VkResult kResult = kSwapchain->AcquireImage(outImageIndex, mImageAvailableSemaphores[mCurrentBuffer], mAcquireFences[mCurrentBuffer]);
+        VkResult acquireResult = kSwapchain->AcquireImage(&imageIndex, mImageAvailableSemaphores[mCurrentBuffer], mAcquireFences[mCurrentBuffer]);
         //spdlog::trace("STEP2: AcquireImage returned {}", vk_result_string(kResult));  
-        if(kResult == VK_ERROR_OUT_OF_DATE_KHR)//交换链过期 需要重建
+        if(acquireResult == VK_ERROR_OUT_OF_DATE_KHR)//交换链过期 需要重建
         {
             XJDebug_Log(vkDeviceWaitIdle(kDevice->XJGetDevice()));//device wait idle 等待设备空闲
-            VkExtent2D kOriginExtent = {kSwapchain->XJGetWidth(), kSwapchain->XJGetHeight()};
+            VkExtent2D oldExtent  = {kSwapchain->XJGetWidth(), kSwapchain->XJGetHeight()};
             
              //重建交换链
-            bool bSuc = kSwapchain->ReCreate();
-            VkExtent2D kNewExtent = {kSwapchain->XJGetWidth(), kSwapchain->XJGetHeight()};
-            if(bSuc && (kOriginExtent.width != kNewExtent.width || kOriginExtent.height != kNewExtent.height))
-            {
-              
-                bShouldUpdateTarget = true;
-                spdlog::info("{0}: 交换链重建成功，新的分辨率：{1}x{2}", __FUNCTION__, kNewExtent.width, kNewExtent.height);
-            }
-            // 在交换链重建后也需要修改
-            kResult = kSwapchain->AcquireImage(outImageIndex, mImageAvailableSemaphores[mCurrentBuffer], mAcquireFences[mCurrentBuffer]);
+            bool recreated  = kSwapchain->ReCreate();
+            VkExtent2D newExtent  = {kSwapchain->XJGetWidth(), kSwapchain->XJGetHeight()};
+
+            result.resizeNeeded = recreated &&
+                (oldExtent.width != newExtent.width || oldExtent.height != newExtent.height);
             
-            if(kResult != VK_SUCCESS && kResult != VK_SUBOPTIMAL_KHR)
+            if (!recreated)
             {
-                spdlog::error("{0}: 获取交换链图片失败，错误码：{1}", __FUNCTION__, vk_result_string(kResult));
-                return false;
+                spdlog::error("{}: 交换链重建失败", __FUNCTION__);
+                return result;
             }
 
-            uint32_t newImageCount = kSwapchain->XJGetSwapchainImages().size();
-            if(newImageCount != mCommandBuffers.size())
-            {
-                
-            }
+            acquireResult = kSwapchain->AcquireImage(
+                &imageIndex,
+                mImageAvailableSemaphores[mCurrentBuffer],
+                mAcquireFences[mCurrentBuffer]);
         }
-        else if(kResult != VK_SUCCESS && kResult != VK_SUBOPTIMAL_KHR)
+        if (acquireResult != VK_SUCCESS && acquireResult != VK_SUBOPTIMAL_KHR)
         {
-            spdlog::error("{0}: 获取交换链图片失败，错误码：{1}", __FUNCTION__, vk_result_string(kResult));
-            return false;
-        }
-        if (*outImageIndex < 0 || *outImageIndex >= static_cast<int32_t>(mCommandBuffers.size())) 
-        {
-            spdlog::error("无效的图像索引: {}", *outImageIndex);
-            return false;
+            spdlog::error("{}: 获取交换链图片失败，错误码：{}", __FUNCTION__, vk_result_string(acquireResult));
+            return result;
         }
 
-        return bShouldUpdateTarget;
+        if (acquireResult == VK_SUBOPTIMAL_KHR)
+        {
+            result.resizeNeeded = true;
+        }
+
+        if (imageIndex < 0 || imageIndex >= static_cast<int32_t>(commandBuffers.size())) 
+        {
+            spdlog::error("无效的图像索引: {}", imageIndex);
+            return result;
+        }
+
+        result.acquired = true;
+        result.imageIndex = imageIndex;
+        return result;
     }
 
     
 
-    bool XJRenderer::XJRendererEnd(int32_t imageIndex, const std::vector<VkCommandBuffer> &cmdBuffers)
+    XJFramePresentResult  XJRenderer::XJRendererEnd(int32_t imageIndex, const std::vector<VkCommandBuffer> &cmdBuffers)
     {
+        XJFramePresentResult result{};
+
         XJ::XJRenderContext *kRenderCxt = XJ::XJApplication::XJGetAppContext()->renderContext;
         XJ::XJVulkanDevice *kDevice = kRenderCxt->XJGetDevice();
         XJ::XJVulkanSwapchain *kSwapchain = kRenderCxt->XJGetSwapchain();
-        bool bShouldUpdateTarget = false;
+
+        if (imageIndex < 0)
+        {
+            spdlog::error("Present skipped: invalid image index {}", imageIndex);
+            return result;
+        }
+        
+        XJDebug_Log(vkResetFences(kDevice->XJGetDevice(), 1, &mSubmitFences[mCurrentBuffer]));
 
         kDevice->XJGetFirstGraphicQueue()->Submit(cmdBuffers, { mImageAvailableSemaphores[mCurrentBuffer] }, { mSubmitedSemaphores[mCurrentBuffer] }, mSubmitFences[mCurrentBuffer]);
         //显示 presen
-        VkResult ret = kSwapchain->Present(imageIndex, { mSubmitedSemaphores[mCurrentBuffer] });
-        if(ret == VK_ERROR_DEVICE_LOST)
+        VkResult presentResult  = kSwapchain->Present(imageIndex, { mSubmitedSemaphores[mCurrentBuffer] });
+
+        if(presentResult  == VK_ERROR_DEVICE_LOST)
         {
             spdlog::critical("Present 失败：设备丢失 (VK_ERROR_DEVICE_LOST)");
-            return false;
+            return result;
         }
-        if(ret == VK_ERROR_OUT_OF_DATE_KHR || ret == VK_SUBOPTIMAL_KHR)
+
+        if(presentResult == VK_ERROR_OUT_OF_DATE_KHR || presentResult == VK_SUBOPTIMAL_KHR)
         {
-           XJDebug_Log(vkDeviceWaitIdle(kDevice->XJGetDevice()));//device wait idle 等待设备空闲
-           VkExtent2D originExtent = { kSwapchain->XJGetWidth(), kSwapchain->XJGetHeight() };
-           bool bSuc = kSwapchain->ReCreate();
-            //重建交换链
-           VkExtent2D newExtent = { kSwapchain->XJGetWidth(), kSwapchain->XJGetHeight() };//更新渲染目标的分辨率
-           if(bSuc && (originExtent.width != newExtent.width || originExtent.height != newExtent.height))
-           {
-               bShouldUpdateTarget = true;
-               
-           }
+            XJDebug_Log(vkDeviceWaitIdle(kDevice->XJGetDevice()));//device wait idle 等待设备空闲
+            VkExtent2D oldExtent  = { kSwapchain->XJGetWidth(), kSwapchain->XJGetHeight() };
+            bool recreated  = kSwapchain->ReCreate();
+             //重建交换链
+            VkExtent2D newExtent = { kSwapchain->XJGetWidth(), kSwapchain->XJGetHeight() };//更新渲染目标的分辨率
+            result.resizeNeeded = recreated &&
+                (oldExtent.width != newExtent.width || oldExtent.height != newExtent.height);
         }
-        else if(ret != VK_SUCCESS)
+        else if(presentResult  != VK_SUCCESS)
         {
-            spdlog::error("Present 失败：{}", vk_result_string(ret));
-            return false;
+            spdlog::error("Present 失败：{}", vk_result_string(presentResult ));
+            return result;
         }
         //latform/Private/Graphic/XJVulkanSwapchain.cpp，第 192-194 行两处 WaitIdle 让每帧变成完全同步（等 GPU 跑完才进入下一帧），严重拖慢性能。
         // XJDebug_Log(vkDeviceWaitIdle(kDevice->XJGetDevice()));//等待每一帧结束之后
         mCurrentBuffer = (mCurrentBuffer + 1) % RENDERER_NUM_BUFFER;
-        return bShouldUpdateTarget;
+
+        result.presented = true;
+        return result;
     
     }
 

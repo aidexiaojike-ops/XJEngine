@@ -10,11 +10,23 @@ namespace XJ
 
     #define RENDERER_NUM_BUFFER  2 //双buffer
 
+
+    struct XJFrameAcquireResult//帧获取结果
+    {
+        bool acquired = false;
+        bool resizeNeeded = false;
+        int32_t imageIndex = -1;
+    };
+
+    struct XJFramePresentResult//帧显示结果
+    {
+        bool presented = false;
+        bool resizeNeeded = false;
+    };
+
     class XJRenderer
     {
         private:
-            /* data */
-
             uint32_t mCurrentBuffer = 0; // 当前缓冲区索引
 
             VkSampleCountFlagBits mSampleCount = VK_SAMPLE_COUNT_1_BIT; // 多重采样数量
@@ -24,13 +36,13 @@ namespace XJ
             std::vector<VkFence> mAcquireFences;  // 用于图像获取
             std::vector<VkFence> mSubmitFences;   // 用于队列提交
 
-            //std::vector<VkFence> mFrameFences;
+
         public:
             XJRenderer(/* args */);
             ~XJRenderer();
           
-            bool XJRendererBegin(int32_t *outImageIndex, std::vector<VkCommandBuffer> mCommandBuffers);
-            bool XJRendererEnd(int32_t imageIndex, const std::vector<VkCommandBuffer> &cmdBuffers);
+            XJFrameAcquireResult XJRendererBegin(const std::vector<VkCommandBuffer>& commandBuffers);
+            XJFramePresentResult XJRendererEnd(int32_t imageIndex, const std::vector<VkCommandBuffer>& cmdBuffers);
     };
     
   

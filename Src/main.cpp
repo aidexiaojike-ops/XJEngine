@@ -360,15 +360,20 @@ protected:
             return;
         }   
         XJ::XJRenderContext *kRenderContext = XJApplication::XJGetAppContext()->renderContext;
-        XJ::XJVulkanDevice* kDevice = kRenderContext->XJGetDevice();
         XJ::XJVulkanSwapchain* kSwapchain = kRenderContext->XJGetSwapchain();
 
-    
-        int32_t imageIndex;// 当前图像索引
-        if(mRender->XJRendererBegin(&imageIndex, mCommandBuffers))
+        XJ::XJFrameAcquireResult acquireResult = mRender->XJRendererBegin(mCommandBuffers);
+        if(acquireResult.resizeNeeded)
         {
             mRenderTarget->SetExtent({kSwapchain->XJGetWidth(),kSwapchain->XJGetHeight()});
         }
+
+        if (!acquireResult.acquired)
+        {
+            return;
+        }
+
+        int32_t imageIndex = acquireResult.imageIndex;// 当前图像索引
 
         if (mScenePreview)
         {
@@ -438,7 +443,8 @@ protected:
       
         XJ::XJVulkanCommandPool::EndCommandBuffer(kCommandBuffer);
         // 提交命令缓冲区
-        if(mRender->XJRendererEnd(imageIndex, {kCommandBuffer}))
+        XJ::XJFramePresentResult presentResult =    mRender->XJRendererEnd(imageIndex, { kCommandBuffer });
+        if(presentResult.resizeNeeded)
         {
             mRenderTarget->SetExtent({kSwapchain->XJGetWidth(),kSwapchain->XJGetHeight()});
            
