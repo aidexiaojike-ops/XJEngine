@@ -46,11 +46,21 @@ namespace XJ
          // UNDEFINED -> TRANSFER_DST -> copy -> SHADER_READ_ONLY_OPTIMAL
         // 将图像的布局转换为可进行传输的状态
         VkCommandBuffer cmdBuffer = kDevice->CreateAndBeginOneDefaultCommandBuffer();
-        XJVulkanImage::TransitionLayout(cmdBuffer, mImage->XJGetImage(), VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+        XJVulkanImage::TransitionLayout(
+            cmdBuffer,
+            mImage->XJGetImage(),
+            mImage->XJGetFormat(),
+            VK_IMAGE_LAYOUT_UNDEFINED,
+            VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
         // 将缓冲区中的数据拷贝到 Vulkan 图像
         mImage->CopyFromBuffer(cmdBuffer, kStageBuffer.get());
           // 将图像的布局转换为着色器只读状态
-        XJVulkanImage::TransitionLayout(cmdBuffer, mImage->XJGetImage(), VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+        XJVulkanImage::TransitionLayout(
+            cmdBuffer,
+            mImage->XJGetImage(),
+            mImage->XJGetFormat(),
+            VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+            VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
          // 提交命令缓冲区
         kDevice->SubmitAndEndOneDefaultCommandBuffer(cmdBuffer);
          // 清理缓冲区

@@ -47,12 +47,28 @@ namespace XJ
     VulkanInstance::VulkanInstance()
     {
        //构建支持的层 获取当前系统（显卡驱动 + 操作系统）支持的所有「Vulkan 实例层」的列表和详细信息。
-        XJDebug_Log(vkEnumerateInstanceLayerProperties(&availableLayerCount, nullptr));//获取可用的层数量
-        std::vector<VkLayerProperties> availableLayers(availableLayerCount);//定义一个数组存储可用的层
-        if (availableLayerCount > 0)
+        std::vector<VkLayerProperties> availableLayers;
+        VkResult result = VK_SUCCESS;
+
+        do
         {
-            XJDebug_Log(vkEnumerateInstanceLayerProperties(&availableLayerCount, availableLayers.data()));
-        }//获取可用的层信息
+            XJDebug_Log(vkEnumerateInstanceLayerProperties(&availableLayerCount, nullptr));
+        
+            availableLayers.resize(availableLayerCount);
+        
+            result = availableLayerCount > 0
+                ? vkEnumerateInstanceLayerProperties(&availableLayerCount, availableLayers.data())
+                : VK_SUCCESS;
+        
+            if (result != VK_SUCCESS && result != VK_INCOMPLETE)
+            {
+                XJDebug_Log(result);
+                throw std::runtime_error("VulkanInstance failed: enumerate instance layers failed");
+            }
+        }
+        while (result == VK_INCOMPLETE);
+
+        availableLayers.resize(availableLayerCount);//获取可用的层信息
 
         uint32_t enableLayerCount = 0;
         const char* enableLayers[ARRAY_SIZE(requiredLayers)];
@@ -78,12 +94,27 @@ namespace XJ
     
 
         //构建支持的扩展 获取当前系统（显卡驱动 + 操作系统）支持的所有「Vulkan 实例扩展」的列表
-        XJDebug_Log(vkEnumerateInstanceExtensionProperties("",&availableExtensionCount, nullptr));//获取可用的层数量
-        std::vector<VkExtensionProperties> availableExtensions(availableExtensionCount);//定义一个数组存储可用的层
-        if (availableExtensionCount > 0)
+        std::vector<VkExtensionProperties> availableExtensions;
+
+        do
         {
-            XJDebug_Log(vkEnumerateInstanceExtensionProperties("", &availableExtensionCount, availableExtensions.data()));
-        }//获取可用的扩展数量
+            XJDebug_Log(vkEnumerateInstanceExtensionProperties(nullptr, &availableExtensionCount, nullptr));
+        
+            availableExtensions.resize(availableExtensionCount);
+        
+            result = availableExtensionCount > 0
+                ? vkEnumerateInstanceExtensionProperties(nullptr, &availableExtensionCount, availableExtensions.data())
+                : VK_SUCCESS;
+        
+            if (result != VK_SUCCESS && result != VK_INCOMPLETE)
+            {
+                XJDebug_Log(result);
+                throw std::runtime_error("VulkanInstance failed: enumerate instance extensions failed");
+            }
+        }
+        while (result == VK_INCOMPLETE);
+
+        availableExtensions.resize(availableExtensionCount);//获取可用的扩展数量
         //收集 Vulkan 实例需要启用的扩展列表，并对扩展进行「去重」，确保每个扩展只被添加一次
         uint32_t glfwRequestedExtensionCount = 0;
         const char** glfwRequestedExtensions = glfwGetRequiredInstanceExtensions(&glfwRequestedExtensionCount);//返回 GLFW 运行 Vulkan 必需的扩展列表
@@ -154,7 +185,8 @@ namespace XJ
         createInfo.enabledExtensionCount = enableExtensionCount;
         createInfo.ppEnabledExtensionNames = enableExtensionCount > 0 ? enableExtensions : nullptr;
 
-        VkResult result = vkCreateInstance(&createInfo, nullptr, &mInstance);
+        result = vkCreateInstance(&createInfo, nullptr, &mInstance);
+
         XJDebug_Log(result);
         if (result != VK_SUCCESS)
         {
@@ -205,7 +237,7 @@ namespace XJ
         
             debugMessenger = VK_NULL_HANDLE;
         }
-        
+
         if (mInstance != nullptr)
         {
             vkDestroyInstance(mInstance, nullptr);

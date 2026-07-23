@@ -27,9 +27,17 @@ namespace XJ
         }
         XJVulkanDescriptorSetLayout::~XJVulkanDescriptorSetLayout()
         {
+            if (!mDevice || !mDevice->IsValid())
+            {
+                return;
+            }
+
+            mDevice->WaitIdle();
+
             if (mDescriptorSet != VK_NULL_HANDLE)
             {
                 vkDestroyDescriptorSetLayout(mDevice->XJGetDevice(), mDescriptorSet, nullptr);
+                mDescriptorSet = VK_NULL_HANDLE;
             }
         }
 
@@ -49,9 +57,17 @@ namespace XJ
         }
         XJVulkanDescriptorPool::~XJVulkanDescriptorPool()
         {
+            if (!mDevice || !mDevice->IsValid())
+            {
+                return;
+            }
+
+            mDevice->WaitIdle();
+
             if(mDescriptorPool != VK_NULL_HANDLE)
             {
                 vkDestroyDescriptorPool(mDevice->XJGetDevice(), mDescriptorPool, nullptr);
+                mDescriptorPool = VK_NULL_HANDLE;
             }
         }
         std::vector<VkDescriptorSet> XJVulkanDescriptorPool::AllocateDescriptorSet(XJVulkanDescriptorSetLayout *setLayout, uint32_t count)

@@ -33,7 +33,9 @@ namespace XJ
             XJVulkanDevice& operator=(const XJVulkanDevice&) = delete;
             
             // 可选：提供获取Device的接口
-            VkDevice XJGetDevice() { return mDevice; }
+            VkDevice XJGetDevice() const { return mDevice; }
+            bool IsValid() const { return mDevice != VK_NULL_HANDLE; }
+            void WaitIdle() const;
             VkSettings XJGetSettings() { return settings;}
             VkPipelineCache XJGetPipelineCache() const { return mPipelineCache; }
 

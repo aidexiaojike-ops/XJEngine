@@ -19,6 +19,13 @@ namespace XJ
     
     XJVulkanSwapchain::~XJVulkanSwapchain()
     {
+        if (!mDevice || !mDevice->IsValid())
+        {
+            return;
+        }
+
+        mDevice->WaitIdle();
+
         if (mSwapchain != VK_NULL_HANDLE)
         {
             vkDestroySwapchainKHR(mDevice->XJGetDevice(), mSwapchain, nullptr);
@@ -93,6 +100,7 @@ namespace XJ
         if(ret != VK_SUCCESS)
         {
             spdlog::error("{0},{1}",__FUNCTION__, vk_result_string(ret));
+            mSwapchain = oldSwapchain;
             return false;
         }
         if (oldSwapchain != VK_NULL_HANDLE)
@@ -104,12 +112,39 @@ namespace XJ
             __FUNCTION__,(void*)oldSwapchain,(void*)mSwapchain,imageCount,
             vk_format_string(mSurfaceInfo.surfaceFormat.format), vk_present_mode_string(mSurfaceInfo.presentMode));
         //获取到交换链里面的内容之后
-        uint32_t swapchainImageCount;
-        ret = vkGetSwapchainImagesKHR(device, mSwapchain, &swapchainImageCount, nullptr);
-        mImages.resize(swapchainImageCount);
-        ret = vkGetSwapchainImagesKHR(device, mSwapchain, &swapchainImageCount, mImages.data());
+        uint32_t swapchainImageCount = 0;
 
-        return ret == VK_SUCCESS;
+        ret = vkGetSwapchainImagesKHR(device, mSwapchain, &swapchainImageCount, nullptr);
+        if (ret != VK_SUCCESS)
+        {
+            spdlog::error(
+                "{}: 获取交换链图片数量失败: {}",
+                __FUNCTION__,
+                vk_result_string(ret));
+            return false;
+        }
+
+        if (swapchainImageCount == 0)
+        {
+            spdlog::error("{}: 交换链图片数量为 0", __FUNCTION__);
+            return false;
+        }
+
+        mImages.resize(swapchainImageCount);
+
+        ret = vkGetSwapchainImagesKHR(device, mSwapchain, &swapchainImageCount, mImages.data());
+        if (ret != VK_SUCCESS)
+        {
+            spdlog::error(
+                "{}: 获取交换链图片失败: {}",
+                __FUNCTION__,
+                vk_result_string(ret));
+            mImages.clear();
+            return false;
+        }
+
+        mImages.resize(swapchainImageCount);
+        return true;
     }
     void XJVulkanSwapchain::SetupSurfaceCapabilities()
     {
@@ -190,19 +225,43 @@ namespace XJ
 
     VkResult XJVulkanSwapchain::Present(int32_t imageIndex, const std::vector<VkSemaphore>& waitSemaphores) 
     {
+        if (mDevice == nullptr)
+        {
+            spdlog::error("{}: device is null", __FUNCTION__);
+            return VK_ERROR_INITIALIZATION_FAILED;
+        }
+
+        if (mSwapchain == VK_NULL_HANDLE)
+        {
+            spdlog::error("{}: swapchain is null", __FUNCTION__);
+            return VK_ERROR_INITIALIZATION_FAILED;
+        }
+
+        VulkanQueue* presentQueue = mDevice->XJGetFirstPresentQueue();
+        if (presentQueue == nullptr || presentQueue->XJGetQueue() == VK_NULL_HANDLE)
+        {
+            spdlog::error("{}: present queue is null", __FUNCTION__);
+            return VK_ERROR_INITIALIZATION_FAILED;
+        }
+
+        uint32_t presentImageIndex = static_cast<uint32_t>(imageIndex);
+
         VkPresentInfoKHR presentInfo{};
         presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
         presentInfo.pNext = nullptr;
         presentInfo.waitSemaphoreCount = static_cast<uint32_t>(waitSemaphores.size());
-        presentInfo.pWaitSemaphores = waitSemaphores.data();
+        presentInfo.pWaitSemaphores = waitSemaphores.empty() ? nullptr : waitSemaphores.data();
         presentInfo.swapchainCount = 1;
         presentInfo.pSwapchains = &mSwapchain;
-        presentInfo.pImageIndices = reinterpret_cast<const uint32_t*>(&imageIndex);
+        presentInfo.pImageIndices = &presentImageIndex;
         presentInfo.pResults = nullptr;
 
-        VkResult result = vkQueuePresentKHR(mDevice->XJGetFirstPresentQueue()->XJGetQueue(), &presentInfo);
-        // Core/Private/Render/XJRenderer.cpp，第 147 行     XJDebug_Log(vkDeviceWaitIdle(kDevice->XJGetDevice()));//等待每一帧结束之后
-        // mDevice->XJGetFirstPresentQueue()->WaitIdle();
+        VkResult result = vkQueuePresentKHR(presentQueue->XJGetQueue(), &presentInfo);
+        if (result != VK_SUCCESS && result != VK_SUBOPTIMAL_KHR)
+        {
+            spdlog::error("{}: present failed: {}", __FUNCTION__, vk_result_string(result));
+        }
+        
         return result;
     }
 

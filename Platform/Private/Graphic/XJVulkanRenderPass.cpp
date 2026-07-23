@@ -12,11 +12,12 @@ namespace XJ
         // 如果附件和子通道为空，创建默认配置
         if(mSubPasses.empty())
         {
-            if(mAttachments.empty())//没有附件就添加一个颜色附件    一个颜色缓冲区附件，由交换链中的一张图像表示
+            bool generatedDefaultAttachments = false;
+        
+            if(mAttachments.empty())
             {
-                 // 颜色附件
-                Attachment  defaultColorAttachment{};
-                defaultColorAttachment.flags = 0;// 默认标志
+                Attachment defaultColorAttachment{};
+                defaultColorAttachment.flags = 0;
                 defaultColorAttachment.format = device->XJGetSettings().surfaceFormat;
                 defaultColorAttachment.samples = VK_SAMPLE_COUNT_1_BIT;
                 defaultColorAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
@@ -26,43 +27,63 @@ namespace XJ
                 defaultColorAttachment.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
                 defaultColorAttachment.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
                 defaultColorAttachment.usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
-
-                // 2. 深度附件 - 使用设备支持的最佳深度格式
-                Attachment  defaultDepthAttachment{};
+            
+                Attachment defaultDepthAttachment{};
                 defaultDepthAttachment.flags = 0;
-                defaultDepthAttachment.format = VK_FORMAT_D32_SFLOAT; // 或者 VK_FORMAT_D24_UNORM_S8_UINT
-                // 注意：深度格式将在Create方法中设置，因为我们需要先查询设备支持的格式
+                defaultDepthAttachment.format = VK_FORMAT_UNDEFINED;
                 defaultDepthAttachment.samples = VK_SAMPLE_COUNT_1_BIT;
                 defaultDepthAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
-                defaultDepthAttachment.storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;// 深度附件通常不需要存储
+                defaultDepthAttachment.storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
                 defaultDepthAttachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
                 defaultDepthAttachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
                 defaultDepthAttachment.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
                 defaultDepthAttachment.finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
-
+                defaultDepthAttachment.usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
+            
                 mAttachments.push_back(defaultColorAttachment);
                 mAttachments.push_back(defaultDepthAttachment);
-                spdlog::debug("添加颜色附件，格式: {}", vk_format_string(device->XJGetSettings().surfaceFormat));
+                generatedDefaultAttachments = true;
+            
+                spdlog::debug("添加默认颜色/深度附件，颜色格式: {}", vk_format_string(device->XJGetSettings().surfaceFormat));
             }
+        
+            if (mAttachments.empty())
+            {
+                spdlog::error("创建默认子通道失败：没有附件");
+                throw std::runtime_error("XJVulkanRenderPass failed: no attachments for default subpass");
+            }
+        
             RenderSubPass defaultSubPass{};
-            //defaultSubPass.colorAttachments = {0, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL};
-            //defaultSubPass.depthStencilAttachments = {1, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL}; // 添加深度附件引用
-            //spdlog::debug("创建默认子通道: 颜色附件索引=0, 深度附件索引=1");
-            //mSubPasses.push_back(defaultSubPass);
             defaultSubPass.colorAttachments = {0};
-            defaultSubPass.depthStencilAttachments = {1}; // 添加深度附件引用
-            spdlog::debug("创建默认子通道: 颜色附件索引=0, 深度附件索引=1");
-            defaultSubPass.sampleCount = VK_SAMPLE_COUNT_1_BIT;  // 明确设为1
+            defaultSubPass.sampleCount = VK_SAMPLE_COUNT_1_BIT;
+        
+            if (generatedDefaultAttachments && mAttachments.size() > 1)
+            {
+                defaultSubPass.depthStencilAttachments = {1};
+                spdlog::debug("创建默认子通道: 颜色附件索引=0, 深度附件索引=1");
+            }
+            else
+            {
+                spdlog::debug("创建默认子通道: 颜色附件索引=0，无默认深度附件");
+            }
+        
             mSubPasses.push_back(defaultSubPass);
-            for (size_t i = 0; i < mAttachments.size(); ++i) 
+        
+            for (size_t i = 0; i < mAttachments.size(); ++i)
             {
                 spdlog::debug("Attachment {} samples: {}", i, mAttachments[i].samples);
             }
         }
 
          // 设置深度格式（查询设备支持的最佳深度格式）
-        if (mAttachments.size() > 1 && mAttachments[1].format == VK_FORMAT_UNDEFINED)
+        for (auto& attachment : mAttachments)
         {
+
+            if ((attachment.usage & VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT) == 0 ||
+                attachment.format != VK_FORMAT_UNDEFINED)
+            {
+                continue;
+            }
             // 查询最佳深度格式
             std::vector<VkFormat> depthFormats = {
                 VK_FORMAT_D32_SFLOAT_S8_UINT,
@@ -91,17 +112,22 @@ namespace XJ
                 throw std::runtime_error("未找到支持的深度格式");
             }
             
-            mAttachments[1].format = depthFormat;
+            attachment.format = depthFormat;
             spdlog::debug("设置深度附件格式为: {}", vk_format_string(depthFormat));
         }
 
     
         // 创建子通道描述
+        if (mSubPasses.empty())
+        {
+            spdlog::error("创建渲染通道失败：没有子通道");
+            throw std::runtime_error("XJVulkanRenderPass failed: no subpasses");
+        }
+        std::vector<VkAttachmentReference> resolveAttachmentRefs(mSubPasses.size()); // 解析附件引用数组
         std::vector<VkSubpassDescription> subpassDescriptions(mSubPasses.size());
-        std::vector<std::vector<VkAttachmentReference>>  inputAttachmentRefs(mSubPasses.size());
+        std::vector<std::vector<VkAttachmentReference>>   inputAttachmentRefs(mSubPasses.size());
         std::vector<std::vector<VkAttachmentReference>>   colorAttachmentRefs(mSubPasses.size());
         std::vector<std::vector<VkAttachmentReference>>   depthStencilAttachmentRefs(mSubPasses.size());
-        VkAttachmentReference resolveAttachmentRefs[mSubPasses.size()]; // 解析附件引用数组
 
         for(uint32_t i = 0; i < mSubPasses.size();i++)
         {
@@ -110,25 +136,59 @@ namespace XJ
             // 输入附件
             for(const auto& inputAttachment : subPass.inputAttachments)
             {
+                if (inputAttachment >= mAttachments.size())
+                {
+                    spdlog::error(
+                        "创建渲染通道失败：subpass {} input attachment index {} 越界，attachmentCount={}",
+                        i,
+                        inputAttachment,
+                        mAttachments.size());
+                    throw std::runtime_error("XJVulkanRenderPass failed: input attachment index out of range");
+                }
+            
                 inputAttachmentRefs[i].push_back({inputAttachment, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL });
             }
             // 颜色附件引用
             for(const auto& colorAttachment : subPass.colorAttachments)
             {
+                if (colorAttachment >= mAttachments.size())
+                {
+                    spdlog::error(
+                        "创建渲染通道失败：subpass {} color attachment index {} 越界，attachmentCount={}",
+                        i,
+                        colorAttachment,
+                        mAttachments.size());
+                    throw std::runtime_error("XJVulkanRenderPass failed: color attachment index out of range");
+                }
+            
                 colorAttachmentRefs[i].push_back({colorAttachment, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL});
-                mAttachments[colorAttachment].samples = subPass.sampleCount; // 设置附件的采样数
+                mAttachments[colorAttachment].samples = subPass.sampleCount;
+            
                 if(subPass.sampleCount > VK_SAMPLE_COUNT_1_BIT)
                 {
-                    mAttachments[colorAttachment].finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL; // 多重采样附件通常不需要存储
-                } else {
-                    // 对于单采样，确保最终布局是PRESENT_SRC_KHR
-                     if (mAttachments[colorAttachment].finalLayout == VK_IMAGE_LAYOUT_UNDEFINED)
-                         mAttachments[colorAttachment].finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+                    mAttachments[colorAttachment].finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+                }
+                else
+                {
+                    if (mAttachments[colorAttachment].finalLayout == VK_IMAGE_LAYOUT_UNDEFINED)
+                    {
+                        mAttachments[colorAttachment].finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+                    }
                 }
             }
             //  // 深度/模板附件引用
             for(const auto& depthStencilAttachment : subPass.depthStencilAttachments)
             {
+                if (depthStencilAttachment >= mAttachments.size())
+                {
+                    spdlog::error(
+                        "创建渲染通道失败：subpass {} depth attachment index {} 越界，attachmentCount={}",
+                        i,
+                        depthStencilAttachment,
+                        mAttachments.size());
+                    throw std::runtime_error("XJVulkanRenderPass failed: depth attachment index out of range");
+                }
+            
                 depthStencilAttachmentRefs[i].push_back({depthStencilAttachment, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL});
                 mAttachments[depthStencilAttachment].samples = subPass.sampleCount; // 设置附件的采样数
             }
@@ -224,7 +284,19 @@ namespace XJ
         }
         
         // 检查附件布局设置
-        spdlog::debug("渲染通道创建成功，附件详细信息：{0}, {1}, {2}", __FUNCTION__,  mAttachments[0].finalLayout, mAttachments[0].initialLayout);
+        if (!mAttachments.empty())
+        {
+            spdlog::debug(
+                "渲染通道创建成功，附件详细信息：{0}, {1}, {2}",
+                __FUNCTION__,
+                mAttachments[0].finalLayout,
+                mAttachments[0].initialLayout);
+        }
+        else
+        {
+            spdlog::debug("渲染通道创建成功，无附件：{0}", __FUNCTION__);
+        }
+        
         for (size_t i = 0; i < mAttachments.size(); ++i) {
             const auto& attach = mAttachments[i];
             spdlog::debug("附件[{}]: format={}, initialLayout={}, finalLayout={}, samples={}", 

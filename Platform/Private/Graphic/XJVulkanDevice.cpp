@@ -136,17 +136,37 @@ namespace XJ
             createdPresentQueueCount = requestedPresentQueueCount;
         }
 
-        uint32_t availableExtensionCount;
-        XJDebug_Log(vkEnumerateDeviceExtensionProperties(physicalDevice,"",&availableExtensionCount, nullptr));//获取可用的层数量
-        std::vector<VkExtensionProperties> availableExtensions(availableExtensionCount);//定义一个数组存储可用的层
-        if (availableExtensionCount > 0)
+        uint32_t availableExtensionCount = 0;
+        std::vector<VkExtensionProperties> availableExtensions;
+        VkResult result = VK_SUCCESS;
+
+        do
         {
             XJDebug_Log(vkEnumerateDeviceExtensionProperties(
                 physicalDevice,
-                "",
+                nullptr,
                 &availableExtensionCount,
-                availableExtensions.data()));
-        }//获取可用的扩展数量
+                nullptr));
+            
+            availableExtensions.resize(availableExtensionCount);
+            
+            result = availableExtensionCount > 0
+                ? vkEnumerateDeviceExtensionProperties(
+                    physicalDevice,
+                    nullptr,
+                    &availableExtensionCount,
+                    availableExtensions.data())
+                : VK_SUCCESS;
+                
+            if (result != VK_SUCCESS && result != VK_INCOMPLETE)
+            {
+                XJDebug_Log(result);
+                throw std::runtime_error("XJVulkanDevice failed: enumerate device extensions failed");
+            }
+        }
+        while (result == VK_INCOMPLETE);
+
+        availableExtensions.resize(availableExtensionCount);//获取可用的扩展数量
         //检查环境支持什么设备扩展
         uint32_t enableExtensionCount = 0;
         const char* enableExtensions[ARRAY_SIZE(requestedExtensions) + 5];
@@ -176,7 +196,7 @@ namespace XJ
         deviceCreateInfo.ppEnabledExtensionNames = enableExtensionCount > 0? enableExtensions : nullptr;//暂时不启用扩展
         deviceCreateInfo.pEnabledFeatures = nullptr;//使用物理设备的默认特性
         
-        VkResult result = vkCreateDevice(physicalDevice, &deviceCreateInfo, nullptr, &mDevice);
+        result = vkCreateDevice(physicalDevice, &deviceCreateInfo, nullptr, &mDevice);
         XJDebug_Log(result);
         if (result != VK_SUCCESS)
         {
@@ -231,7 +251,7 @@ namespace XJ
             return;
         }
 
-        vkDeviceWaitIdle(mDevice);
+        WaitIdle();
 
         mDefaultCmdPool = nullptr;
 
@@ -244,6 +264,13 @@ namespace XJ
         vkDestroyDevice(mDevice, nullptr);
         mDevice = VK_NULL_HANDLE;
         
+    }
+    void XJVulkanDevice::WaitIdle() const
+    {
+        if (mDevice != VK_NULL_HANDLE)
+        {
+            XJDebug_Log(vkDeviceWaitIdle(mDevice));
+        }
     }
     void XJVulkanDevice::CreatePipelineCache()//创建管线缓存
     {
@@ -290,15 +317,46 @@ namespace XJ
 
     VkCommandBuffer XJVulkanDevice::CreateAndBeginOneDefaultCommandBuffer()//开始单个命令缓冲区
     {
+        if (!mDefaultCmdPool)
+        {
+            spdlog::error("{}: default command pool is null", __FUNCTION__);
+            return VK_NULL_HANDLE;
+        }
+    
         VkCommandBuffer commandBuffer = mDefaultCmdPool->AllocateSingleCommandBuffer();
+        if (commandBuffer == VK_NULL_HANDLE)
+        {
+            spdlog::error("{}: failed to allocate command buffer", __FUNCTION__);
+            return VK_NULL_HANDLE;
+        }
+    
         XJVulkanCommandPool::BeginCommandBuffer(commandBuffer);
         return commandBuffer;
     }       
     void XJVulkanDevice::SubmitAndEndOneDefaultCommandBuffer(VkCommandBuffer& commandBuffer)//结束单个命令缓冲区
     {
+        if (commandBuffer == VK_NULL_HANDLE)
+        {
+            spdlog::error("{}: commandBuffer is null", __FUNCTION__);
+            return;
+        }
+
+        if (!mDefaultCmdPool)
+        {
+            spdlog::error("{}: default command pool is null", __FUNCTION__);
+            return;
+        }
+
         mDefaultCmdPool->EndCommandBuffer(commandBuffer);
 
         VulkanQueue* queue = XJGetFirstGraphicQueue();
+        if (queue == nullptr || queue->XJGetQueue() == VK_NULL_HANDLE)
+        {
+            spdlog::error("{}: graphics queue is null", __FUNCTION__);
+            mDefaultCmdPool->FreeCommandBuffer(commandBuffer);
+            return;
+        }
+
         queue->Submit({commandBuffer});
         queue->WaitIdle();
 

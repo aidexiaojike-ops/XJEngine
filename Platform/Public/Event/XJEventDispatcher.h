@@ -6,6 +6,7 @@
 #include <unordered_map>
 #include <vector>
 #include <algorithm>
+#include <mutex>
 
 
 //事件分发器类，用于将事件分发给相应的事件处理函数
@@ -27,45 +28,36 @@ namespace XJ
             XJEventDispatcher& operator=(const XJEventDispatcher&) = delete;
             ~XJEventDispatcher();
 
-            static XJEventDispatcher* XJGetInstance(){return sInstance;};//获取事件分发器实例
+            static XJEventDispatcher* XJGetInstance();//获取事件分发器实例
 
             template<typename T>
             void AddObserverHandler(XJEventObserver* observer, std::function<void(const T&)> funchandler)
             {
-               if(!observer || !funchandler) return;
-
-               FuncEventHandler eventFunc = [funchandler](const XJEvent& e)
-               {
+                if(!observer || !funchandler) return;
+            
+                FuncEventHandler eventFunc = [funchandler](const XJEvent& e)
+                {
                     const T& event = static_cast<const T&>(e);
                     return funchandler(event);
-               };
-
-               EventHandlerEntry handler
-               {
+                };
+            
+                EventHandlerEntry handler
+                {
                     .eventType = observer,
                     .funchandler = eventFunc
-               };
-               mObserverHandlerMap[T::XJGetStaticType()].push_back(handler);
+                };
+            
+                std::lock_guard<std::mutex> lock(mObserverHandlerMutex);
+                mObserverHandlerMap[T::XJGetStaticType()].push_back(handler);
             }
 
-            void DestroyObserverHandler(XJEventObserver* observer)//销毁事件观察者的事件处理函数
-            {
-                for(auto &mapIt : mObserverHandlerMap)
-                {
-                    mapIt.second.erase(std::remove_if(mapIt.second.begin(), mapIt.second.end(),
-                    [observer](const EventHandlerEntry& handler)                    
-                    {
-                        return (handler.eventType && handler.eventType == observer);
-                    }), mapIt.second.end());
-                }
-            }
-
+            void DestroyObserverHandler(XJEventObserver* observer);//销毁事件观察者的事件处理函数
 
             void DispatchEvent(XJEvent& event);//分发事件，将事件传递给相应的事件处理函数
         private:
             XJEventDispatcher() = default;
-            static XJEventDispatcher* sInstance;//事件分发器实例
-            
+            //事件分发器实例
+            std::mutex mObserverHandlerMutex;
             std::unordered_map<XJEventType, std::vector<EventHandlerEntry>> mObserverHandlerMap;//提供一个注册订阅者的函数
           
     };

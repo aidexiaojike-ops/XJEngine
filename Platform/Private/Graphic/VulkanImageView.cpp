@@ -31,6 +31,17 @@ namespace XJ
 
     VulkanImageView::~VulkanImageView()
     {
-        vkDestroyImageView(mDevice->XJGetDevice(), mImageView, nullptr);
+        if (!mDevice || !mDevice->IsValid())
+        {
+            return;
+        }
+
+        mDevice->WaitIdle();
+
+        if (mImageView != VK_NULL_HANDLE)
+        {
+            vkDestroyImageView(mDevice->XJGetDevice(), mImageView, nullptr);
+            mImageView = VK_NULL_HANDLE;
+        }
     }
 }

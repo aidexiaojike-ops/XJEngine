@@ -14,8 +14,24 @@ namespace XJ
     }
     XJVulkanBuffer::~XJVulkanBuffer()
     {
-        vkDestroyBuffer(mDevice->XJGetDevice(), mBuffer, nullptr);
-        vkFreeMemory(mDevice->XJGetDevice(), mBufferMemory, nullptr);
+        if (!mDevice || !mDevice->IsValid())
+        {
+            return;
+        }
+
+        mDevice->WaitIdle();
+
+        if (mBuffer != VK_NULL_HANDLE)
+        {
+            vkDestroyBuffer(mDevice->XJGetDevice(), mBuffer, nullptr);
+            mBuffer = VK_NULL_HANDLE;
+        }
+
+        if (mBufferMemory != VK_NULL_HANDLE)
+        {
+            vkFreeMemory(mDevice->XJGetDevice(), mBufferMemory, nullptr);
+            mBufferMemory = VK_NULL_HANDLE;
+        }
     }
     void XJVulkanBuffer::CreateBufferInternal(XJVulkanDevice* device, VkMemoryPropertyFlags memoryPropertyFlags, VkBufferUsageFlags usage, size_t size, VkBuffer* outBuffer, VkDeviceMemory* outBufferMemory)
     {
@@ -92,6 +108,18 @@ namespace XJ
         }
         else
         {
+            if(!data)
+            {
+                CreateBufferInternal(
+                    mDevice,
+                    VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+                    usage | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+                    mSize,
+                    &mBuffer,
+                    &mBufferMemory);
+                return;
+            }
+
             //创建临时缓冲区用于数据传输
             VkBuffer stagingBuffer = VK_NULL_HANDLE;
             VkDeviceMemory stagingBufferMemory = VK_NULL_HANDLE;
@@ -103,19 +131,21 @@ namespace XJ
                       VK_BUFFER_USAGE_TRANSFER_SRC_BIT, mSize, &stagingBuffer, &stagingBufferMemory);
     
                 //将数据复制到临时缓冲区
-                if(data)
-                {
-                    void *mapping;
-                    XJDebug_Log(vkMapMemory(mDevice->XJGetDevice(), stagingBufferMemory, 0, mSize, 0, &mapping));
-                    memcpy(mapping, data, mSize);
-                    vkUnmapMemory(mDevice->XJGetDevice(), stagingBufferMemory);
+                void *mapping = nullptr;
+                XJDebug_Log(vkMapMemory(mDevice->XJGetDevice(), stagingBufferMemory, 0, mSize, 0, &mapping));
+                memcpy(mapping, data, mSize);
+                vkUnmapMemory(mDevice->XJGetDevice(), stagingBufferMemory);
 
-                }
                 //创建实际使用的缓冲区
-                CreateBufferInternal(mDevice, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-                                     usage|VK_BUFFER_USAGE_TRANSFER_DST_BIT, mSize, &mBuffer, &mBufferMemory);
+                CreateBufferInternal(
+                    mDevice,
+                    VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+                    usage | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+                    mSize,
+                    &mBuffer,
+                    &mBufferMemory);
                 
-                //将数据从临时缓冲区复制到实际使用的缓冲区
+                //只有存在初始数据时，才从 staging 拷贝到 device buffer
                 CopyToBuffer(mDevice, stagingBuffer, mBuffer, mSize);
                 
                 vkDestroyBuffer(mDevice->XJGetDevice(), stagingBuffer, nullptr);

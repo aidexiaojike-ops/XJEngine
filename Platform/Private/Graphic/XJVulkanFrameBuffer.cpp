@@ -19,6 +19,13 @@ namespace XJ
     
     XJVulkanFrameBuffer::~XJVulkanFrameBuffer()
     {
+        if (!mDevice || !mDevice->IsValid())
+        {
+            return;
+        }
+
+        mDevice->WaitIdle();
+
         if (mFrameBuffer != VK_NULL_HANDLE)
         {
             vkDestroyFramebuffer(mDevice->XJGetDevice(), mFrameBuffer, nullptr);
@@ -35,8 +42,9 @@ namespace XJ
         
 
         // 销毁旧的帧缓冲
-        if(mFrameBuffer != VK_NULL_HANDLE && mDevice && mDevice->XJGetDevice() != VK_NULL_HANDLE)
+        if(mFrameBuffer != VK_NULL_HANDLE && mDevice && mDevice->IsValid())
         {
+            mDevice->WaitIdle();
             vkDestroyFramebuffer(mDevice->XJGetDevice(), mFrameBuffer, nullptr);
             mFrameBuffer = VK_NULL_HANDLE;
         }

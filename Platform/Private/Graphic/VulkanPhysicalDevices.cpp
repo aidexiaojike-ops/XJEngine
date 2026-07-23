@@ -7,14 +7,35 @@ namespace XJ
     {
         //查询所有的物理设备
         uint32_t physicalDeviceCount = 0;
-        XJDebug_Log(vkEnumeratePhysicalDevices(instance->XJGetInstance(), &physicalDeviceCount, nullptr));
-        if (physicalDeviceCount == 0)
+        std::vector<VkPhysicalDevice> physicalDevices;
+        VkResult result = VK_SUCCESS;
+
+        do
         {
-            spdlog::error("未发现 Vulkan 物理设备");
-            return;
+            XJDebug_Log(vkEnumeratePhysicalDevices(instance->XJGetInstance(), &physicalDeviceCount, nullptr));
+        
+            if (physicalDeviceCount == 0)
+            {
+                spdlog::error("未发现 Vulkan 物理设备");
+                throw std::runtime_error("VulkanPhysicalDevices failed: no physical devices");
+            }
+        
+            physicalDevices.resize(physicalDeviceCount);
+        
+            result = vkEnumeratePhysicalDevices(
+                instance->XJGetInstance(),
+                &physicalDeviceCount,
+                physicalDevices.data());
+            
+            if (result != VK_SUCCESS && result != VK_INCOMPLETE)
+            {
+                XJDebug_Log(result);
+                throw std::runtime_error("VulkanPhysicalDevices failed: enumerate physical devices failed");
+            }
         }
-        std::vector<VkPhysicalDevice> physicalDevices(physicalDeviceCount);
-        XJDebug_Log(vkEnumeratePhysicalDevices(instance->XJGetInstance(), &physicalDeviceCount, physicalDevices.data()));
+        while (result == VK_INCOMPLETE);
+
+        physicalDevices.resize(physicalDeviceCount);
 
         spdlog::trace("{0} : 发现 {1} 个物理设备", __FUNCTION__, physicalDeviceCount);
         uint32_t maxScore = 0;
@@ -34,12 +55,38 @@ namespace XJ
             uint32_t formatCount = 0;
             vkGetPhysicalDeviceSurfaceFormatsKHR(physicalDevices[i], surface->mSurface, &formatCount, nullptr);
 
-            std::vector<VkSurfaceFormatKHR> surfaceFormats(formatCount);
-            if (formatCount > 0)
-            {
-                vkGetPhysicalDeviceSurfaceFormatsKHR(physicalDevices[i], surface->mSurface, &formatCount, surfaceFormats.data());
-            }
+            std::vector<VkSurfaceFormatKHR> surfaceFormats;
+            VkResult surfaceResult = VK_SUCCESS;
 
+            do
+            {
+                XJDebug_Log(vkGetPhysicalDeviceSurfaceFormatsKHR(
+                    physicalDevices[i],
+                    surface->mSurface,
+                    &formatCount,
+                    nullptr));
+                
+                surfaceFormats.resize(formatCount);
+                
+                surfaceResult = formatCount > 0
+                    ? vkGetPhysicalDeviceSurfaceFormatsKHR(
+                        physicalDevices[i],
+                        surface->mSurface,
+                        &formatCount,
+                        surfaceFormats.data())
+                    : VK_SUCCESS;
+                    
+                if (surfaceResult != VK_SUCCESS && surfaceResult != VK_INCOMPLETE)
+                {
+                    XJDebug_Log(surfaceResult);
+                    surfaceFormats.clear();
+                    break;
+                }
+            }
+            while (surfaceResult == VK_INCOMPLETE);
+
+            surfaceFormats.resize(formatCount);
+          
             for(uint32_t j = 0; j < formatCount; j++)
             {
                 if(surfaceFormats[j].format == VK_FORMAT_B8G8R8A8_SRGB &&

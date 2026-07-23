@@ -9,15 +9,24 @@ namespace XJ
     {
         public:
             XJEventObserver() = default;
+            XJEventObserver(const XJEventObserver&) = delete;
+            XJEventObserver& operator=(const XJEventObserver&) = delete;
+            
             ~XJEventObserver()
             {
-                 XJEventDispatcher::XJGetInstance()->DestroyObserverHandler(this);
+                if (auto* dispatcher = XJEventDispatcher::XJGetInstance())
+                {
+                    dispatcher->DestroyObserverHandler(this);
+                }
             };
 
             template<typename T>
             void OnEvent(const std::function<void(const T&)>& handler)
             {
-                XJEventDispatcher::XJGetInstance()->AddObserverHandler<T>(this, handler);
+                if (auto* dispatcher = XJEventDispatcher::XJGetInstance())
+                {
+                    dispatcher->AddObserverHandler<T>(this, handler);
+                }
             }
 
             

@@ -76,6 +76,13 @@ namespace XJ
     }
     XJVulkanPipelineLayout::~XJVulkanPipelineLayout()
     {
+        if (!mDevice || !mDevice->IsValid())
+        {
+            return;
+        }
+
+        mDevice->WaitIdle();
+
         if (mPipelineLayoutLayout != VK_NULL_HANDLE)
         {
             vkDestroyPipelineLayout(mDevice->XJGetDevice(), mPipelineLayoutLayout, nullptr);
@@ -125,6 +132,13 @@ namespace XJ
     
     XJVulkanPipeline::~XJVulkanPipeline()
     {
+        if (!mDevice || !mDevice->IsValid())
+        {
+            return;
+        }
+
+        mDevice->WaitIdle();
+
         if (mPipeline != VK_NULL_HANDLE)
         {
             vkDestroyPipeline(mDevice->XJGetDevice(), mPipeline, nullptr);

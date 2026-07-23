@@ -76,6 +76,13 @@ namespace XJ
 
     XJVulkanImage::~XJVulkanImage()
     {
+        if (!mDevice || !mDevice->IsValid())
+        {
+            return;
+        }
+
+        mDevice->WaitIdle();
+
         if (mImage != VK_NULL_HANDLE && bCreateImage) // 只销毁自己创建的图像
         {
             vkDestroyImage(mDevice->XJGetDevice(), mImage, nullptr);
@@ -112,6 +119,11 @@ namespace XJ
 
     bool XJVulkanImage::TransitionLayout(VkCommandBuffer cmdBuffer, VkImage image, VkImageLayout oldLayout, VkImageLayout newLayout)
     {
+        return TransitionLayout(cmdBuffer, image, VK_FORMAT_UNDEFINED, oldLayout, newLayout);
+    }
+
+    bool XJVulkanImage::TransitionLayout(VkCommandBuffer cmdBuffer, VkImage image, VkFormat format, VkImageLayout oldLayout, VkImageLayout newLayout)
+    {
         if(image == VK_NULL_HANDLE){return false;}
         if(oldLayout == newLayout){return true;}
 
@@ -123,7 +135,30 @@ namespace XJ
         barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
         barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
         barrier.image = image;
-        barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+        if (IsDepthStencilFormat(format))
+        {
+            barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
+        
+            if (format == VK_FORMAT_D32_SFLOAT_S8_UINT ||
+                format == VK_FORMAT_D24_UNORM_S8_UINT ||
+                format == VK_FORMAT_D16_UNORM_S8_UINT)
+            {
+                barrier.subresourceRange.aspectMask |= VK_IMAGE_ASPECT_STENCIL_BIT;
+            }
+        }
+        else if (oldLayout == VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL ||
+                 newLayout == VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL ||
+                 oldLayout == VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL ||
+                 newLayout == VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL ||
+                 oldLayout == VK_IMAGE_LAYOUT_STENCIL_ATTACHMENT_OPTIMAL ||
+                 newLayout == VK_IMAGE_LAYOUT_STENCIL_ATTACHMENT_OPTIMAL)
+        {
+            barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
+        }
+        else
+        {
+            barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+        }
         barrier.subresourceRange.baseMipLevel = 0;
         barrier.subresourceRange.levelCount = 1;
         barrier.subresourceRange.baseArrayLayer = 0;
@@ -197,7 +232,7 @@ namespace XJ
             case VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL:
                 // Image will be used as a color attachment.
                 // Make sure any writes to the color buffer have finished.
-                barrier.srcAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
+                barrier.srcAccessMask |= VK_ACCESS_TRANSFER_READ_BIT;
                 barrier.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
                 break;
 

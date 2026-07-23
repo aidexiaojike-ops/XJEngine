@@ -21,6 +21,7 @@ namespace XJ
             void CopyFromBuffer(VkCommandBuffer cmdBuffer, XJVulkanBuffer *buffer);
             
             static bool TransitionLayout(VkCommandBuffer cmdBuffer, VkImage image, VkImageLayout oldLayout, VkImageLayout newLayout);
+            static bool TransitionLayout(VkCommandBuffer cmdBuffer, VkImage image, VkFormat format, VkImageLayout oldLayout, VkImageLayout newLayout);
 
 
             const VkImage& XJGetImage() const { return mImage; }
