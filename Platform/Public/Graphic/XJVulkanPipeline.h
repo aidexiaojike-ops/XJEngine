@@ -96,6 +96,8 @@ namespace XJ
             XJVulkanPipelineLayout(XJVulkanDevice* device, const std::string &vertexShaderFilePath, 
                 const std::string &fragmentShaderFilePath, const ShaderLayout &shaderLayout = {});
             ~XJVulkanPipelineLayout();
+            XJVulkanPipelineLayout(const XJVulkanPipelineLayout&) = delete;
+            XJVulkanPipelineLayout& operator=(const XJVulkanPipelineLayout&) = delete;
 
             VkPipelineLayout XJGetPipelineLayout() const { return mPipelineLayoutLayout; }
             //两个ShaderModule
@@ -128,6 +130,8 @@ namespace XJ
         public:
             XJVulkanPipeline(XJVulkanDevice* device, XJVulkanRenderPass* renderPass, XJVulkanPipelineLayout* pipelineLayout);
             ~XJVulkanPipeline();
+            XJVulkanPipeline(const XJVulkanPipeline&) = delete;
+            XJVulkanPipeline& operator=(const XJVulkanPipeline&) = delete;
             
             void Create();
 
@@ -148,9 +152,9 @@ namespace XJ
 
             VkPipeline XJGetPipeline() const { return mPipeline; }
 
-bool isValid() const {
-    return !mPipelineConfig.colorBlendState.attachments.empty();
-}
+            bool isValid() const {
+                return !mPipelineConfig.colorBlendState.attachments.empty();
+            }
 
 
     };

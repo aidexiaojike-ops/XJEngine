@@ -27,9 +27,10 @@ namespace XJ
     {
       
         public:
-            XJVulkanDevice(VulkanPhysicalDevices* physicalDevices, uint32_t graphicsQueueIndex, uint32_t presentQueueIndex, const VkSettings &settings = {});
-            // void DeviceInit(VulkanPhysicalDevices* physicalDevices);
+            XJVulkanDevice(VulkanPhysicalDevices* physicalDevices, uint32_t graphicsQueueCount, uint32_t presentQueueCount, const VkSettings &settings = {});
             ~XJVulkanDevice();
+            XJVulkanDevice(const XJVulkanDevice&) = delete;
+            XJVulkanDevice& operator=(const XJVulkanDevice&) = delete;
             
             // 可选：提供获取Device的接口
             VkDevice XJGetDevice() { return mDevice; }

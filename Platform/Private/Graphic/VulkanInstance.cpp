@@ -3,6 +3,7 @@
 #include "Graphic/VulkanCommon.h"
 #include "Edit/XJGlfwWindow.h"
 #include <unordered_set>
+#include <stdexcept>
 
 // 确保调试扩展常量被正确定义（兜底）
 #ifndef VK_EXT_debug_report_EXTENSION_NAME
@@ -47,25 +48,28 @@ namespace XJ
     {
        //构建支持的层 获取当前系统（显卡驱动 + 操作系统）支持的所有「Vulkan 实例层」的列表和详细信息。
         XJDebug_Log(vkEnumerateInstanceLayerProperties(&availableLayerCount, nullptr));//获取可用的层数量
-        VkLayerProperties availableLayers[availableLayerCount];//定义一个数组存储可用的层
-        XJDebug_Log(vkEnumerateInstanceLayerProperties(&availableLayerCount, availableLayers));//获取可用的层信息
+        std::vector<VkLayerProperties> availableLayers(availableLayerCount);//定义一个数组存储可用的层
+        if (availableLayerCount > 0)
+        {
+            XJDebug_Log(vkEnumerateInstanceLayerProperties(&availableLayerCount, availableLayers.data()));
+        }//获取可用的层信息
 
         uint32_t enableLayerCount = 0;
         const char* enableLayers[ARRAY_SIZE(requiredLayers)];
         if(bShouldValidate)
         {
             if(!checkDeviceFeature(
-            "实例层",
-            false,
-            availableLayerCount,
-            availableLayers,
-            ARRAY_SIZE(requiredLayers),
-            requiredLayers,
-            &enableLayerCount,
-            enableLayers))
+                "实例层",
+                false,
+                availableLayerCount,
+                availableLayers.data(),
+                ARRAY_SIZE(requiredLayers),
+                requiredLayers,
+                &enableLayerCount,
+                enableLayers))
             {
                 spdlog::error("缺少必需的实例层，无法继续。");
-                return;
+                throw std::runtime_error("VulkanInstance failed: missing required instance layers");
             }
 
         }
@@ -75,8 +79,11 @@ namespace XJ
 
         //构建支持的扩展 获取当前系统（显卡驱动 + 操作系统）支持的所有「Vulkan 实例扩展」的列表
         XJDebug_Log(vkEnumerateInstanceExtensionProperties("",&availableExtensionCount, nullptr));//获取可用的层数量
-        VkExtensionProperties availableExtensions[availableExtensionCount];//定义一个数组存储可用的层
-        XJDebug_Log(vkEnumerateInstanceExtensionProperties("",&availableExtensionCount, availableExtensions));//获取可用的扩展数量
+        std::vector<VkExtensionProperties> availableExtensions(availableExtensionCount);//定义一个数组存储可用的层
+        if (availableExtensionCount > 0)
+        {
+            XJDebug_Log(vkEnumerateInstanceExtensionProperties("", &availableExtensionCount, availableExtensions.data()));
+        }//获取可用的扩展数量
         //收集 Vulkan 实例需要启用的扩展列表，并对扩展进行「去重」，确保每个扩展只被添加一次
         uint32_t glfwRequestedExtensionCount = 0;
         const char** glfwRequestedExtensions = glfwGetRequiredInstanceExtensions(&glfwRequestedExtensionCount);//返回 GLFW 运行 Vulkan 必需的扩展列表
@@ -108,14 +115,14 @@ namespace XJ
             "实例扩展",
             true,
             availableExtensionCount,
-            availableExtensions,
+            availableExtensions.data(),
             allRequestedExtensions.size(),
             allRequestedExtensions.data(),
             &enableExtensionCount,
             enableExtensions))
         {
             spdlog::error("缺少必需的实例扩展，无法继续");
-            return;
+            throw std::runtime_error("VulkanInstance failed: missing required instance extensions");
         }
         spdlog::trace("所有必需的实例扩展均已找到。");
         //创建Vulkan实例
@@ -136,21 +143,6 @@ namespace XJ
         debugCreateInfo.messageType = VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT;
         debugCreateInfo.pfnUserCallback = DebugUtilsCallback;
         debugCreateInfo.pUserData = nullptr;
-        if (bShouldValidate)
-        {
-            auto func = (PFN_vkCreateDebugUtilsMessengerEXT)
-                vkGetInstanceProcAddr(mInstance, "vkCreateDebugUtilsMessengerEXT");
-        
-            if (func != nullptr)
-            {
-                func(mInstance, &debugCreateInfo, nullptr, &debugMessenger);
-                spdlog::trace("Debug Utils Messenger 创建成功");
-            }
-            else
-            {
-                spdlog::error("vkCreateDebugUtilsMessengerEXT not found");
-            }
-        }
        
         VkInstanceCreateInfo createInfo{};
         createInfo.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
@@ -162,23 +154,58 @@ namespace XJ
         createInfo.enabledExtensionCount = enableExtensionCount;
         createInfo.ppEnabledExtensionNames = enableExtensionCount > 0 ? enableExtensions : nullptr;
 
-        XJDebug_Log(vkCreateInstance(&createInfo, nullptr, &mInstance));
+        VkResult result = vkCreateInstance(&createInfo, nullptr, &mInstance);
+        XJDebug_Log(result);
+        if (result != VK_SUCCESS)
+        {
+            throw std::runtime_error("VulkanInstance failed: vkCreateInstance failed");
+        }
+
         spdlog::trace("{0} : 创建 instance 实例 : {1}", __FUNCTION__, (void*)mInstance);
+
+        if (bShouldValidate)
+        {
+            auto func = reinterpret_cast<PFN_vkCreateDebugUtilsMessengerEXT>(
+                vkGetInstanceProcAddr(mInstance, "vkCreateDebugUtilsMessengerEXT"));
+            
+            if (func != nullptr)
+            {
+                result = func(mInstance, &debugCreateInfo, nullptr, &debugMessenger);
+                XJDebug_Log(result);
+                if (result != VK_SUCCESS)
+                {
+                    vkDestroyInstance(mInstance, nullptr);
+                    mInstance = nullptr;
+                    throw std::runtime_error("VulkanInstance failed: vkCreateDebugUtilsMessengerEXT failed");
+                }
+            
+                spdlog::trace("Debug Utils Messenger 创建成功");
+            }
+            else
+            {
+                vkDestroyInstance(mInstance, nullptr);
+                mInstance = nullptr;
+                throw std::runtime_error("VulkanInstance failed: vkCreateDebugUtilsMessengerEXT not found");
+            }
+        }
     }
 
     VulkanInstance::~VulkanInstance()
     {
         
-        if (debugMessenger != VK_NULL_HANDLE)
+        if (mInstance != nullptr && debugMessenger != VK_NULL_HANDLE)
         {
-            auto func = (PFN_vkDestroyDebugUtilsMessengerEXT)
-                vkGetInstanceProcAddr(mInstance, "vkDestroyDebugUtilsMessengerEXT");
-        
+            auto func = reinterpret_cast<PFN_vkDestroyDebugUtilsMessengerEXT>(
+                vkGetInstanceProcAddr(mInstance, "vkDestroyDebugUtilsMessengerEXT"));
+            
             if (func != nullptr)
             {
                 func(mInstance, debugMessenger, nullptr);
             }
+        
+            debugMessenger = VK_NULL_HANDLE;
         }
+        
         if (mInstance != nullptr)
         {
             vkDestroyInstance(mInstance, nullptr);

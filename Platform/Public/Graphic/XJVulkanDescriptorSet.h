@@ -22,6 +22,9 @@ namespace XJ
             
             XJVulkanDescriptorSetLayout(XJVulkanDevice *device, const std::vector<VkDescriptorSetLayoutBinding> &bindings);
             ~XJVulkanDescriptorSetLayout();
+            XJVulkanDescriptorSetLayout(const XJVulkanDescriptorSetLayout&) = delete;
+            XJVulkanDescriptorSetLayout& operator=(const XJVulkanDescriptorSetLayout&) = delete;
+
             VkDescriptorSetLayout XJGetDescriptorSet() {return mDescriptorSet;}
         private:
             VkDescriptorSetLayout mDescriptorSet = VK_NULL_HANDLE;
@@ -46,6 +49,8 @@ namespace XJ
             // poolSizes：池中每种类型的描述符大小
             XJVulkanDescriptorPool(XJVulkanDevice *device, uint32_t maxSets, const std::vector<VkDescriptorPoolSize> &poolSizes);
             ~XJVulkanDescriptorPool();
+            XJVulkanDescriptorPool(const XJVulkanDescriptorPool&) = delete;
+            XJVulkanDescriptorPool& operator=(const XJVulkanDescriptorPool&) = delete;
 
             
             VkDescriptorPool XJGetDescriptorPool() {return mDescriptorPool;}

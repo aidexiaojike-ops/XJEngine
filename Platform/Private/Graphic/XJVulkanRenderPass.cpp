@@ -157,7 +157,7 @@ namespace XJ
             subpassDescriptions[i].colorAttachmentCount = static_cast<uint32_t>(colorAttachmentRefs[i].size());
             subpassDescriptions[i].pColorAttachments = colorAttachmentRefs[i].data();
             subpassDescriptions[i].pResolveAttachments = subPass.sampleCount > VK_SAMPLE_COUNT_1_BIT ? &resolveAttachmentRefs[i] : nullptr; // 只有在多重采样时才使用解析附件
-            subpassDescriptions[i].pDepthStencilAttachment = depthStencilAttachmentRefs[i].data();
+            subpassDescriptions[i].pDepthStencilAttachment = depthStencilAttachmentRefs[i].empty() ? nullptr : depthStencilAttachmentRefs[i].data();
             subpassDescriptions[i].preserveAttachmentCount = 0;
             subpassDescriptions[i].pPreserveAttachments = nullptr;
 

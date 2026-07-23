@@ -37,6 +37,8 @@ namespace XJ
         public:
             XJVulkanSwapchain(VulkanPhysicalDevices* physicalDevice, XJVulkanDevice* device, VulkanSurface* surface);
             ~XJVulkanSwapchain();
+            XJVulkanSwapchain(const XJVulkanSwapchain&) = delete;
+            XJVulkanSwapchain& operator=(const XJVulkanSwapchain&) = delete;
 
             bool ReCreate();
             

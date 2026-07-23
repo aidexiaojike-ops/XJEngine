@@ -1,5 +1,6 @@
 #include "Graphic/VulkanSurface.h"
 #include "Graphic/VulkanCommon.h"
+#include <stdexcept>
 
 namespace XJ
 {
@@ -9,23 +10,29 @@ namespace XJ
         if(!window || !instance)
         {
             spdlog::error("VulkanSurface::SurfaceInit 参数错误，window 或 instance 为空指针");
-            return;
+            throw std::runtime_error("VulkanSurface failed: window or instance is null");
         }
         auto *glfWwindow = dynamic_cast<XJGlfwWindow*>(window);
         if(!glfWwindow)
         {
             //Faild to get GLFW window handle
             spdlog::error("VulkanSurface::SurfaceInit 参数错误：传入的window不是XJGlfwWindow类型");
-            return;
+            throw std::runtime_error("VulkanSurface failed: invalid window type");
         }
       
         GLFWwindow* XJGetImplWindowPointer = static_cast<GLFWwindow*>(glfWwindow->XJGetImplWindowPointer());
         if(XJGetImplWindowPointer == nullptr)
         {   
             spdlog::error("VulkanSurface::SurfaceInit 获取 GLFW window 句柄失败，XJGetImplWindowPointer 返回空指针");
-            return;
+            throw std::runtime_error("VulkanSurface failed: GLFW window handle is null");
         }
-        XJDebug_Log(glfwCreateWindowSurface(mInstance->XJGetInstance(), XJGetImplWindowPointer, nullptr, &mSurface));
+
+        VkResult result = glfwCreateWindowSurface(mInstance->XJGetInstance(), XJGetImplWindowPointer, nullptr, &mSurface);
+        XJDebug_Log(result);
+        if (result != VK_SUCCESS)
+        {
+            throw std::runtime_error("VulkanSurface failed: glfwCreateWindowSurface failed");
+        }
         spdlog::trace("{0} : 创建 surface 实例 : {1}", __FUNCTION__, (void*)mSurface);
         //glfwCreateWindowSurface(instance->XJGetVulkanInstance(), window->XJGetWindow(), nullptr, &surface);
         //待实现
@@ -34,11 +41,12 @@ namespace XJ
     VulkanSurface::~VulkanSurface()
     {
         // 销毁 surface，例如：
-        if (mSurface != VK_NULL_HANDLE)
+        if (mInstance != nullptr && mInstance->XJGetInstance() != VK_NULL_HANDLE && mSurface != VK_NULL_HANDLE)
         {
             vkDestroySurfaceKHR(mInstance->XJGetInstance(), mSurface, nullptr);
             mSurface = VK_NULL_HANDLE;
         }
+    
         spdlog::trace("{0} : 销毁 surface 实例 : {1}", __FUNCTION__, (void*)mInstance);
         //待实现
     }

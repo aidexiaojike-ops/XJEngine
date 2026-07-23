@@ -18,6 +18,8 @@ namespace XJ
 
             VulkanSurface(XJGlfwWindow* window,VulkanInstance* instance);
             ~VulkanSurface();
+            VulkanSurface(const VulkanSurface&) = delete;
+            VulkanSurface& operator=(const VulkanSurface&) = delete;
             
             // 可选：提供获取Surface的接口
             VkSurfaceKHR XJGetSurface() { return mSurface; }

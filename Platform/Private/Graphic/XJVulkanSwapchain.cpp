@@ -51,11 +51,17 @@ namespace XJ
             queueFamilyIndexCount = 0;
         }
         else
-        {
+        {//Present 队列族索引
             imageSharingMode = VK_SHARING_MODE_CONCURRENT;
             queueFamilyIndexCount = 2;
             pQueueFamilyIndices[0] = mPhysicalDevice->XJGetGraphicQueueFamilyInfo().queueFamilyIndex;
-            pQueueFamilyIndices[1] = mPhysicalDevice->XJGetGraphicQueueFamilyInfo().queueFamilyIndex;
+            pQueueFamilyIndices[1] = mPhysicalDevice->XJGetPresentQueueFamilyInfo().queueFamilyIndex;
+        }
+
+        VkDevice device = mDevice->XJGetDevice();
+        if (mSwapchain != VK_NULL_HANDLE)
+        {
+            XJDebug_Log(vkDeviceWaitIdle(device));
         }
 
         VkSwapchainKHR oldSwapchain = mSwapchain;//存储原来的交换链
@@ -83,20 +89,25 @@ namespace XJ
         swapchainInfo.clipped = VK_FALSE;
         swapchainInfo.oldSwapchain = oldSwapchain;
   
-        VkResult ret = vkCreateSwapchainKHR(mDevice->XJGetDevice(), &swapchainInfo, nullptr, &mSwapchain);
+        VkResult ret = vkCreateSwapchainKHR(device, &swapchainInfo, nullptr, &mSwapchain);
         if(ret != VK_SUCCESS)
         {
             spdlog::error("{0},{1}",__FUNCTION__, vk_result_string(ret));
             return false;
         }
+        if (oldSwapchain != VK_NULL_HANDLE)
+        {
+            vkDestroySwapchainKHR(device, oldSwapchain, nullptr);
+        }
+
         spdlog::trace("交换链 {0}:old:{1},new:{2},image count:{3}, format:{4}, present mode:{5}",
             __FUNCTION__,(void*)oldSwapchain,(void*)mSwapchain,imageCount,
             vk_format_string(mSurfaceInfo.surfaceFormat.format), vk_present_mode_string(mSurfaceInfo.presentMode));
         //获取到交换链里面的内容之后
         uint32_t swapchainImageCount;
-        ret = vkGetSwapchainImagesKHR(mDevice->XJGetDevice(), mSwapchain, &swapchainImageCount, nullptr);
+        ret = vkGetSwapchainImagesKHR(device, mSwapchain, &swapchainImageCount, nullptr);
         mImages.resize(swapchainImageCount);
-        ret = vkGetSwapchainImagesKHR(mDevice->XJGetDevice(), mSwapchain, &swapchainImageCount, mImages.data());
+        ret = vkGetSwapchainImagesKHR(device, mSwapchain, &swapchainImageCount, mImages.data());
 
         return ret == VK_SUCCESS;
     }

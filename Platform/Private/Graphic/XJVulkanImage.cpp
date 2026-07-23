@@ -2,6 +2,7 @@
 #include <Graphic/XJVulkanDevice.h>
 #include <Graphic/VulkanCommon.h>
 #include <Graphic/XJVulkanBuffer.h>
+#include <stdexcept>
 
 namespace XJ
 {
@@ -16,8 +17,7 @@ namespace XJ
         {
             tiling = VK_IMAGE_TILING_OPTIMAL;//深度格式使用最优平铺
         }
-        
-
+    
         VkImageCreateInfo imageCreateInfo{};//结构体变量初始化 图片创建信息
         imageCreateInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
         imageCreateInfo.pNext = nullptr;
@@ -41,11 +41,27 @@ namespace XJ
         VkMemoryRequirements memRequirements;//内存需求
         vkGetImageMemoryRequirements(mDevice->XJGetDevice(), mImage, &memRequirements);//获取图片内存需求 
         //创建图片 后续还要分配内存绑定图片
+        int32_t memoryTypeIndex = mDevice->XJGetMemoryIndex(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, memRequirements.memoryTypeBits);
+        if (memoryTypeIndex < 0)
+        {
+            spdlog::error(
+                "创建 Image 失败：找不到合适的内存类型，format={}, requiredFlags=0x{:X}, memoryTypeBits=0x{:X}",
+                vk_format_string(format),
+                VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+                memRequirements.memoryTypeBits);
+            
+            vkDestroyImage(mDevice->XJGetDevice(), mImage, nullptr);
+            mImage = VK_NULL_HANDLE;
+            mDeviceMemory = VK_NULL_HANDLE;
+            
+            throw std::runtime_error("XJVulkanImage failed: no suitable memory type");
+        }
+
         VkMemoryAllocateInfo memoryAllocateInfo{};//结构体变量初始化 内存分配信息
         memoryAllocateInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
         memoryAllocateInfo.pNext = nullptr;
         memoryAllocateInfo.allocationSize = memRequirements.size;//分配大小
-        memoryAllocateInfo.memoryTypeIndex = static_cast<uint32_t>(mDevice->XJGetMemoryIndex(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, memRequirements.memoryTypeBits));
+        memoryAllocateInfo.memoryTypeIndex = static_cast<uint32_t>(memoryTypeIndex);
         
         XJDebug_Log(vkAllocateMemory(mDevice->XJGetDevice(), &memoryAllocateInfo, nullptr, &mDeviceMemory));//分配内存
         vkBindImageMemory(mDevice->XJGetDevice(), mImage, mDeviceMemory, 0);//绑定图片内存  偏移量0

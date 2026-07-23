@@ -23,6 +23,8 @@ namespace XJ
         public:
             XJVulkanDepthImage(XJVulkanDevice* device, VulkanPhysicalDevices* physicalDevice, uint32_t width, uint32_t height, VkSampleCountFlagBits samples = VK_SAMPLE_COUNT_1_BIT);
             ~XJVulkanDepthImage();
+            XJVulkanDepthImage(const XJVulkanDepthImage&) = delete;
+            XJVulkanDepthImage& operator=(const XJVulkanDepthImage&) = delete;
 
             bool Create();
             void Destroy();

@@ -25,6 +25,9 @@ namespace XJ
     std::vector<VkCommandBuffer> XJVulkanCommandPool::AllocateCommandBuffer(uint32_t count) const//分配命令缓冲区
     {
         spdlog::trace("分配了 {} 个命令缓冲区", count);
+
+        std::lock_guard<std::mutex> lock(mCommandPoolMutex);
+
         VkCommandBufferAllocateInfo commandBufferAllocateInfo{};
         commandBufferAllocateInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
         commandBufferAllocateInfo.pNext = nullptr;
@@ -37,17 +40,12 @@ namespace XJ
 
        
         return commandBuffers;
-    }//生气commandbuffer
+    }//申请commandbuffer
     
     VkCommandBuffer XJVulkanCommandPool::AllocateSingleCommandBuffer() const//分配单个命令缓冲区
     {
-         static thread_local VkCommandBuffer sStagingCB = VK_NULL_HANDLE;
-        if (sStagingCB == VK_NULL_HANDLE)
-        {
-            std::vector<VkCommandBuffer> buffers = AllocateCommandBuffer(1);
-            sStagingCB = buffers[0];
-        }
-        return sStagingCB;
+        std::vector<VkCommandBuffer> buffers = AllocateCommandBuffer(1);
+        return buffers.empty() ? VK_NULL_HANDLE : buffers[0];
     
     }
 
@@ -67,6 +65,24 @@ namespace XJ
     void XJVulkanCommandPool::EndCommandBuffer(VkCommandBuffer commandBuffer)//结束命令记录
     {
         XJDebug_Log(vkEndCommandBuffer(commandBuffer));
+    }
+    
+    void XJVulkanCommandPool::FreeCommandBuffer(VkCommandBuffer& commandBuffer) const//释放命令缓冲区
+    {
+        if (commandBuffer == VK_NULL_HANDLE)
+        {
+            return;
+        }
+
+        std::lock_guard<std::mutex> lock(mCommandPoolMutex);
+
+        vkFreeCommandBuffers(
+            mDevice->XJGetDevice(),
+            mCommandPool,
+            1,
+            &commandBuffer);
+
+        commandBuffer = VK_NULL_HANDLE;
     }
 
 

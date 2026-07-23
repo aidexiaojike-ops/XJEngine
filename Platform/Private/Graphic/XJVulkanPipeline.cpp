@@ -2,6 +2,7 @@
 #include "Graphic/XJVulkanDevice.h"
 #include "Graphic/XJVulkanRenderPass.h"
 #include "Edit/FileUtil.h"
+#include <stdexcept>
 
 namespace XJ
 {
@@ -13,30 +14,65 @@ namespace XJ
         spdlog::trace("{} : 开始创建管线布局", __FUNCTION__);
         spdlog::debug("顶点着色器路径: {}", vertexShaderFilePath + ".spv");
         spdlog::debug("片元着色器路径: {}", fragmentShaderFilePath + ".spv");
-        
-        //编译两个ShaderModule  
-        spdlog::trace("创建顶点着色器模块...");
-        //编译两个ShaderModule  
-        XJDebug_Log(CreateShaderModule(vertexShaderFilePath + ".spv", &mVertexShaderModule));//添加位置
-        spdlog::trace("顶点着色器模块创建成功: {}", (void*)mVertexShaderModule);
-        
-        spdlog::trace("创建片元着色器模块...");
-        XJDebug_Log(CreateShaderModule(fragmentShaderFilePath + ".spv", &mFragmentShaderModule));
-        spdlog::trace("片元着色器模块创建成功: {}", (void*)mFragmentShaderModule);
-        //pipelineLayout
-        VkPipelineLayoutCreateInfo pipelineLayoutInfo{};
-        pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-        pipelineLayoutInfo.pNext = nullptr;
-        pipelineLayoutInfo.flags = 0;
-        pipelineLayoutInfo.setLayoutCount = static_cast<uint32_t>(shaderLayout.descriptorSetLayouts.size());//描述符集布局数量
-        pipelineLayoutInfo.pSetLayouts = shaderLayout.descriptorSetLayouts.data();//描述符集布局数组
-        pipelineLayoutInfo.pushConstantRangeCount = static_cast<uint32_t>(shaderLayout.pushConstantRanges.size());//推送常量范围数量
-        pipelineLayoutInfo.pPushConstantRanges = shaderLayout.pushConstantRanges.data();//推送常量范围数组
 
-        //spdlog::debug("描述符集布局数量: {}", pipelineLayoutInfo.setLayoutCount);
-        //spdlog::debug("推送常量范围数量: {}", pipelineLayoutInfo.pushConstantRangeCount);
-        XJDebug_Log(vkCreatePipelineLayout(mDevice->XJGetDevice(), &pipelineLayoutInfo, nullptr, &mPipelineLayoutLayout));
-        spdlog::trace("{} : 管线布局创建成功 : {}", __FUNCTION__, (void*)mPipelineLayoutLayout);
+        VkDevice vkDevice = mDevice->XJGetDevice();
+        VkShaderModule vertexShaderModule = VK_NULL_HANDLE;
+        VkShaderModule fragmentShaderModule = VK_NULL_HANDLE;
+        VkPipelineLayout pipelineLayout = VK_NULL_HANDLE;
+
+        try
+        {
+            //编译两个ShaderModule  
+            spdlog::trace("创建顶点着色器模块...");
+            //编译两个ShaderModule  
+            XJDebug_Log(CreateShaderModule(vertexShaderFilePath + ".spv", &vertexShaderModule));//添加位置
+            spdlog::trace("顶点着色器模块创建成功: {}", (void*)vertexShaderModule);
+            
+            spdlog::trace("创建片元着色器模块...");
+            XJDebug_Log(CreateShaderModule(fragmentShaderFilePath + ".spv", &fragmentShaderModule));
+            spdlog::trace("片元着色器模块创建成功: {}", (void*)fragmentShaderModule);
+            //pipelineLayout
+            VkPipelineLayoutCreateInfo pipelineLayoutInfo{};
+            pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+            pipelineLayoutInfo.pNext = nullptr;
+            pipelineLayoutInfo.flags = 0;
+            pipelineLayoutInfo.setLayoutCount = static_cast<uint32_t>(shaderLayout.descriptorSetLayouts.size());//描述符集布局数量
+            pipelineLayoutInfo.pSetLayouts = shaderLayout.descriptorSetLayouts.data();//描述符集布局数组
+            pipelineLayoutInfo.pushConstantRangeCount = static_cast<uint32_t>(shaderLayout.pushConstantRanges.size());//推送常量范围数量
+            pipelineLayoutInfo.pPushConstantRanges = shaderLayout.pushConstantRanges.data();//推送常量范围数组
+
+            //spdlog::debug("描述符集布局数量: {}", pipelineLayoutInfo.setLayoutCount);
+            //spdlog::debug("推送常量范围数量: {}", pipelineLayoutInfo.pushConstantRangeCount);
+            XJDebug_Log(vkCreatePipelineLayout(mDevice->XJGetDevice(), &pipelineLayoutInfo, nullptr, &pipelineLayout));
+            spdlog::trace("{} : 管线布局创建成功 : {}", __FUNCTION__, (void*)pipelineLayout);
+
+            mVertexShaderModule = vertexShaderModule;
+            mFragmentShaderModule = fragmentShaderModule;
+            mPipelineLayoutLayout = pipelineLayout;
+
+        }
+        catch(...)
+        {
+            if (pipelineLayout != VK_NULL_HANDLE)
+            {
+                vkDestroyPipelineLayout(vkDevice, pipelineLayout, nullptr);
+            }
+        
+            if (fragmentShaderModule != VK_NULL_HANDLE)
+            {
+                vkDestroyShaderModule(vkDevice, fragmentShaderModule, nullptr);
+            }
+        
+            if (vertexShaderModule != VK_NULL_HANDLE)
+            {
+                vkDestroyShaderModule(vkDevice, vertexShaderModule, nullptr);
+            }
+        
+            throw;
+
+        }
+        
+      
     }
     XJVulkanPipelineLayout::~XJVulkanPipelineLayout()
     {
@@ -114,6 +150,30 @@ namespace XJ
         if (!mPipelineLayout)
         {
             spdlog::error("[VulkanPipeline] Create failed: pipeline layout is null");
+            return;
+        }
+
+        if (mDevice->XJGetDevice() == VK_NULL_HANDLE)
+        {
+            spdlog::error("[VulkanPipeline] Create failed: VkDevice is null");
+            return;
+        }
+
+        if (mRenderPass->XJGetRenderPass() == VK_NULL_HANDLE)
+        {
+            spdlog::error("[VulkanPipeline] Create failed: VkRenderPass is null");
+            return;
+        }
+
+        if (mPipelineLayout->XJGetPipelineLayout() == VK_NULL_HANDLE ||
+            mPipelineLayout->XJGetVertexShaderModule() == VK_NULL_HANDLE ||
+            mPipelineLayout->XJGetFragmentShaderModule() == VK_NULL_HANDLE)
+        {
+            spdlog::error(
+                "[VulkanPipeline] Create failed: invalid layout or shader modules. layout={}, vert={}, frag={}",
+                (void*)mPipelineLayout->XJGetPipelineLayout(),
+                (void*)mPipelineLayout->XJGetVertexShaderModule(),
+                (void*)mPipelineLayout->XJGetFragmentShaderModule());
             return;
         }
 
@@ -336,7 +396,13 @@ namespace XJ
         //             pipelineInfo.subpass);
 
         spdlog::trace("调用 vkCreateGraphicsPipelines...");
-        XJDebug_Log(vkCreateGraphicsPipelines(mDevice->XJGetDevice(), mDevice->XJGetPipelineCache(), 1, &pipelineInfo, nullptr, &mPipeline));
+        VkResult result = vkCreateGraphicsPipelines(mDevice->XJGetDevice(), mDevice->XJGetPipelineCache(), 1, &pipelineInfo, nullptr, &mPipeline);
+        XJDebug_Log(result);
+        if (result != VK_SUCCESS)
+        {
+            spdlog::error("{} : 图形管线创建失败 : {}", __FUNCTION__, vk_result_string(result));
+            return;
+        }
 
         spdlog::trace("{} : 图形管线创建成功 : {}", __FUNCTION__, (void*)mPipeline);     
     }
@@ -455,10 +521,10 @@ namespace XJ
             mPipelineConfig.colorBlendState.attachments[i].srcAlphaBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA;
             mPipelineConfig.colorBlendState.attachments[i].dstAlphaBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
             mPipelineConfig.colorBlendState.attachments[i].alphaBlendOp = VK_BLEND_OP_ADD;
-            //mPipelineConfig.colorBlendState.attachments[i].colorWriteMask = VK_COLOR_COMPONENT_R_BIT |
-            //                                                                      VK_COLOR_COMPONENT_G_BIT |
-            //                                                                      VK_COLOR_COMPONENT_B_BIT |
-            //                                                                      VK_COLOR_COMPONENT_A_BIT;
+            mPipelineConfig.colorBlendState.attachments[i].colorWriteMask = VK_COLOR_COMPONENT_R_BIT |
+                                                                                  VK_COLOR_COMPONENT_G_BIT |
+                                                                                  VK_COLOR_COMPONENT_B_BIT |
+                                                                                  VK_COLOR_COMPONENT_A_BIT;
         }
       
         return this;

@@ -47,7 +47,7 @@ target_include_directories(Platform
 )
 
 # 设置 C++ 标准
-target_compile_features(Platform PUBLIC cxx_std_17)
+target_compile_features(Platform PUBLIC cxx_std_20)
 
 # 禁用 spdlog/fmt 的弃用警告
 if(MSVC)

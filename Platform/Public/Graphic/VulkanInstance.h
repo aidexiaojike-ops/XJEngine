@@ -18,6 +18,9 @@ namespace XJ
         public:
             VulkanInstance();
             ~VulkanInstance();
+            VulkanInstance(const VulkanInstance&) = delete;
+            VulkanInstance& operator=(const VulkanInstance&) = delete;
+            
             VkInstance mInstance = nullptr;
             bool bShouldValidate = true;
 

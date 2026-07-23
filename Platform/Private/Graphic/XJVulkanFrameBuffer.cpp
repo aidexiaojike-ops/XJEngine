@@ -98,9 +98,9 @@ namespace XJ
                 mResolveImage->XJGetFormat(),
                 VK_IMAGE_ASPECT_COLOR_BIT
             );
+            spdlog::debug("帧缓冲添加深度附件: {}", static_cast<void*>(resolveView->XJGetImageView()));
             mResolveViews.push_back(resolveView);
             attachments.push_back(resolveView->XJGetImageView());
-            spdlog::debug("帧缓冲添加深度附件: {}", static_cast<void*>(mDepthImage->XJGetImageView()));
         }
        
         

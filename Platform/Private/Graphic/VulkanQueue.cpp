@@ -22,7 +22,12 @@ namespace XJ
         XJDebug_Log(vkQueueWaitIdle(mQueue));
     }   
 
-    void VulkanQueue::Submit(std::vector<VkCommandBuffer> commandBuffers, const std::vector<VkSemaphore>& waitSemaphores, const std::vector<VkSemaphore>& signalSemaphores, VkFence FrameFence)//提交命令缓冲区到队列
+    void VulkanQueue::Submit(
+        std::vector<VkCommandBuffer> commandBuffers,
+        const std::vector<VkSemaphore>& waitSemaphores,
+        const std::vector<VkSemaphore>& signalSemaphores,
+        VkFence FrameFence,
+        const std::vector<VkPipelineStageFlags>& waitStageMasks)//提交命令缓冲区到队列
     {
         //spdlog::warn("Queue Submit");
         const char* caller = (FrameFence != VK_NULL_HANDLE) ? "PER-FRAME" : "ONE-TIME";
@@ -30,17 +35,40 @@ namespace XJ
             caller, commandBuffers.size(), waitSemaphores.size(),
             signalSemaphores.size(), (void*)FrameFence);*/
 
-        VkPipelineStageFlags WaitDststageMask[] = {VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT};
+        std::vector<VkPipelineStageFlags> effectiveWaitStageMasks;
+        if (!waitSemaphores.empty())
+        {
+            if (!waitStageMasks.empty() && waitStageMasks.size() == waitSemaphores.size())
+            {
+                effectiveWaitStageMasks = waitStageMasks;
+            }
+            else
+            {
+                if (!waitStageMasks.empty())
+                {
+                    spdlog::warn(
+                        "Submit [{}]: waitStageMasks size ({}) does not match waitSemaphores size ({}). Using default stage masks.",
+                        caller,
+                        waitStageMasks.size(),
+                        waitSemaphores.size());
+                }
+
+                effectiveWaitStageMasks.resize(
+                    waitSemaphores.size(),
+                    VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT);
+            }
+        }
+
         VkSubmitInfo submitInfo{};
         submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
         submitInfo.pNext = nullptr;
         submitInfo.waitSemaphoreCount = static_cast<uint32_t>(waitSemaphores.size());
-        submitInfo.pWaitSemaphores = waitSemaphores.data();
-        submitInfo.pWaitDstStageMask = WaitDststageMask;
+        submitInfo.pWaitSemaphores = waitSemaphores.empty() ? nullptr : waitSemaphores.data();
+        submitInfo.pWaitDstStageMask = effectiveWaitStageMasks.empty() ? nullptr : effectiveWaitStageMasks.data();
         submitInfo.commandBufferCount = static_cast<uint32_t>(commandBuffers.size());
-        submitInfo.pCommandBuffers = commandBuffers.data();
+        submitInfo.pCommandBuffers = commandBuffers.empty() ? nullptr : commandBuffers.data();
         submitInfo.signalSemaphoreCount = static_cast<uint32_t>(signalSemaphores.size());
-        submitInfo.pSignalSemaphores = signalSemaphores.data();
+        submitInfo.pSignalSemaphores = signalSemaphores.empty() ? nullptr : signalSemaphores.data();
         
         VkResult ret = vkQueueSubmit(mQueue, 1, &submitInfo, FrameFence);
         if (ret != VK_SUCCESS)

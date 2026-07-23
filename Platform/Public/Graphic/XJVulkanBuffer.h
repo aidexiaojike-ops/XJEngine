@@ -22,6 +22,9 @@ namespace XJ
         public:
             XJVulkanBuffer(XJVulkanDevice* device, VkBufferUsageFlags usage, size_t size,const void* data = nullptr,bool bHostVisible = false);
             ~XJVulkanBuffer();
+
+            XJVulkanBuffer(const XJVulkanBuffer&) = delete;
+            XJVulkanBuffer& operator=(const XJVulkanBuffer&) = delete;
             
             static void CreateBufferInternal(XJVulkanDevice* device, VkMemoryPropertyFlags memoryPropertyFlags, VkBufferUsageFlags usage, size_t size, VkBuffer* outBuffer, VkDeviceMemory* outBufferMemory);
             static void CopyToBuffer(XJVulkanDevice* device, VkBuffer srcBuffer = VK_NULL_HANDLE, VkBuffer dstBuffer = VK_NULL_HANDLE, size_t size = 0);

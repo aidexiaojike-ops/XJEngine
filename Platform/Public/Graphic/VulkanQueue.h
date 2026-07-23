@@ -24,7 +24,12 @@ namespace XJ
 
             VkQueue XJGetQueue(){return mQueue;}
 
-            void Submit(std::vector<VkCommandBuffer> commandBuffers, const std::vector<VkSemaphore>& waitSemaphores = {}, const std::vector<VkSemaphore>& signalSemaphores = {}, VkFence FrameFence = VK_NULL_HANDLE);//提交命令缓冲区到队列
+            void Submit(
+                std::vector<VkCommandBuffer> commandBuffers,
+                const std::vector<VkSemaphore>& waitSemaphores = {},
+                const std::vector<VkSemaphore>& signalSemaphores = {},
+                VkFence FrameFence = VK_NULL_HANDLE,
+                const std::vector<VkPipelineStageFlags>& waitStageMasks = {});//提交命令缓冲区到队列
     };
     
  

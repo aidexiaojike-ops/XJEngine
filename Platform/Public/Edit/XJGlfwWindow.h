@@ -30,6 +30,9 @@ namespace XJ
         public:
             XJGlfwWindow(int windowWidth = 800, int windowHeight = 600, const char *title = "XJEngine Application");
             ~XJGlfwWindow();
+            XJGlfwWindow(const XJGlfwWindow&) = delete;
+            XJGlfwWindow& operator=(const XJGlfwWindow&) = delete;
+
             void PollEvents();
             void SwapBuffer();
 

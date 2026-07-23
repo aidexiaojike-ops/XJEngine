@@ -47,6 +47,8 @@ namespace XJ
         public:
             XJVulkanRenderPass(XJVulkanDevice* device, VulkanPhysicalDevices* physicalDevices, const std::vector<Attachment> &attachments = {}, const std::vector<RenderSubPass> &subPass = {});
             ~XJVulkanRenderPass();
+            XJVulkanRenderPass(const XJVulkanRenderPass&) = delete;
+            XJVulkanRenderPass& operator=(const XJVulkanRenderPass&) = delete;
 
             VkRenderPass XJGetRenderPass() const{return mRenderPass;}
 

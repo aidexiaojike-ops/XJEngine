@@ -13,12 +13,15 @@ namespace XJ
         public:
             XJVulkanImage(XJVulkanDevice* device, VkExtent3D extent, VkFormat format, VkImageUsageFlags usage, VkSampleCountFlagBits sampleCount = VK_SAMPLE_COUNT_1_BIT);
             XJVulkanImage(XJVulkanDevice *device, VkImage image, VkExtent3D extent, VkFormat format, VkImageUsageFlags usage, VkSampleCountFlagBits sampleCount = VK_SAMPLE_COUNT_1_BIT);
-                        
+            ~XJVulkanImage();
+
+            XJVulkanImage(const XJVulkanImage&) = delete;
+            XJVulkanImage& operator=(const XJVulkanImage&) = delete;
+            
             void CopyFromBuffer(VkCommandBuffer cmdBuffer, XJVulkanBuffer *buffer);
             
             static bool TransitionLayout(VkCommandBuffer cmdBuffer, VkImage image, VkImageLayout oldLayout, VkImageLayout newLayout);
 
-            ~XJVulkanImage();
 
             const VkImage& XJGetImage() const { return mImage; }
             const VkDeviceMemory& XJGetImageMemory() const { return mDeviceMemory; }

@@ -2,6 +2,7 @@
 #define XJ_VULKAN_COMMANDBUFFER_H
 
 #include "Graphic/VulkanCommon.h"
+#include <mutex>
 
 namespace XJ
 {
@@ -11,12 +12,15 @@ namespace XJ
         public:
             XJVulkanCommandPool(XJVulkanDevice* device, uint32_t queueFamilyIndex);
             ~XJVulkanCommandPool();
+            XJVulkanCommandPool(const XJVulkanCommandPool&) = delete;
+            XJVulkanCommandPool& operator=(const XJVulkanCommandPool&) = delete;
         
             static void BeginCommandBuffer(VkCommandBuffer commandBuffer);
             static void EndCommandBuffer(VkCommandBuffer commandBuffer);
 
             std::vector<VkCommandBuffer> AllocateCommandBuffer(uint32_t count) const;//分配命令缓冲区
             VkCommandBuffer AllocateSingleCommandBuffer() const;//分配单个命令缓冲区
+            void FreeCommandBuffer(VkCommandBuffer& commandBuffer) const;//释放命令缓冲区
             
 
             VkCommandBuffer XJGetCommandBuffer() const { return mCommandBuffer; }
@@ -26,6 +30,7 @@ namespace XJ
             XJVulkanDevice* mDevice = nullptr;
             VkCommandPool mCommandPool = VK_NULL_HANDLE;
             VkCommandBuffer mCommandBuffer = VK_NULL_HANDLE;
+            mutable std::mutex mCommandPoolMutex;
     };
 }
 

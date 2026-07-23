@@ -45,7 +45,7 @@ PRIVATE
 )
     
 # 设置C++标准
-target_compile_features(Core PUBLIC cxx_std_17)
+target_compile_features(Core PUBLIC cxx_std_20)
 
 if (CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
     target_compile_options(Core PRIVATE -Wa,-mbig-obj)

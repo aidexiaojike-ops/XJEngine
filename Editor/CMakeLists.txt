@@ -31,8 +31,8 @@ target_link_libraries(Editor
        nlohmann_json
 )
 
-#target_compile_features(Editor PUBLIC cxx_std_17)
-target_compile_features(Editor PRIVATE cxx_std_17)
+#target_compile_features(Editor PUBLIC cxx_std_20)
+target_compile_features(Editor PRIVATE cxx_std_20)
 
 if (CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
     target_compile_options(Editor PRIVATE -Wa,-mbig-obj)

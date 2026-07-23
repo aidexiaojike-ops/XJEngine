@@ -41,6 +41,8 @@ namespace XJ
                            const std::shared_ptr<XJVulkanImage>& resolveImage,
                            uint32_t width, uint32_t height);
             ~XJVulkanFrameBuffer();
+            XJVulkanFrameBuffer(const XJVulkanFrameBuffer&) = delete;
+            XJVulkanFrameBuffer& operator=(const XJVulkanFrameBuffer&) = delete;
 
             bool ReCreate(const std::vector<std::shared_ptr<XJVulkanImage>> &colorImages,
                      const std::shared_ptr<XJVulkanDepthImage>& depthImage,

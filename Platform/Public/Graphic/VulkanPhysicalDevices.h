@@ -11,8 +11,8 @@ namespace XJ
 
     struct QueueFamilyInfo
     {
-        int32_t queueFamilyIndex;
-        uint32_t queueCount;
+        int32_t queueFamilyIndex = -1;
+        uint32_t queueCount = 0;
     };
 
     class VulkanPhysicalDevices
