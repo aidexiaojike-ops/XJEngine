@@ -71,7 +71,7 @@ namespace XJ
         availableLayers.resize(availableLayerCount);//获取可用的层信息
 
         uint32_t enableLayerCount = 0;
-        const char* enableLayers[ARRAY_SIZE(requiredLayers)];
+        std::vector<const char*> enableLayers(ARRAY_SIZE(requiredLayers));
         if(bShouldValidate)
         {
             if(!checkDeviceFeature(
@@ -82,14 +82,14 @@ namespace XJ
                 ARRAY_SIZE(requiredLayers),
                 requiredLayers,
                 &enableLayerCount,
-                enableLayers))
+                enableLayers.data()))
             {
                 spdlog::error("缺少必需的实例层，无法继续。");
                 throw std::runtime_error("VulkanInstance failed: missing required instance layers");
             }
 
         }
-      
+        enableLayers.resize(enableLayerCount);
         spdlog::trace("所有必需的实例层均已找到。");
     
 
@@ -141,20 +141,22 @@ namespace XJ
 
        
         uint32_t enableExtensionCount = 0;
-        const char* enableExtensions[ARRAY_SIZE(requiredExtensions) + 5];
+        std::vector<const char*> enableExtensions(allRequestedExtensions.size());
+
         if(!checkDeviceFeature(
             "实例扩展",
             true,
             availableExtensionCount,
             availableExtensions.data(),
-            allRequestedExtensions.size(),
+            static_cast<uint32_t>(allRequestedExtensions.size()),
             allRequestedExtensions.data(),
             &enableExtensionCount,
-            enableExtensions))
+            enableExtensions.data()))
         {
             spdlog::error("缺少必需的实例扩展，无法继续");
             throw std::runtime_error("VulkanInstance failed: missing required instance extensions");
         }
+        enableExtensions.resize(enableExtensionCount);
         spdlog::trace("所有必需的实例扩展均已找到。");
         //创建Vulkan实例
         VkApplicationInfo appInfo{};
@@ -180,10 +182,10 @@ namespace XJ
         createInfo.pNext = bShouldValidate ? &debugCreateInfo : nullptr;
         createInfo.flags = 0;
         createInfo.pApplicationInfo = &appInfo;
-        createInfo.enabledLayerCount = enableLayerCount;
-        createInfo.ppEnabledLayerNames = enableLayerCount > 0 ? enableLayers : nullptr;
-        createInfo.enabledExtensionCount = enableExtensionCount;
-        createInfo.ppEnabledExtensionNames = enableExtensionCount > 0 ? enableExtensions : nullptr;
+        createInfo.enabledLayerCount = static_cast<uint32_t>(enableLayers.size());
+        createInfo.ppEnabledLayerNames = enableLayers.empty() ? nullptr : enableLayers.data();
+        createInfo.enabledExtensionCount = static_cast<uint32_t>(enableExtensions.size());
+        createInfo.ppEnabledExtensionNames = enableExtensions.empty() ? nullptr : enableExtensions.data();
 
         result = vkCreateInstance(&createInfo, nullptr, &mInstance);
 

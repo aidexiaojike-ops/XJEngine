@@ -191,6 +191,13 @@ namespace XJ
             return;
         }
 
+        if (mPipeline != VK_NULL_HANDLE)
+        {
+            mDevice->WaitIdle();
+            vkDestroyPipeline(mDevice->XJGetDevice(), mPipeline, nullptr);
+            mPipeline = VK_NULL_HANDLE;
+        }
+
         spdlog::debug("子通道索引: {}", mSubpassIndex);
         
          // 1. Pipeline Layout

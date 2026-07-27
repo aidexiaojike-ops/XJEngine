@@ -123,11 +123,12 @@ namespace XJ
             spdlog::error("创建渲染通道失败：没有子通道");
             throw std::runtime_error("XJVulkanRenderPass failed: no subpasses");
         }
-        std::vector<VkAttachmentReference> resolveAttachmentRefs(mSubPasses.size()); // 解析附件引用数组
+
         std::vector<VkSubpassDescription> subpassDescriptions(mSubPasses.size());
-        std::vector<std::vector<VkAttachmentReference>>   inputAttachmentRefs(mSubPasses.size());
-        std::vector<std::vector<VkAttachmentReference>>   colorAttachmentRefs(mSubPasses.size());
-        std::vector<std::vector<VkAttachmentReference>>   depthStencilAttachmentRefs(mSubPasses.size());
+        std::vector<std::vector<VkAttachmentReference>> inputAttachmentRefs(mSubPasses.size());
+        std::vector<std::vector<VkAttachmentReference>> colorAttachmentRefs(mSubPasses.size());
+        std::vector<std::vector<VkAttachmentReference>> depthStencilAttachmentRefs(mSubPasses.size());
+        std::vector<std::vector<VkAttachmentReference>> resolveAttachmentRefs(mSubPasses.size());// 解析附件引用数组
 
         for(uint32_t i = 0; i < mSubPasses.size();i++)
         {
@@ -195,20 +196,43 @@ namespace XJ
             //// 多重采样解析附件
             if(subPass.sampleCount > VK_SAMPLE_COUNT_1_BIT)
             {
-                Attachment mAttachment{};
-                mAttachment.format = device->XJGetSettings().surfaceFormat; // 使用与颜色附件相同的格式
-                mAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;// 多重采样附件通常不需要加载
-                mAttachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;// 多重采样附件通常需要存储以供解析使用
-                mAttachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;// 多重采样附件通常不需要存储
-                mAttachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;// 多重采样附件通常不需要存储
-                mAttachment.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;// 解析附件通常不需要预定义布局
-                mAttachment.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;// 多重采样附件通常不需要存储
-                mAttachment.samples = VK_SAMPLE_COUNT_1_BIT; // 解析附件通常不需要多重采样
-                mAttachment.usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
-                
-                mAttachments.push_back(mAttachment); // 添加一个新的附件用于多重采样
-                resolveAttachmentRefs[i] = {static_cast<uint32_t>(mAttachments.size() - 1), VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL}; // 设置解析附件引用
-            }
+                if (colorAttachmentRefs[i].empty())
+                {
+                    spdlog::error("创建渲染通道失败：subpass {} 使用 MSAA 但没有颜色附件", i);
+                    throw std::runtime_error("XJVulkanRenderPass failed: MSAA subpass has no color attachments");
+                }
+            
+                resolveAttachmentRefs[i].reserve(colorAttachmentRefs[i].size());
+
+                for (const auto& colorRef : colorAttachmentRefs[i])
+                {
+                    const Attachment& colorAttachment = mAttachments[colorRef.attachment];
+
+                    Attachment mAttachment{};
+                    mAttachment.format = device->XJGetSettings().surfaceFormat; // 使用与颜色附件相同的格式
+                    mAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;// 多重采样附件通常不需要加载
+                    mAttachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;// 多重采样附件通常需要存储以供解析使用
+                    mAttachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;// 多重采样附件通常不需要存储
+                    mAttachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;// 多重采样附件通常不需要存储
+                    mAttachment.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;// 解析附件通常不需要预定义布局
+                    mAttachment.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;// 多重采样附件通常不需要存储
+                    mAttachment.samples = VK_SAMPLE_COUNT_1_BIT; // 解析附件通常不需要多重采样
+                    mAttachment.usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+                    
+                    mAttachments.push_back(mAttachment); // 添加一个新的附件用于多重采样
+                    resolveAttachmentRefs[i].push_back({// 设置解析附件引用
+                        static_cast<uint32_t>(mAttachments.size() - 1),
+                        VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL
+                    });
+                }
+
+                mSubPasses[i].resolveAttachments.clear();
+                mSubPasses[i].resolveAttachments.reserve(resolveAttachmentRefs[i].size());
+                for (const auto& resolveRef : resolveAttachmentRefs[i])
+                {
+                    mSubPasses[i].resolveAttachments.push_back(resolveRef.attachment);
+                }
+            } 
             //subpass 描述
             subpassDescriptions[i].flags = 0;
             subpassDescriptions[i].pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
@@ -216,7 +240,7 @@ namespace XJ
             subpassDescriptions[i].pInputAttachments = inputAttachmentRefs[i].data();
             subpassDescriptions[i].colorAttachmentCount = static_cast<uint32_t>(colorAttachmentRefs[i].size());
             subpassDescriptions[i].pColorAttachments = colorAttachmentRefs[i].data();
-            subpassDescriptions[i].pResolveAttachments = subPass.sampleCount > VK_SAMPLE_COUNT_1_BIT ? &resolveAttachmentRefs[i] : nullptr; // 只有在多重采样时才使用解析附件
+            subpassDescriptions[i].pResolveAttachments = resolveAttachmentRefs[i].empty() ? nullptr : resolveAttachmentRefs[i].data(); // 只有在多重采样时才使用解析附件
             subpassDescriptions[i].pDepthStencilAttachment = depthStencilAttachmentRefs[i].empty() ? nullptr : depthStencilAttachmentRefs[i].data();
             subpassDescriptions[i].preserveAttachmentCount = 0;
             subpassDescriptions[i].pPreserveAttachments = nullptr;
@@ -224,27 +248,68 @@ namespace XJ
         }
         //  子通道依赖关系
          // 子通道依赖关系 - 修复布局转换问题
-        std::vector<VkSubpassDependency> dependencies(2);
+        std::vector<VkSubpassDependency> dependencies;
+        dependencies.reserve(mSubPasses.size() + 1);
         
-        // 依赖1：从外部到子通道0 - 确保渲染开始前图像准备好
-        dependencies[0].srcSubpass = VK_SUBPASS_EXTERNAL;
-        dependencies[0].dstSubpass = 0;
-        dependencies[0].srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-        dependencies[0].dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-        dependencies[0].srcAccessMask = 0;
-        dependencies[0].dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
-        dependencies[0].dependencyFlags = 0;
+        // 外部 -> 第一个子通道
+        VkSubpassDependency externalToFirst{};
+        externalToFirst.srcSubpass = VK_SUBPASS_EXTERNAL;
+        externalToFirst.dstSubpass = 0;
+        externalToFirst.srcStageMask =
+            VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT |
+            VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
+        externalToFirst.dstStageMask =
+            VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT |
+            VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
+        externalToFirst.srcAccessMask = 0;
+        externalToFirst.dstAccessMask =
+            VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT |
+            VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
+        externalToFirst.dependencyFlags = VK_DEPENDENCY_BY_REGION_BIT;
+        dependencies.push_back(externalToFirst);
         
-        // 依赖2：从子通道0到外部 - 确保渲染结束后图像布局转换
-        dependencies[1].srcSubpass = 0;
-        dependencies[1].dstSubpass = VK_SUBPASS_EXTERNAL;
-        dependencies[1].srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-        //dependencies[1].dstStageMask = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
-        dependencies[1].dstStageMask = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
-        dependencies[1].srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
-        //dependencies[1].dstAccessMask = 0;
-        dependencies[1].dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
-        dependencies[1].dependencyFlags = 0;
+        // 相邻子通道依赖：0 -> 1, 1 -> 2, ...
+        for (uint32_t subpassIndex = 0; subpassIndex + 1 < static_cast<uint32_t>(mSubPasses.size()); ++subpassIndex)
+        {
+            VkSubpassDependency dependency{};
+            dependency.srcSubpass = subpassIndex;
+            dependency.dstSubpass = subpassIndex + 1;
+        
+            dependency.srcStageMask =
+                VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT |
+                VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT;
+            dependency.dstStageMask =
+                VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT |
+                VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT |
+                VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
+        
+            dependency.srcAccessMask =
+                VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT |
+                VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
+            dependency.dstAccessMask =
+                VK_ACCESS_INPUT_ATTACHMENT_READ_BIT |
+                VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT |
+                VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
+        
+            dependency.dependencyFlags = VK_DEPENDENCY_BY_REGION_BIT;
+            dependencies.push_back(dependency);
+        }
+        
+        // 最后一个子通道 -> 外部
+        VkSubpassDependency lastToExternal{};
+        lastToExternal.srcSubpass = static_cast<uint32_t>(mSubPasses.size() - 1);
+        lastToExternal.dstSubpass = VK_SUBPASS_EXTERNAL;
+        lastToExternal.srcStageMask =
+            VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT |
+            VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT;
+        lastToExternal.dstStageMask =
+            VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
+        lastToExternal.srcAccessMask =
+            VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT |
+            VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
+        lastToExternal.dstAccessMask = 0;
+        lastToExternal.dependencyFlags = VK_DEPENDENCY_BY_REGION_BIT;
+        dependencies.push_back(lastToExternal);
 
         //createinfo 结构体
         std::vector<VkAttachmentDescription> vkAttachments;

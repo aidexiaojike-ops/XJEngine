@@ -169,7 +169,7 @@ namespace XJ
         availableExtensions.resize(availableExtensionCount);//获取可用的扩展数量
         //检查环境支持什么设备扩展
         uint32_t enableExtensionCount = 0;
-        const char* enableExtensions[ARRAY_SIZE(requestedExtensions) + 5];
+        std::vector<const char*> enableExtensions(ARRAY_SIZE(requestedExtensions));
         if(!checkDeviceFeature(
             "设备扩展",
             true,
@@ -178,11 +178,12 @@ namespace XJ
             ARRAY_SIZE(requestedExtensions),
             requestedExtensions,
             &enableExtensionCount,
-            enableExtensions))
+            enableExtensions.data()))
         {
             spdlog::error("缺少必需的实例扩展，无法继续");
             throw std::runtime_error("XJVulkanDevice failed: missing required device extensions");
         }
+        enableExtensions.resize(enableExtensionCount);
 
         VkDeviceCreateInfo deviceCreateInfo{};
         deviceCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO; 
@@ -192,8 +193,8 @@ namespace XJ
         deviceCreateInfo.pQueueCreateInfos = queueCreateInfos;//创建队列
         deviceCreateInfo.enabledLayerCount = 0;//暂时不启用层
         deviceCreateInfo.ppEnabledLayerNames = nullptr;//暂时不启用层
-        deviceCreateInfo.enabledExtensionCount = enableExtensionCount;//暂时不启用扩展
-        deviceCreateInfo.ppEnabledExtensionNames = enableExtensionCount > 0? enableExtensions : nullptr;//暂时不启用扩展
+        deviceCreateInfo.enabledExtensionCount = static_cast<uint32_t>(enableExtensions.size());//暂时不启用扩展
+        deviceCreateInfo.ppEnabledExtensionNames = enableExtensions.empty() ? nullptr : enableExtensions.data();//暂时不启用扩展
         deviceCreateInfo.pEnabledFeatures = nullptr;//使用物理设备的默认特性
         
         result = vkCreateDevice(physicalDevice, &deviceCreateInfo, nullptr, &mDevice);

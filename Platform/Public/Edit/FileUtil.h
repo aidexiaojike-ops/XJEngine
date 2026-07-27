@@ -2,7 +2,11 @@
 #ifndef FILE_UTIL_H
 #define FILE_UTIL_H
 
-#include "EditIncludes.h"
+#include <chrono>
+#include <ctime>
+#include <filesystem>
+#include <iomanip>
+#include <sstream>
 // #include <filesystem> // 添加这一行
 //#include <string>
 //资源路径定义
@@ -63,11 +67,20 @@ namespace XJ
     //格式化系统时间
     static std::string FormatSystemTime(std::filesystem::file_time_type fileTime)
     {
-        std::time_t time = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
-        std::tm* tm = std::localtime(&time);
+        auto systemTime = std::chrono::time_point_cast<std::chrono::system_clock::duration>(
+        fileTime - std::filesystem::file_time_type::clock::now() + std::chrono::system_clock::now());
+
+        std::time_t time = std::chrono::system_clock::to_time_t(systemTime);
+
+        std::tm localTime{};
+    #ifdef _WIN32
+        localtime_s(&localTime, &time);
+    #else
+        localtime_r(&time, &localTime);
+    #endif
 
         std::stringstream ss;
-        ss << std::put_time(tm, "%Y/%m/%d %H:%M");
+        ss << std::put_time(&localTime, "%Y/%m/%d %H:%M");
 
         return ss.str();
     }
@@ -81,11 +94,29 @@ namespace XJ
             throw std::runtime_error("Could not open the file:" + filePath);
         }
 
-        auto fileSzie =(size_t)file.tellg();
-        std::vector<char> buffer(fileSzie);
+        std::streampos fileSizePos = file.tellg();
+        if (fileSizePos < 0)
+        {
+            throw std::runtime_error("Could not get file size: " + filePath);
+        }
+        
+        size_t fileSize = static_cast<size_t>(fileSizePos);
+        std::vector<char> buffer(fileSize);
+
         file.seekg(0);
-        file.read(buffer.data(),fileSzie);
-        file.close();
+        if (!file)
+        {
+            throw std::runtime_error("Could not seek file: " + filePath);
+        }
+
+        if (fileSize > 0)
+        {
+            file.read(buffer.data(), static_cast<std::streamsize>(fileSize));
+            if (!file)
+            {
+                throw std::runtime_error("Could not read file: " + filePath);
+            }
+        }
         return buffer;
 
     }

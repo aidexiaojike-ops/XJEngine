@@ -1,4 +1,6 @@
 #include "Graphic/XJVulkanGeometryUtil.h"
+#include <vector>
+#include <cstdint>
 
 namespace XJ
 {
