@@ -13,6 +13,13 @@
     "source": "Resource/Mesh/Monkey.glb",
     "imported": ""
   },
+  "536870914": {
+    "handle": 536870914,
+    "type": 1,
+    "name": "TJCube",
+    "source": "builtin://mesh/TJCube",
+    "imported": ""
+  },
   "556870913": {
     "handle": 556870913,
     "type": 3,

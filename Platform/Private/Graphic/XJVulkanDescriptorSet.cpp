@@ -50,7 +50,7 @@ namespace XJ
             kDescriptorPoolCreateInfo.pNext = nullptr;
             kDescriptorPoolCreateInfo.flags = 0; // 可选标志（如 FREE_DESCRIPTOR_SET_BIT）
             kDescriptorPoolCreateInfo.maxSets = maxSets; // 最大描述符集数量
-            kDescriptorPoolCreateInfo.poolSizeCount = poolSizes.size(); // 池大小条目数
+            kDescriptorPoolCreateInfo.poolSizeCount = static_cast<uint32_t>(poolSizes.size()); // 池大小条目数
             kDescriptorPoolCreateInfo.pPoolSizes = poolSizes.data(); // 池大小数组
             // 创建描述符池，结果存入 mDescriptorPool
             XJDebug_Log(vkCreateDescriptorPool(mDevice->XJGetDevice(), &kDescriptorPoolCreateInfo, nullptr, &mDescriptorPool));
@@ -72,14 +72,38 @@ namespace XJ
         }
         std::vector<VkDescriptorSet> XJVulkanDescriptorPool::AllocateDescriptorSet(XJVulkanDescriptorSetLayout *setLayout, uint32_t count)
         {
-             // 准备一个向量存储分配得到的描述符集句柄
-            std::vector<VkDescriptorSet> descriptorSets(count);
-              // 准备与 count 相同数量的描述符集布局引用（所有引用相同布局）
-            std::vector<VkDescriptorSetLayout> setLayouts(count);
-            for(int i = 0; i < count; i++)
+            if (!mDevice || !mDevice->IsValid())
             {
-                setLayouts[i] = setLayout->XJGetDescriptorSet(); // 从布局对象获取 VkDescriptorSetLayout
+                spdlog::error("AllocateDescriptorSet failed: device is invalid");
+                return {};
             }
+
+            if (mDescriptorPool == VK_NULL_HANDLE)
+            {
+                spdlog::error("AllocateDescriptorSet failed: descriptor pool is null");
+                return {};
+            }
+
+            if (!setLayout || setLayout->XJGetDescriptorSet() == VK_NULL_HANDLE)
+            {
+                spdlog::error("AllocateDescriptorSet failed: descriptor set layout is invalid");
+                return {};
+            }
+
+            if (count == 0)
+            {
+                spdlog::warn("AllocateDescriptorSet skipped: count is 0");
+                return {};
+            }
+           // 准备与 count 相同数量的描述符集布局引用（所有引用相同布局）
+            std::vector<VkDescriptorSetLayout> setLayouts(count);
+            for (uint32_t i = 0; i < count; ++i)
+            {
+                setLayouts[i] = setLayout->XJGetDescriptorSet();// 从布局对象获取 VkDescriptorSetLayout
+            }
+
+             // 准备一个向量存储分配得到的描述符集句柄
+            std::vector<VkDescriptorSet> descriptorSets(count, VK_NULL_HANDLE);
 
             VkDescriptorSetAllocateInfo allocateInfo{};
             allocateInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
@@ -90,14 +114,15 @@ namespace XJ
             // 执行分配
             VkResult ret = vkAllocateDescriptorSets(mDevice->XJGetDevice(),&allocateInfo, descriptorSets.data());
             XJDebug_Log(ret);
-            if (ret == VK_SUCCESS && !descriptorSets.empty()) 
+            
+    
+            if (ret != VK_SUCCESS)
             {
-                spdlog::trace("Descriptor set allocated: {}", (void*)descriptorSets[0]);
-            } else {
-                spdlog::error("Descriptor set allocation FAILED, ret={}", static_cast<int>(ret));
+                spdlog::error("Descriptor set allocation failed, ret={}", static_cast<int>(ret));
+                return {};
             }
 
-
+            spdlog::trace("Descriptor sets allocated, count={}", count);
             return descriptorSets;
         }
 

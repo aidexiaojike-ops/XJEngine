@@ -10,9 +10,9 @@ namespace XJ
     class XJMeshFactory
     {
         public:
-        
             static std::shared_ptr<XJMesh> CreateFromAsset(const XJMeshAsset& asset);//// 转换 Vertex（Asset 格式）→ XJVulkanVertex（GPU 格式）
-    };
+            static std::shared_ptr<XJMesh> CreateCubeMesh();//自带的cube
+        };
 }
 
 

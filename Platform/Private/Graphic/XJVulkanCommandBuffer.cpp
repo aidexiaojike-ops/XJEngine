@@ -24,6 +24,12 @@ namespace XJ
 
     std::vector<VkCommandBuffer> XJVulkanCommandPool::AllocateCommandBuffer(uint32_t count) const//分配命令缓冲区
     {
+        if (!mDevice || !mDevice->IsValid() || mCommandPool == VK_NULL_HANDLE || count == 0)
+        {
+            spdlog::error("AllocateCommandBuffer failed: invalid device, pool, or count");
+            return {};
+        }
+
         spdlog::trace("分配了 {} 个命令缓冲区", count);
 
         std::lock_guard<std::mutex> lock(mCommandPoolMutex);
@@ -34,9 +40,21 @@ namespace XJ
         commandBufferAllocateInfo.commandPool = mCommandPool;
         commandBufferAllocateInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
         commandBufferAllocateInfo.commandBufferCount = count;
+        //避免 vkAllocateCommandBuffers 失败后返回一堆空句柄
+        std::vector<VkCommandBuffer> commandBuffers(count, VK_NULL_HANDLE);
 
-        std::vector<VkCommandBuffer> commandBuffers(count);
-        XJDebug_Log(vkAllocateCommandBuffers(mDevice->XJGetDevice(), &commandBufferAllocateInfo, commandBuffers.data()));
+        VkResult result = vkAllocateCommandBuffers(
+            mDevice->XJGetDevice(),
+            &commandBufferAllocateInfo,
+            commandBuffers.data());     
+
+        XJDebug_Log(result);        
+
+        if (result != VK_SUCCESS)
+        {
+            spdlog::error("AllocateCommandBuffer failed, count={}, result={}", count, static_cast<int>(result));
+            return {};
+        }
 
        
         return commandBuffers;

@@ -2,7 +2,7 @@
 #define XJ_MESH_H
 
 #include "Graphic/XJVulkanBuffer.h"
-#include "Graphic/XJVulkanGeometryUtil.h"
+#include "Graphic/XJVulkanVertex.h"
 #include  <memory>
 #include  <cstdint>
 #include  <string>

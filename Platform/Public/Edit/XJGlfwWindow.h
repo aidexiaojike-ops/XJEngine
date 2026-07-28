@@ -49,6 +49,7 @@ namespace XJ
             bool IsKeyUp(int key) const;//获取键盘按键
 
             bool IsWindowMinimized() const {return glfwGetWindowAttrib(mGLFWwindow, GLFW_ICONIFIED);}//窗口最小化
+            VkExtent2D XJGetFramebufferExtent() const;
     };
     
 }

@@ -74,7 +74,11 @@ namespace XJ
     };
     struct PipelineDynamicState//动态状态
     {
-        std::vector<VkDynamicState> dynamicStates;//动态状态列表
+        std::vector<VkDynamicState> dynamicStates =
+        {
+            VK_DYNAMIC_STATE_VIEWPORT,
+            VK_DYNAMIC_STATE_SCISSOR
+        };//动态状态列表
     };
 
     struct PipelineConfig

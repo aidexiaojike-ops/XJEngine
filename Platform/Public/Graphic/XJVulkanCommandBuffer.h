@@ -21,15 +21,12 @@ namespace XJ
             std::vector<VkCommandBuffer> AllocateCommandBuffer(uint32_t count) const;//分配命令缓冲区
             VkCommandBuffer AllocateSingleCommandBuffer() const;//分配单个命令缓冲区
             void FreeCommandBuffer(VkCommandBuffer& commandBuffer) const;//释放命令缓冲区
-            
-
-            VkCommandBuffer XJGetCommandBuffer() const { return mCommandBuffer; }
+    
             VkCommandPool XJGetCommandPool() const { return mCommandPool; }
 
         private:
             XJVulkanDevice* mDevice = nullptr;
             VkCommandPool mCommandPool = VK_NULL_HANDLE;
-            VkCommandBuffer mCommandBuffer = VK_NULL_HANDLE;
             mutable std::mutex mCommandPoolMutex;
     };
 }

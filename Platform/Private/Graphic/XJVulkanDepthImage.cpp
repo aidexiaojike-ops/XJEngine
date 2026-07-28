@@ -18,29 +18,38 @@ namespace XJ
     
     bool XJVulkanDepthImage::Create()
     {
-        if (!CreateImage()) {
+        Destroy();
+
+        if (!CreateImage())
+        {
             spdlog::error("创建深度图像失败");
+            Destroy();
             return false;
         }
-        
-        if (!AllocateMemory()) {
+
+        if (!AllocateMemory())
+        {
             spdlog::error("分配深度图像内存失败");
+            Destroy();
             return false;
         }
-        
-        if (!CreateImageView()) {
+
+        if (!CreateImageView())
+        {
             spdlog::error("创建深度图像视图失败");
+            Destroy();
             return false;
         }
-        
+
         spdlog::debug("深度图像创建成功");
         return true;
     }
     // 销毁深度图像资源
     void XJVulkanDepthImage::Destroy()
     {
-        if (mDevice && mDevice->XJGetDevice() != VK_NULL_HANDLE) {
-            vkDeviceWaitIdle(mDevice->XJGetDevice());
+        if (mDevice && mDevice->IsValid())
+        {
+            mDevice->WaitIdle();
             
             if (mDepthImageView != VK_NULL_HANDLE) {
                 vkDestroyImageView(mDevice->XJGetDevice(), mDepthImageView, nullptr);
@@ -117,17 +126,17 @@ namespace XJ
         VkMemoryRequirements memRequirements;
         vkGetImageMemoryRequirements(mDevice->XJGetDevice(), mDepthImage, &memRequirements);
         
-        VkMemoryAllocateInfo allocInfo{};
-        allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-        allocInfo.allocationSize = memRequirements.size;
-        allocInfo.memoryTypeIndex = mDevice->XJGetMemoryIndex(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, memRequirements.memoryTypeBits);
-        //allocInfo.memoryTypeIndex = mDevice->XJGetMemoryIndex(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, memRequirements.memoryTypeBits);
+        int32_t memoryTypeIndex = mDevice->XJGetMemoryIndex(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, memRequirements.memoryTypeBits);
         
-        
-        if (allocInfo.memoryTypeIndex == -1) {
+        if (memoryTypeIndex < 0) {
             spdlog::error("找不到合适的深度图像内存类型");
             return false;
         }
+
+        VkMemoryAllocateInfo allocInfo{};
+        allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+        allocInfo.allocationSize = memRequirements.size;
+        allocInfo.memoryTypeIndex = static_cast<uint32_t>(memoryTypeIndex);
         
         VkResult result = vkAllocateMemory(mDevice->XJGetDevice(), &allocInfo, nullptr, &mDepthImageMemory);
         if (result != VK_SUCCESS) {
@@ -136,8 +145,13 @@ namespace XJ
         }
         
         result = vkBindImageMemory(mDevice->XJGetDevice(), mDepthImage, mDepthImageMemory, 0);
-        if (result != VK_SUCCESS) {
+        if (result != VK_SUCCESS)
+        {
             spdlog::error("绑定深度图像内存失败: {}", vk_result_string(result));
+        
+            vkFreeMemory(mDevice->XJGetDevice(), mDepthImageMemory, nullptr);
+            mDepthImageMemory = VK_NULL_HANDLE;
+        
             return false;
         }
         

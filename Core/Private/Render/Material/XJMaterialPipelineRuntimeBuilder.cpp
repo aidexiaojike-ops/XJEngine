@@ -100,10 +100,17 @@ namespace XJ
                 1,
                 framePoolSizes);
 
-        runtime.FrameUboDescSet =
+        auto frameDescSets =
             runtime.FrameDescriptorPool->AllocateDescriptorSet(
-                runtime.FrameUboDescSetLayout.get(),
-                1)[0];
+                    runtime.FrameUboDescSetLayout.get(),
+                    1);
+        if (frameDescSets.empty())
+        {
+            spdlog::error("Material pipeline runtime build failed: frame descriptor set allocation failed.");
+            return false;
+        }
+        runtime.FrameUboDescSet = frameDescSets[0];
+
 
         runtime.FrameUboBuffer =
             std::make_shared<XJ::XJVulkanBuffer>(

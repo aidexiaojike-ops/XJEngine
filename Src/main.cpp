@@ -196,7 +196,7 @@ protected:
         mEditorAssetController.SetRootPath("Resource");
         mEditorSceneController.SetDefaultResources(mWhiteTexture, mDefaultSampler);
         mEditorSceneController.SetCurrentScenePath("Resource/Scenes/Default.xjscene");
-        mEditorSceneController.SetDefaultMeshHandle(kMonkeyMeshHandle);
+        mEditorSceneController.SetDefaultMeshHandle(kTJCubeMeshHandle);
         //打开前准备
         mEditorSceneController.SetBeforeDeleteCallback(
             [this](XJ::XJScene& scene, const std::vector<XJ::XJEditorEntityId>& ids)
@@ -354,9 +354,24 @@ protected:
     
     void OnRender() override
     {
+        auto updateImGuiPlatformWindows = []()
+        {
+            if (ImGui::GetCurrentContext() &&
+                (ImGui::GetIO().ConfigFlags & ImGuiConfigFlags_ViewportsEnable))
+            {
+                GLFWwindow* backup = glfwGetCurrentContext();
+
+                ImGui::UpdatePlatformWindows();
+                ImGui::RenderPlatformWindowsDefault();
+
+                glfwMakeContextCurrent(backup);
+            }
+        };
+
         if (XJGetWindow()->IsWindowMinimized())
         {
             // 窗口最小化时跳过渲染，但保留事件处理
+            updateImGuiPlatformWindows();
             return;
         }   
         XJ::XJRenderContext *kRenderContext = XJApplication::XJGetAppContext()->renderContext;
@@ -370,6 +385,7 @@ protected:
 
         if (!acquireResult.acquired)
         {
+            updateImGuiPlatformWindows();
             return;
         }
 
@@ -388,6 +404,7 @@ protected:
         if (kCommandBuffer == VK_NULL_HANDLE) 
         {
             spdlog::error("Command buffer is null");
+            updateImGuiPlatformWindows();
             return;
         }
         // 开始录制命令缓冲区
@@ -427,15 +444,7 @@ protected:
             if (mEditorRenderer && mUIContext)
                 mEditorRenderer->RenderDrawData(kCommandBuffer, mUIContext->XJGetDrawData());
             // ===== Viewport Vulkan UI 已绘制完成 =====
-            if (ImGui::GetIO().ConfigFlags & ImGuiConfigFlags_ViewportsEnable)
-            {
-                GLFWwindow* backup = glfwGetCurrentContext();// 备份当前上下文
-        
-                ImGui::UpdatePlatformWindows();// 更新平台窗口，处理多视口窗口创建和尺寸变化
-                ImGui::RenderPlatformWindowsDefault();// 渲染平台窗口，调用各视口对应的平台渲染逻辑
-        
-                glfwMakeContextCurrent(backup);// 恢复之前的上下文
-            }
+            updateImGuiPlatformWindows();
              // ===== UI 渲染结束 =====
             mRenderTarget->EndRenderTarget(kCommandBuffer);// 结束渲染通道
         }
@@ -510,6 +519,7 @@ private:
 
     static constexpr XJ::XJAssetHandle kDefaultSceneHandle = 0x10000001ull;
     static constexpr XJ::XJAssetHandle kMonkeyMeshHandle = 0x20000001ull;
+    static constexpr XJ::XJAssetHandle kTJCubeMeshHandle = 0x20000002ull;
     static constexpr uint64_t kPreviewCameraEntityId = 0x30000001ull;
     static constexpr uint64_t kGameCameraEntityId = 0x30000002ull;
     static constexpr uint64_t kMonkeyEntityId = 0x30000003ull;

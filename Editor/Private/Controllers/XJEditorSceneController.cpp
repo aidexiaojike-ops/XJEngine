@@ -71,7 +71,8 @@ namespace XJ
         if (!mScene || !mAssetRegistry)
             return false;
 
-        XJAssetBootstrap bootstrap(*mAssetRegistry, defaultSceneHandle, defaultMeshHandle);
+        static constexpr XJAssetHandle TJCubeMeshHandle = 0x20000002ull;//来自代码的cube
+        XJAssetBootstrap bootstrap(*mAssetRegistry, defaultSceneHandle, defaultMeshHandle, TJCubeMeshHandle);
         bootstrap.LoadOrCreateAssetRegistry();
         
         auto sceneAsset  = bootstrap.LoadOrCreateDefaultSceneAsset();//获取默认场景

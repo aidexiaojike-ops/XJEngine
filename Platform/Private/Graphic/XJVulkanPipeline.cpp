@@ -3,9 +3,18 @@
 #include "Graphic/XJVulkanRenderPass.h"
 #include "Edit/FileUtil.h"
 #include <stdexcept>
+#include <algorithm>
 
 namespace XJ
 {
+
+    namespace
+    {
+        bool HasDynamicState(const std::vector<VkDynamicState>& states, VkDynamicState state)
+        {
+            return std::find(states.begin(), states.end(), state) != states.end();
+        }
+    }
 
 
     XJVulkanPipelineLayout::XJVulkanPipelineLayout(XJVulkanDevice* device, const std::string &vertexShaderFilePath, 
@@ -281,27 +290,32 @@ namespace XJ
         //            static_cast<VkPrimitiveTopology>(inputAssemblyStateInfo.topology),
         //            static_cast<uint32_t>(inputAssemblyStateInfo.primitiveRestartEnable));
         //默认视口
-        VkViewport defaultViewport{};
-        defaultViewport.x = 0.0f;
-        defaultViewport.y = 0.0f;
-        defaultViewport.width = 800.0f;
-        defaultViewport.height = 600.0f;
-        defaultViewport.minDepth = 0.0f;
-        defaultViewport.maxDepth = 1.0f;
+        const bool hasDynamicViewport = HasDynamicState(
+            mPipelineConfig.dynamicState.dynamicStates,
+            VK_DYNAMIC_STATE_VIEWPORT);
         //默认裁剪矩形
-        VkRect2D defaultScissor{};
-        defaultScissor.offset = {0, 0};
-        defaultScissor.extent = {800, 600};
-        spdlog::trace("视口设置: {}x{}", defaultViewport.width, defaultViewport.height);
+        const bool hasDynamicScissor = HasDynamicState(
+            mPipelineConfig.dynamicState.dynamicStates,
+            VK_DYNAMIC_STATE_SCISSOR);
+        
+        if (!hasDynamicViewport || !hasDynamicScissor)
+        {
+            spdlog::error(
+                "XJVulkanPipeline::Create failed: viewport and scissor must be dynamic. viewport={}, scissor={}",
+                hasDynamicViewport,
+                hasDynamicScissor);
+            return;
+        }
+
         //视口状态
         VkPipelineViewportStateCreateInfo viewportStateInfo{};
         viewportStateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
         viewportStateInfo.pNext = nullptr;  
         viewportStateInfo.flags = 0;
         viewportStateInfo.viewportCount = 1; //视口数量
-        viewportStateInfo.pViewports = &defaultViewport;
+        viewportStateInfo.pViewports = nullptr;
         viewportStateInfo.scissorCount = 1; //裁剪矩形数量
-        viewportStateInfo.pScissors = &defaultScissor;
+        viewportStateInfo.pScissors = nullptr;
         //光栅化状态
         spdlog::trace("配置光栅化状态...");
         VkPipelineRasterizationStateCreateInfo rasterizationStateInfo{};
@@ -519,7 +533,14 @@ namespace XJ
     XJVulkanPipeline *XJVulkanPipeline::SetDynamicState(const std::vector<VkDynamicState> &dynamicStates)
     {
         //spdlog::trace("设置动态状态: {} 个状态", dynamicStates.size());
-        mPipelineConfig.dynamicState.dynamicStates = dynamicStates;
+         mPipelineConfig.dynamicState.dynamicStates = dynamicStates;
+
+        if (!HasDynamicState(mPipelineConfig.dynamicState.dynamicStates, VK_DYNAMIC_STATE_VIEWPORT))
+            mPipelineConfig.dynamicState.dynamicStates.push_back(VK_DYNAMIC_STATE_VIEWPORT);
+        
+        if (!HasDynamicState(mPipelineConfig.dynamicState.dynamicStates, VK_DYNAMIC_STATE_SCISSOR))
+            mPipelineConfig.dynamicState.dynamicStates.push_back(VK_DYNAMIC_STATE_SCISSOR);
+        
         return this;
 
     }

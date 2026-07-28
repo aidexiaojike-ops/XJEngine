@@ -1,7 +1,7 @@
 #include "Render/System/XJBaseMaterialSystem.h"//获取基础材质系统信息
 #include "Graphic/XJVulkanPipeline.h"//获取管线信息
 #include "Edit/FileUtil.h"//获取文件工具类
-#include "Graphic/XJVulkanGeometryUtil.h"//获取几何体工具类
+#include "Graphic/XJVulkanVertex.h"//获取几何体工具类
 #include "Graphic/XJVulkanDescriptorSet.h"//获取描述符集信息
 #include "XJApplication.h"//获取应用程序上下文信息
 
@@ -91,6 +91,11 @@ namespace XJ
 
         mDescriptorPool = std::make_shared<XJ::XJVulkanDescriptorPool>(kDevice, 1, kPoolSizes);
         mDescriptorSets = mDescriptorPool->AllocateDescriptorSet(mDescriptorSetLayout.get(), 1);
+        if (mDescriptorSets.empty())
+        {
+            spdlog::error("XJBaseMaterialSystem descriptor set allocation failed");//如果默认会用 mDescriptorSets[0]，这里马上检查
+            return;
+        }
         //buffer的资源准备
         mGlobalBuffer = std::make_shared<XJ::XJVulkanBuffer>(kDevice, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT, sizeof(mGlobalUbo),nullptr,true);
         mInstanceBuffer = std::make_shared<XJ::XJVulkanBuffer>(kDevice, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT, MAX_ENTITIES * mDynamicAlignment, nullptr, true);

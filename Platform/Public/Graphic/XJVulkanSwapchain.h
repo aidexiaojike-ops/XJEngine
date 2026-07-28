@@ -33,6 +33,7 @@ namespace XJ
 
             SurfaceInfo mSurfaceInfo;
 
+            VkExtent2D mExtent{0, 0};
 
         public:
             XJVulkanSwapchain(VulkanPhysicalDevices* physicalDevice, XJVulkanDevice* device, VulkanSurface* surface);
@@ -48,8 +49,8 @@ namespace XJ
             VkSwapchainKHR XJGetVulkanSwapchain() { return mSwapchain; }
 
             const std::vector<VkImage>& XJGetSwapchainImages() const { return mImages; }
-            uint32_t XJGetWidth() const { return mSurfaceInfo.capabilities.currentExtent.width; }
-            uint32_t XJGetHeight() const { return mSurfaceInfo.capabilities.currentExtent.height; }
+            uint32_t XJGetWidth() const { return mExtent.width; }
+            uint32_t XJGetHeight() const { return mExtent.height; }
 
             int32_t XJGetCurrentImageIndex() const { return mCurrentImageIndex; }
 

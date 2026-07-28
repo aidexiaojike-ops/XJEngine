@@ -8,7 +8,7 @@ namespace XJ
 {
     void XJAssetBootstrap::RegisterBootstrapAssets()
     {
-        mAssetRegistry.RegisterAsset
+        mAssetRegistry.RegisterAsset//来自资源文件夹的场景
         ({
             mDefaultSceneHandle,
             XJ::XJAssetType::Scene,
@@ -17,12 +17,21 @@ namespace XJ
             {}
         });
 
-        mAssetRegistry.RegisterAsset
+        mAssetRegistry.RegisterAsset//来自资源文件夹的猴头
         ({
             mMonkeyMeshHandle,
             XJ::XJAssetType::Mesh,
             "Monkey",
             "Resource/Mesh/Monkey.glb",
+            {}
+        });
+
+        mAssetRegistry.RegisterAsset//来自代码里面的cube
+        ({
+            mTJCubeMeshHandle,
+            XJ::XJAssetType::Mesh,
+            "TJCube",
+            "builtin://mesh/TJCube",
             {}
         });
     }
@@ -36,6 +45,8 @@ namespace XJ
             if(mAssetRegistry.Load(registryPath))
             {
                 spdlog::info("Loaded asset registry from {}", registryPath.string());
+                RegisterBootstrapAssets();
+                mAssetRegistry.Save(registryPath);   
             }
             else
             {

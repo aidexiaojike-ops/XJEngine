@@ -1,4 +1,6 @@
 #include "Render/Resource/XJMeshFactory.h"
+#include "Graphic/XJVulkanGeometryUtil.h"
+#include "spdlog/spdlog.h"
 
 namespace XJ
 {
@@ -17,5 +19,29 @@ namespace XJ
             kVertices.push_back(kVulkanVertex);
          }
         return std::make_shared<XJMesh>(kVertices, asset.mIndices);//创建 XJMesh 实例，传入转换后的顶点数据和索引数据
+    }
+
+    std::shared_ptr<XJMesh> XJMeshFactory::CreateCubeMesh()
+    {
+        std::vector<XJVulkanVertex> vertices;
+        std::vector<uint32_t> indices;
+
+        XJVulkanGeometryUtil::CreateCube(//自带cube的设置
+            -0.5f,
+             0.5f,
+            -0.5f,
+             0.5f,
+            -0.5f,
+             0.5f,
+            vertices,
+            indices,
+            true,
+            true,
+            glm::mat4(1.0f));
+
+        if (vertices.empty() || indices.empty())
+            return nullptr;
+
+        return std::make_shared<XJMesh>(vertices, indices);
     }
 }

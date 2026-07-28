@@ -2,6 +2,7 @@
 #include "Edit/SpdlogDebug.h"
 #include "Event/XJWindowEvent.h"
 #include "Event/XJEventDispatcher.h"
+#include <algorithm>
 
 namespace XJ
 {
@@ -196,5 +197,22 @@ namespace XJ
     bool XJGlfwWindow::IsKeyUp(int key) const//获取键盘按键
     {
         return glfwGetKey(mGLFWwindow, key) == GLFW_RELEASE;
+    }
+
+    VkExtent2D XJGlfwWindow::XJGetFramebufferExtent() const
+    {
+        if (!mGLFWwindow)
+        {
+            return {0, 0};
+        }
+
+        int width = 0;
+        int height = 0;
+        glfwGetFramebufferSize(mGLFWwindow, &width, &height);
+
+        return {
+            static_cast<uint32_t>(std::max(width, 0)),
+            static_cast<uint32_t>(std::max(height, 0))
+        };
     }
 }

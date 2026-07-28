@@ -129,8 +129,10 @@ namespace XJ
             // 更新描述集
             static void UpdateDescriptorSets(VkDevice device, const std::vector<VkWriteDescriptorSet> &writes) 
             {
+                if (device == VK_NULL_HANDLE || writes.empty())
+                    return;
                 // 调用 Vulkan API 更新描述集
-                vkUpdateDescriptorSets(device, writes.size(), writes.data(), 0, nullptr);
+                vkUpdateDescriptorSets(device, static_cast<uint32_t>(writes.size()), writes.data(), 0, nullptr);
             }
 
     };

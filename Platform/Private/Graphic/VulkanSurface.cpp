@@ -5,7 +5,7 @@
 namespace XJ
 {
     
-    VulkanSurface::VulkanSurface(XJGlfwWindow* window,VulkanInstance* instance) : mInstance(instance)
+    VulkanSurface::VulkanSurface(XJGlfwWindow* window,VulkanInstance* instance) : mInstance(instance), mWindow(window)
     {
         if(!window || !instance)
         {

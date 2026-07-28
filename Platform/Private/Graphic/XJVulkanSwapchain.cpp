@@ -3,6 +3,7 @@
 #include "Graphic/VulkanPhysicalDevices.h"
 #include "Graphic/VulkanSurface.h"
 #include "Graphic/VulkanQueue.h"
+#include <algorithm>
 /*交换链 内部是几张图片 运行的时候从交换链里面取一张图片  把图片当作画布在里面绘制想要的内容（绘制过场叫渲染） 
 **绘制完后（渲染完成）把图片还给交换链    交换链把提交过来的图片给显示（surface window）  这个过场叫呈现 present
 **做图像的存储
@@ -35,6 +36,29 @@ namespace XJ
     bool XJVulkanSwapchain::ReCreate()
     {
         SetupSurfaceCapabilities();
+
+        VkExtent2D swapchainExtent = mSurfaceInfo.capabilities.currentExtent;
+
+        if (swapchainExtent.width == UINT32_MAX || swapchainExtent.height == UINT32_MAX)
+        {
+            swapchainExtent = mSurface->XJGetFramebufferExtent();
+
+            swapchainExtent.width = std::clamp(
+                swapchainExtent.width,
+                mSurfaceInfo.capabilities.minImageExtent.width,
+                mSurfaceInfo.capabilities.maxImageExtent.width);
+
+            swapchainExtent.height = std::clamp(
+                swapchainExtent.height,
+                mSurfaceInfo.capabilities.minImageExtent.height,
+                mSurfaceInfo.capabilities.maxImageExtent.height);
+        }
+        if (swapchainExtent.width == 0 || swapchainExtent.height == 0)
+        {
+            spdlog::warn("{}: swapchain extent is 0x0, skip recreate", __FUNCTION__);
+            return false;
+        }
+
         spdlog::debug("当前范围：{0} x {1}", mSurfaceInfo.capabilities.currentExtent.width, mSurfaceInfo.capabilities.currentExtent.height);
         spdlog::debug("表面格式：{0}", mSurfaceInfo.surfaceFormat.format);
         spdlog::debug("显示模式：{0}", mSurfaceInfo.presentMode);
@@ -70,7 +94,7 @@ namespace XJ
         {
             XJDebug_Log(vkDeviceWaitIdle(device));
         }
-
+        //mDevice->WaitIdle();
         VkSwapchainKHR oldSwapchain = mSwapchain;//存储原来的交换链
 
         VkSwapchainCreateInfoKHR swapchainInfo{};
@@ -81,7 +105,7 @@ namespace XJ
         swapchainInfo.minImageCount = imageCount;
         swapchainInfo.imageFormat = mSurfaceInfo.surfaceFormat.format;
         swapchainInfo.imageColorSpace =  mSurfaceInfo.surfaceFormat.colorSpace;
-        swapchainInfo.imageExtent =  mSurfaceInfo.capabilities.currentExtent;
+        swapchainInfo.imageExtent = swapchainExtent;
         swapchainInfo.imageArrayLayers = 1;
         swapchainInfo.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
         swapchainInfo.imageSharingMode = imageSharingMode;
@@ -103,6 +127,8 @@ namespace XJ
             mSwapchain = oldSwapchain;
             return false;
         }
+        mExtent = swapchainExtent;
+        
         if (oldSwapchain != VK_NULL_HANDLE)
         {
             vkDestroySwapchainKHR(device, oldSwapchain, nullptr);

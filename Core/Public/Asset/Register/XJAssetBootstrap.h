@@ -14,13 +14,14 @@ namespace XJ
     class XJAssetBootstrap
     {
         private:
-            XJAssetRegistry& mAssetRegistry;
-            XJAssetHandle    mDefaultSceneHandle;
-            XJAssetHandle    mMonkeyMeshHandle;
+            XJAssetRegistry& mAssetRegistry;//所有资产
+            XJAssetHandle    mDefaultSceneHandle;//场景
+            XJAssetHandle    mMonkeyMeshHandle;//猴头
+            XJAssetHandle    mTJCubeMeshHandle;//cube
             
         public:
-            XJAssetBootstrap(XJAssetRegistry& registry, XJAssetHandle sceneHandle, XJAssetHandle meshHandle)
-                            : mAssetRegistry(registry), mDefaultSceneHandle(sceneHandle), mMonkeyMeshHandle(meshHandle)
+            XJAssetBootstrap(XJAssetRegistry& registry, XJAssetHandle sceneHandle, XJAssetHandle meshHandle, XJAssetHandle cubeMeshHandle)
+                            : mAssetRegistry(registry), mDefaultSceneHandle(sceneHandle), mMonkeyMeshHandle(meshHandle), mTJCubeMeshHandle(cubeMeshHandle)
             {}
 
             void RegisterBootstrapAssets();
