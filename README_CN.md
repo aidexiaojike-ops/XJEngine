@@ -141,13 +141,13 @@ XJEngine/
 │   ├── Public/Asset/        # Asset 层（CPU）
 │   │   ├── Importer/        # 模型/纹理/材质导入器
 │   │   ├── Loader/          # 资产加载器
-│   │   ├── Serialization/   # 场景序列化（.xjscene）
+│   │   ├── Serialization/   # 场景/材质/Shader 序列化
 │   │   ├── Instantiation/   # 场景实例化器
 │   │   └── Register/        # 资产引导注册/扫描
 │   ├── Public/Render/       # 渲染接口
-│   │   ├── System/          # 渲染系统（材质系统）
-│   │   ├── Material/        # 材质参数（Block/Layout/Builder/Writer）
-│   │   └── Shader/          # 着色器资产（Schema/Parameter/Asset）
+│   │   ├── System/          # 渲染系统（材质系统 + RenderSystemBase）
+│   │   ├── Material/        # 材质参数与管线运行时（Block/Layout/Builder/Writer/PipelineRuntime）
+│   │   └── Shader/          # 着色器资产（Schema/Parameter/Asset/Validator/BindingResolver/Reflection）
 │   └── Public/Render/Resource/ # GPU 资源
 ├── Platform/                # Vulkan、GLFW 封装
 ├── ThirdParty/              # 第三方库（glfw、imgui、glm、spdlog、entt、json、tinygltf 等）

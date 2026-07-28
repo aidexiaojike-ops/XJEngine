@@ -306,18 +306,23 @@ XJEngine/
 │   │       ├── System/      # 渲染系统（材质系统）
 │   │       │   ├── XJMaterialSystem.h
 │   │       │   ├── XJBaseMaterialSystem.h
-│   │       │   └── XJUnlitMaterialSystem.h
-│   │       ├── Material/    # 材质参数（Block/Layout/Builder/Writer）
-│   │       │   ├── XJMaterialParameterBlock.h
-│   │       │   └── XJMaterialParameterLayout.h
+│   │       │   ├── XJUnlitMaterialSystem.h
+│   │       │   └── XJMaterialRenderSystemBase.h
+│   │       ├── Material/    # 材质参数与管线运行时
+│   │       │   ├── XJMaterialParameterBlock.h / Layout / Builder / Writer
+│   │       │   ├── XJMaterialPipelineRuntime.h / Builder / Cache / Descriptor
+│   │       │   ├── XJMaterialShaderRuntimeLayout.h / Builder
+│   │       │   ├── XJMaterialRenderItem.h / RuntimeUploader
+│   │       │   └── XJUnlitMaterialBindingUtils / RenderItemBuilder
 │   │       ├── Resource/    # GPU 渲染资源
 │   │       │   ├── XJMesh.h / XJMeshFactory.h
 │   │       │   ├── XJTexture.h / XJTextureFactory.h
 │   │       │   └── XJMaterial.h / XJMaterialFactory.h
-│   │       └── Shader/      # 着色器资产
-│   │           ├── XJShaderSchema.h
-│   │           ├── XJShaderParameter.h
-│   │           └── XJShaderAsset.h
+│   │       └── Shader/      # 着色器资产与验证
+│   │           ├── XJShaderSchema.h / XJShaderParameter.h / XJShaderAsset.h
+│   │           ├── XJShaderSchemaValidator.h / BindingResolver
+│   │           ├── XJShaderDescriptorLayoutBuilder.h
+│   │           └── XJShaderReflection.h / Reflector / ReflectionUtils
 │   │   └── Asset/           # 资产管理（CPU 侧）
 │   │       ├── XJAsset.h
 │   │       ├── XJAssetRef.h
@@ -333,8 +338,10 @@ XJEngine/
 │   │       │   └── XJMaterialImporter.h
 │   │       ├── Loader/      # 资产加载器
 │   │       │   └── XJMeshAssetLoader.h
-│   │       ├── Serialization/ # 场景序列化
-│   │       │   └── XJSceneAssetSerializer.h
+│   │       ├── Serialization/ # 场景/材质/Shader 序列化
+│   │       │   ├── XJSceneAssetSerializer.h
+│   │       │   ├── XJMaterialAssetSerializer.h
+│   │       │   └── XJShaderAssetSerializer.h / XJShaderSchemaSerializer.h
 │   │       ├── Instantiation/ # 场景实例化
 │   │       │   └── XJSceneInstantiator.h
 │   │       └── Register/    # 资产引导注册/扫描
