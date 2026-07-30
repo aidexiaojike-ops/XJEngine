@@ -39,10 +39,12 @@ namespace XJ
             VkSettings XJGetSettings() { return settings;}
             VkPipelineCache XJGetPipelineCache() const { return mPipelineCache; }
 
-            VulkanQueue* XJGetGraphicQueue(uint32_t index) const { return mGraphicQueue.size() < index + 1 ? nullptr : mGraphicQueue[index].get(); };
-            VulkanQueue* XJGetFirstGraphicQueue() const { return mGraphicQueue.empty() ? nullptr : mGraphicQueue[0].get(); };
-            VulkanQueue* XJGetPresentQueue(uint32_t index) const { return mPresentQueue.size() < index + 1 ? nullptr : mPresentQueue[index].get(); };
-            VulkanQueue* XJGetFirstPresentQueue() const { return mPresentQueue.empty() ? nullptr : mPresentQueue[0].get(); };
+
+            VulkanQueue* XJGetGraphicQueue(uint32_t index) const { return index < mGraphicQueue.size() ? mGraphicQueue[index].get() : nullptr; }
+            VulkanQueue* XJGetFirstGraphicQueue() const { return XJGetGraphicQueue(0); }
+            VulkanQueue* XJGetPresentQueue(uint32_t index) const { return index < mPresentQueue.size() ? mPresentQueue[index].get() : nullptr; }
+            VulkanQueue* XJGetFirstPresentQueue() const { return XJGetPresentQueue(0); }
+
             XJVulkanCommandPool *XJGetDefaultCmdPool() const { return mDefaultCmdPool.get(); }
 
 
@@ -50,7 +52,6 @@ namespace XJ
             VkCommandBuffer CreateAndBeginOneDefaultCommandBuffer();//开始单个命令缓冲区
             void SubmitAndEndOneDefaultCommandBuffer(VkCommandBuffer& commandBuffer);//结束单个命令缓冲区
 
-            VkResult CreateSimpleSampler(VkFilter filter, VkSamplerAddressMode addressMode, VkSampler *outSampler);//传入的格式 环绕方式
         private:
             void CreatePipelineCache();//创建管线缓存
             void CreateDefaultCommandPool();//创建默认命令池

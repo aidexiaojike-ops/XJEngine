@@ -11,6 +11,7 @@ namespace XJ
     struct XJEditorRendererInitInfo
     {
         VkInstance       instance;
+        uint32_t         apiVersion = VK_API_VERSION_1_0;
         VkPhysicalDevice physicalDevice;
         VkDevice         device;
 

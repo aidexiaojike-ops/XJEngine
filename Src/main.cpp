@@ -135,6 +135,7 @@ protected:
         // 初始化 UI
         XJ::XJEditorRendererInitInfo kUIRendererInfo = {};
         kUIRendererInfo.instance       = kRenderContext->XJGetInstance()->XJGetInstance();
+        kUIRendererInfo.apiVersion     = kRenderContext->XJGetInstance()->XJGetApiVersion();
         kUIRendererInfo.physicalDevice = kPhysicalDevices->XJGetPhysicalDevice();
         kUIRendererInfo.device         = kDevice->XJGetDevice();
         kUIRendererInfo.renderPass     = mRenderPass->XJGetRenderPass();

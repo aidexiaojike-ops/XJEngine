@@ -228,68 +228,106 @@ namespace XJ
         mSurfaceInfo.presentMode = presentModes[foundPresentModeIndex];
 
     }
-    VkResult XJVulkanSwapchain::AcquireImage(int32_t *outImageIndex,VkSemaphore semaphore, VkFence fence) 
+    XJSwapchainAcquireResult XJVulkanSwapchain::AcquireImage(VkSemaphore semaphore, VkFence fence)
     {
-        uint32_t imageIndex;
-        VkResult result = vkAcquireNextImageKHR(mDevice->XJGetDevice(), mSwapchain, UINT64_MAX, semaphore, fence, &imageIndex);
-        //if(fence != VK_NULL_HANDLE)//如果有围栏的话 等待围栏完成 然后重置围栏
-        //{
-        //   XJDebug_Log(vkWaitForFences(mDevice->XJGetDevice(), 1, &fence, VK_TRUE, UINT64_MAX));
-        //   XJDebug_Log(vkResetFences(mDevice->XJGetDevice(), 1, &fence));
-        //}
-        if(result == VK_SUCCESS || result == VK_SUBOPTIMAL_KHR)
+        XJSwapchainAcquireResult acquire{};
+
+        if(!mDevice || !mDevice->IsValid() || mSwapchain == VK_NULL_HANDLE)
         {
-            *outImageIndex = imageIndex;
-            mCurrentImageIndex = imageIndex;
+            acquire.result = VK_ERROR_INITIALIZATION_FAILED;
+            acquire.recreateNeeded = true;
+            spdlog::error("{}: invalid device or swapchain", __FUNCTION__);
+            return acquire;
         }
-        else
+
+        uint32_t imageIndex = 0;
+        acquire.result = vkAcquireNextImageKHR(
+            mDevice->XJGetDevice(),
+            mSwapchain,
+            UINT64_MAX,
+            semaphore,
+            fence,
+            &imageIndex);
+
+        if(acquire.result == VK_ERROR_OUT_OF_DATE_KHR)
         {
-            spdlog::error("{0}: 获取交换链图片失败，错误码：{1}", __FUNCTION__, vk_result_string(result));
+            acquire.recreateNeeded = true;
+            return acquire;
         }
-        return result;
+
+        if(acquire.result == VK_SUBOPTIMAL_KHR)
+        {
+            acquire.acquired = true;
+            acquire.recreateNeeded = true;
+            acquire.imageIndex = imageIndex;
+            mCurrentImageIndex = static_cast<int32_t>(imageIndex);
+            return acquire;
+        }
+
+        if (acquire.result != VK_SUCCESS)
+        {
+            spdlog::error("{}: 获取交换链图片失败，错误码：{}", __FUNCTION__, vk_result_string(acquire.result));
+            return acquire;
+        }
+
+        acquire.acquired = true;
+        acquire.imageIndex = imageIndex;
+        mCurrentImageIndex = static_cast<int32_t>(imageIndex);
+        return acquire;
+
     }
 
-    VkResult XJVulkanSwapchain::Present(int32_t imageIndex, const std::vector<VkSemaphore>& waitSemaphores) 
+    XJSwapchainPresentResult XJVulkanSwapchain::Present(uint32_t imageIndex, const std::vector<VkSemaphore>& waitSemaphores)
     {
-        if (mDevice == nullptr)
+        XJSwapchainPresentResult present{};
+
+        if (!mDevice || !mDevice->IsValid())
         {
-            spdlog::error("{}: device is null", __FUNCTION__);
-            return VK_ERROR_INITIALIZATION_FAILED;
+            present.result = VK_ERROR_INITIALIZATION_FAILED;
+            spdlog::error("{}: device is invalid", __FUNCTION__);
+            return present;
         }
 
         if (mSwapchain == VK_NULL_HANDLE)
         {
+            present.result = VK_ERROR_INITIALIZATION_FAILED;
+            present.recreateNeeded = true;
             spdlog::error("{}: swapchain is null", __FUNCTION__);
-            return VK_ERROR_INITIALIZATION_FAILED;
+            return present;
         }
 
         VulkanQueue* presentQueue = mDevice->XJGetFirstPresentQueue();
-        if (presentQueue == nullptr || presentQueue->XJGetQueue() == VK_NULL_HANDLE)
+        if (!presentQueue || presentQueue->XJGetQueue() == VK_NULL_HANDLE)
         {
+            present.result = VK_ERROR_INITIALIZATION_FAILED;
             spdlog::error("{}: present queue is null", __FUNCTION__);
-            return VK_ERROR_INITIALIZATION_FAILED;
+            return present;
         }
-
-        uint32_t presentImageIndex = static_cast<uint32_t>(imageIndex);
 
         VkPresentInfoKHR presentInfo{};
         presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
-        presentInfo.pNext = nullptr;
         presentInfo.waitSemaphoreCount = static_cast<uint32_t>(waitSemaphores.size());
         presentInfo.pWaitSemaphores = waitSemaphores.empty() ? nullptr : waitSemaphores.data();
         presentInfo.swapchainCount = 1;
         presentInfo.pSwapchains = &mSwapchain;
-        presentInfo.pImageIndices = &presentImageIndex;
-        presentInfo.pResults = nullptr;
+        presentInfo.pImageIndices = &imageIndex;
 
-        VkResult result = vkQueuePresentKHR(presentQueue->XJGetQueue(), &presentInfo);
-        if (result != VK_SUCCESS && result != VK_SUBOPTIMAL_KHR)
+        present.result = vkQueuePresentKHR(presentQueue->XJGetQueue(), &presentInfo);
+
+        if (present.result == VK_ERROR_OUT_OF_DATE_KHR || present.result == VK_SUBOPTIMAL_KHR)
         {
-            spdlog::error("{}: present failed: {}", __FUNCTION__, vk_result_string(result));
+            present.recreateNeeded = true;
+            return present;
         }
-        
-        return result;
+
+        if (present.result != VK_SUCCESS)
+        {
+            spdlog::error("{}: present failed: {}", __FUNCTION__, vk_result_string(present.result));
+            return present;
+        }
+
+        present.presented = true;
+        return present;
     }
 
-  
-} 
+}

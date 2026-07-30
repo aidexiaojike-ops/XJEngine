@@ -14,6 +14,10 @@ namespace XJ
     }
     XJRenderContext::~XJRenderContext()
     {
-        
+        mSwapchain.reset();
+        mDevice.reset();
+        mPhysicalDevices.reset();
+        mSurface.reset();
+        mInstance.reset();
     }
 }

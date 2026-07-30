@@ -4,50 +4,47 @@
 
 namespace XJ
 {
-    
-    VulkanSurface::VulkanSurface(XJGlfwWindow* window,VulkanInstance* instance) : mInstance(instance), mWindow(window)
+    VulkanSurface::VulkanSurface(XJGlfwWindow* window, VulkanInstance* instance)
+        : mWindow(window)
     {
-        if(!window || !instance)
+        if (!window || !instance)
         {
             spdlog::error("VulkanSurface::SurfaceInit 参数错误，window 或 instance 为空指针");
             throw std::runtime_error("VulkanSurface failed: window or instance is null");
         }
-        auto *glfWwindow = dynamic_cast<XJGlfwWindow*>(window);
-        if(!glfWwindow)
+
+        mInstance = instance->XJGetInstance();
+        if (mInstance == VK_NULL_HANDLE)
         {
-            //Faild to get GLFW window handle
-            spdlog::error("VulkanSurface::SurfaceInit 参数错误：传入的window不是XJGlfwWindow类型");
-            throw std::runtime_error("VulkanSurface failed: invalid window type");
+            spdlog::error("VulkanSurface::SurfaceInit 参数错误，VkInstance 为空");
+            throw std::runtime_error("VulkanSurface failed: VkInstance is null");
         }
-      
-        GLFWwindow* XJGetImplWindowPointer = static_cast<GLFWwindow*>(glfWwindow->XJGetImplWindowPointer());
-        if(XJGetImplWindowPointer == nullptr)
-        {   
+
+        GLFWwindow* glfwWindow = static_cast<GLFWwindow*>(window->XJGetImplWindowPointer());
+        if (!glfwWindow)
+        {
             spdlog::error("VulkanSurface::SurfaceInit 获取 GLFW window 句柄失败，XJGetImplWindowPointer 返回空指针");
             throw std::runtime_error("VulkanSurface failed: GLFW window handle is null");
         }
 
-        VkResult result = glfwCreateWindowSurface(mInstance->XJGetInstance(), XJGetImplWindowPointer, nullptr, &mSurface);
+        VkResult result = glfwCreateWindowSurface(mInstance, glfwWindow, nullptr, &mSurface);
         XJDebug_Log(result);
         if (result != VK_SUCCESS)
         {
+            spdlog::error("VulkanSurface::SurfaceInit 创建 surface 失败: {}", vk_result_string(result));
             throw std::runtime_error("VulkanSurface failed: glfwCreateWindowSurface failed");
         }
-        spdlog::trace("{0} : 创建 surface 实例 : {1}", __FUNCTION__, (void*)mSurface);
-        //glfwCreateWindowSurface(instance->XJGetVulkanInstance(), window->XJGetWindow(), nullptr, &surface);
-        //待实现
 
+        spdlog::trace("{0} : 创建 surface 实例 : {1}", __FUNCTION__, (void*)mSurface);
     }
+
     VulkanSurface::~VulkanSurface()
     {
-        // 销毁 surface，例如：
-        if (mInstance != nullptr && mInstance->XJGetInstance() != VK_NULL_HANDLE && mSurface != VK_NULL_HANDLE)
+        if (mInstance != VK_NULL_HANDLE && mSurface != VK_NULL_HANDLE)
         {
-            vkDestroySurfaceKHR(mInstance->XJGetInstance(), mSurface, nullptr);
+            vkDestroySurfaceKHR(mInstance, mSurface, nullptr);
+            spdlog::trace("{0} : 销毁 surface 实例 : {1}", __FUNCTION__, (void*)mSurface);
             mSurface = VK_NULL_HANDLE;
         }
-    
-        spdlog::trace("{0} : 销毁 surface 实例 : {1}", __FUNCTION__, (void*)mInstance);
-        //待实现
     }
 }

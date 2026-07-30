@@ -156,10 +156,7 @@ namespace XJ
 
             VkPipeline XJGetPipeline() const { return mPipeline; }
 
-            bool isValid() const {
-                return !mPipelineConfig.colorBlendState.attachments.empty();
-            }
-
+            bool IsValid() const { return mPipeline != VK_NULL_HANDLE; }
 
     };
     

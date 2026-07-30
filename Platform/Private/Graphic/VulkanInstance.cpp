@@ -10,6 +10,51 @@
 #define VK_EXT_debug_report_EXTENSION_NAME "VK_EXT_debug_report"
 #endif
 
+namespace
+{
+    static uint32_t SelectInstanceApiVersion()
+    {
+        constexpr uint32_t desiredApiVersion = VK_API_VERSION_1_3;
+
+        uint32_t supportedApiVersion = VK_API_VERSION_1_0;
+
+        auto enumerateInstanceVersion =
+            reinterpret_cast<PFN_vkEnumerateInstanceVersion>(
+                vkGetInstanceProcAddr(nullptr, "vkEnumerateInstanceVersion"));
+
+        if (enumerateInstanceVersion)
+        {
+            VkResult result = enumerateInstanceVersion(&supportedApiVersion);
+            XJDebug_Log(result);
+
+            if (result != VK_SUCCESS)
+            {
+                spdlog::warn(
+                    "vkEnumerateInstanceVersion failed: {}, fallback to Vulkan 1.0",
+                    vk_result_string(result));
+                supportedApiVersion = VK_API_VERSION_1_0;
+            }
+        }
+
+        uint32_t selectedApiVersion =
+            supportedApiVersion < desiredApiVersion ? supportedApiVersion : desiredApiVersion;
+
+        spdlog::info(
+            "Vulkan instance API version selected: {}.{}.{} (supported: {}.{}.{}, desired: {}.{}.{})",
+            VK_VERSION_MAJOR(selectedApiVersion),
+            VK_VERSION_MINOR(selectedApiVersion),
+            VK_VERSION_PATCH(selectedApiVersion),
+            VK_VERSION_MAJOR(supportedApiVersion),
+            VK_VERSION_MINOR(supportedApiVersion),
+            VK_VERSION_PATCH(supportedApiVersion),
+            VK_VERSION_MAJOR(desiredApiVersion),
+            VK_VERSION_MINOR(desiredApiVersion),
+            VK_VERSION_PATCH(desiredApiVersion));
+
+        return selectedApiVersion;
+    }
+}
+
 namespace XJ
 {
     const DeviceFeature requiredLayers[] = {
@@ -159,6 +204,8 @@ namespace XJ
         enableExtensions.resize(enableExtensionCount);
         spdlog::trace("所有必需的实例扩展均已找到。");
         //创建Vulkan实例
+        mApiVersion = SelectInstanceApiVersion();
+
         VkApplicationInfo appInfo{};
         appInfo.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
         appInfo.pNext = nullptr;
@@ -166,7 +213,7 @@ namespace XJ
         appInfo.applicationVersion = VK_MAKE_VERSION(1, 0, 0);
         appInfo.pEngineName = "No XJEngine";
         appInfo.engineVersion = VK_MAKE_VERSION(1, 0, 0);
-        appInfo.apiVersion = VK_API_VERSION_1_3;
+        appInfo.apiVersion = mApiVersion;
         //去debug createInfo
         VkDebugUtilsMessengerCreateInfoEXT debugCreateInfo{};
 

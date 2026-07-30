@@ -70,8 +70,6 @@ namespace XJ
             OnUIEnd();// UI 渲染结束
 
             OnRender();
-
-            mWindow->SwapBuffer();
         }
         spdlog::info("退出主循环");
     } 

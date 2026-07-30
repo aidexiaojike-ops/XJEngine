@@ -19,6 +19,7 @@ XJEngine is a lightweight modern game engine built with Vulkan and ECS architect
 | Feature | Description |
 |---------|-------------|
 | **Vulkan Renderer** | Modern graphics API with multi-platform support, GPU-driven rendering pipeline |
+| **Robust Swapchain Lifecycle** | Structured acquire/present results, resize-aware recreation, minimized per-frame blocking, and clearer device-lost handling |
 | **ECS Architecture** | High-performance Entity Component System using EnTT library |
 | **Event Driven System** | Complete input handling for window, mouse, keyboard events |
 | **Modular Material System** | Extensible material pipeline with textures, samplers and uniform buffers |
@@ -124,10 +125,14 @@ Swapchain
 
 #### **Vulkan Rendering Pipeline**
 - **Swapchain Management**: Automatic recreation on window resize
+- **Acquire/Present Flow**: `XJSwapchainAcquireResult` and `XJSwapchainPresentResult` separate success, recreation, and device-lost states
 - **Frame Buffer Management**: Multi-buffer support with depth and color attachments
 - **Command Buffer Pooling**: Efficient command buffer allocation and reuse
 - **Synchronization**: Semaphores and fences for proper GPU synchronization
 - **Render Pass Design**: Configurable attachments and subpasses for flexible rendering
+- **Vulkan API Selection**: Instance creation selects the best supported API version up to Vulkan 1.3 and passes it to the ImGui Vulkan backend
+- **Surface and Window Validation**: GLFW window creation, Vulkan surface lifetime, and minimized-window checks now fail clearly on invalid handles
+- **Sampler Lifetime**: `XJSampler` delegates Vulkan sampler ownership to `XJVulkanTextureSampler` for RAII cleanup and validity checks
 
 #### **ECS Implementation**
 - **Entity Management**: Lightweight entity handles with automatic lifetime tracking
@@ -517,6 +522,7 @@ mRenderTarget->XJSetCamera(camera);
 // Initialize UI (after render context setup)
 XJ::XJEditorRendererInitInfo kUIRendererInfo = {};
 kUIRendererInfo.instance       = kRenderContext->XJGetInstance()->XJGetInstance();
+kUIRendererInfo.apiVersion     = kRenderContext->XJGetInstance()->XJGetApiVersion();
 kUIRendererInfo.physicalDevice = kPhysicalDevices->XJGetPhysicalDevice();
 kUIRendererInfo.device         = kDevice->XJGetDevice();
 kUIRendererInfo.renderPass     = mRenderPass->XJGetRenderPass();
@@ -577,7 +583,7 @@ mUIContext->Shutdown();
 
 ## 🐛 Known Issues
 
-1. **Memory Management**: Some resource cleanup logic needs improvement
+1. **Memory Management**: Some higher-level resource ownership paths still need review
 2. **Platform Support**: Limited testing on macOS with MoltenVK
 3. **Editor Panels**: Editor panel implementations (Viewport, Hierarchy, Inspector, Stats) are pending
 
@@ -585,7 +591,8 @@ mUIContext->Shutdown();
 
 ### Short-term (Next 3 months)
 - [x] ~~Fix Vulkan validation layer errors~~
-- [ ] Improve memory management and resource cleanup
+- [x] ~~Improve Vulkan sampler ownership and render context shutdown order~~
+- [ ] Review remaining higher-level resource ownership paths
 - [ ] Implement editor panels (Viewport, Hierarchy, Inspector, Stats)
 - [ ] Add unit tests for core systems
 - [ ] Enhance documentation with API references

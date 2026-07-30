@@ -34,6 +34,7 @@ namespace XJ
 
         //初始化 ImGui Vulkan
         ImGui_ImplVulkan_InitInfo kInitInfo{};
+        kInitInfo.ApiVersion = info.apiVersion;
         kInitInfo.Instance = info.instance;
         kInitInfo.PhysicalDevice = info.physicalDevice;
         kInitInfo.Device = info.device;

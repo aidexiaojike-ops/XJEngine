@@ -15,9 +15,11 @@ namespace XJ
             /* data */
             uint32_t availableLayerCount;
             uint32_t availableExtensionCount;
+            uint32_t mApiVersion = VK_API_VERSION_1_0;
         public:
             VulkanInstance();
             ~VulkanInstance();
+
             VulkanInstance(const VulkanInstance&) = delete;
             VulkanInstance& operator=(const VulkanInstance&) = delete;
             
@@ -26,7 +28,8 @@ namespace XJ
 
             VkDebugUtilsMessengerEXT debugMessenger = VK_NULL_HANDLE;
 
-            VkInstance XJGetInstance() { return mInstance; }
+            VkInstance XJGetInstance() const { return mInstance; }
+            uint32_t XJGetApiVersion() const { return mApiVersion; }
     };
     
 }

@@ -17,6 +17,21 @@ namespace XJ
         VkPresentModeKHR presentMode;
     };
 
+    struct XJSwapchainAcquireResult
+    {
+        VkResult result = VK_SUCCESS;
+        bool acquired = false;
+        bool recreateNeeded = false;
+        uint32_t imageIndex = 0;
+    };
+
+    struct XJSwapchainPresentResult
+    {
+        VkResult result = VK_SUCCESS;
+        bool presented = false;
+        bool recreateNeeded = false;
+    };
+
     class XJVulkanSwapchain
     {
         private:
@@ -42,17 +57,22 @@ namespace XJ
             XJVulkanSwapchain& operator=(const XJVulkanSwapchain&) = delete;
 
             bool ReCreate();
-            
-            VkResult AcquireImage(int32_t *outImageIndex,VkSemaphore semaphore, VkFence fence = VK_NULL_HANDLE);//获取图片
-            VkResult Present(int32_t imageIndex, const std::vector<VkSemaphore>& waitSemaphores);
-            
+
+            XJSwapchainAcquireResult AcquireImage( //获取图片
+                VkSemaphore semaphore,
+                VkFence fence = VK_NULL_HANDLE);
+
+            XJSwapchainPresentResult Present(
+                uint32_t imageIndex,
+                const std::vector<VkSemaphore>& waitSemaphores);
+
+            int32_t XJGetCurrentImageIndex() const { return mCurrentImageIndex; }
+
             VkSwapchainKHR XJGetVulkanSwapchain() { return mSwapchain; }
 
             const std::vector<VkImage>& XJGetSwapchainImages() const { return mImages; }
             uint32_t XJGetWidth() const { return mExtent.width; }
             uint32_t XJGetHeight() const { return mExtent.height; }
-
-            int32_t XJGetCurrentImageIndex() const { return mCurrentImageIndex; }
 
             const SurfaceInfo& XJGetSurfaceInfo() const { return mSurfaceInfo; }
             

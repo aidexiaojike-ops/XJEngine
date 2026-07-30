@@ -9,15 +9,7 @@ namespace XJ
     XJVulkanImage::XJVulkanImage(XJVulkanDevice* device, VkExtent3D extent, VkFormat format, VkImageUsageFlags usage, VkSampleCountFlagBits sampleCount)
         : mDevice(device), mFormat(format), mExtent(extent), mUsage(usage), mSampleCount(sampleCount)
     {
-        //默认线性平铺  深度格式使用最优平铺
-        // VkImageTiling tiling = VK_IMAGE_TILING_LINEAR;
-        VkImageTiling tiling = VK_IMAGE_TILING_OPTIMAL;
-        bool isDepthStencilFormat = IsDepthStencilFormat(format);
-        if(isDepthStencilFormat || sampleCount > VK_SAMPLE_COUNT_1_BIT)
-        {
-            tiling = VK_IMAGE_TILING_OPTIMAL;//深度格式使用最优平铺
-        }
-    
+
         VkImageCreateInfo imageCreateInfo{};//结构体变量初始化 图片创建信息
         imageCreateInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
         imageCreateInfo.pNext = nullptr;
@@ -28,7 +20,7 @@ namespace XJ
         imageCreateInfo.mipLevels = 1;//mip 级别 数量
         imageCreateInfo.arrayLayers = 1;//数组层数
         imageCreateInfo.samples = sampleCount;//采样数
-        imageCreateInfo.tiling = tiling;//图像的平铺方式  最优的
+        imageCreateInfo.tiling = VK_IMAGE_TILING_OPTIMAL;//图像的平铺方式  最优的
         imageCreateInfo.usage = usage;//图像的用途  深度附加使用深度用途
         imageCreateInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;//独占模式
         imageCreateInfo.queueFamilyIndexCount = 0;//队列族索引数量
@@ -49,11 +41,11 @@ namespace XJ
                 vk_format_string(format),
                 VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
                 memRequirements.memoryTypeBits);
-            
+
             vkDestroyImage(mDevice->XJGetDevice(), mImage, nullptr);
             mImage = VK_NULL_HANDLE;
             mDeviceMemory = VK_NULL_HANDLE;
-            
+
             throw std::runtime_error("XJVulkanImage failed: no suitable memory type");
         }
 
@@ -62,9 +54,29 @@ namespace XJ
         memoryAllocateInfo.pNext = nullptr;
         memoryAllocateInfo.allocationSize = memRequirements.size;//分配大小
         memoryAllocateInfo.memoryTypeIndex = static_cast<uint32_t>(memoryTypeIndex);
-        
+
         XJDebug_Log(vkAllocateMemory(mDevice->XJGetDevice(), &memoryAllocateInfo, nullptr, &mDeviceMemory));//分配内存
-        vkBindImageMemory(mDevice->XJGetDevice(), mImage, mDeviceMemory, 0);//绑定图片内存  偏移量0
+        //绑定图片内存  偏移量0
+        VkResult bindResult = vkBindImageMemory(mDevice->XJGetDevice(), mImage, mDeviceMemory, 0);
+        if (bindResult != VK_SUCCESS)
+        {
+            spdlog::error("绑定 Image 内存失败：{}", vk_result_string(bindResult));
+
+            if (mDeviceMemory != VK_NULL_HANDLE)
+            {
+                vkFreeMemory(mDevice->XJGetDevice(), mDeviceMemory, nullptr);
+                mDeviceMemory = VK_NULL_HANDLE;
+            }
+
+            if (mImage != VK_NULL_HANDLE)
+            {
+                vkDestroyImage(mDevice->XJGetDevice(), mImage, nullptr);
+                mImage = VK_NULL_HANDLE;
+            }
+
+            throw std::runtime_error("XJVulkanImage failed: vkBindImageMemory failed");
+        }
+
     }
 
 

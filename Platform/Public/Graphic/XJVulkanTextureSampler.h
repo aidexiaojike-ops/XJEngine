@@ -12,11 +12,20 @@ namespace XJ
 
         private:
             XJVulkanDevice *mDevice = nullptr;
+            VkSampler mSampler = VK_NULL_HANDLE;
             /* data */
         public:
-            //XJVulkanTextureSampler(/* args */);
-            //~XJVulkanTextureSampler();
-            VkResult CreateSimpleSampler(XJVulkanDevice* device, VkFilter filter, VkSamplerAddressMode addressMode, VkSampler *outSampler);
+            XJVulkanTextureSampler(
+                XJVulkanDevice* device,
+                VkFilter filter = VK_FILTER_LINEAR,
+                VkSamplerAddressMode addressMode = VK_SAMPLER_ADDRESS_MODE_REPEAT);
+            ~XJVulkanTextureSampler();
+
+            XJVulkanTextureSampler(const XJVulkanTextureSampler&) = delete;
+            XJVulkanTextureSampler& operator=(const XJVulkanTextureSampler&) = delete;
+
+            VkSampler XJGetSampler() const { return mSampler; }
+            bool IsValid() const { return mSampler != VK_NULL_HANDLE; }
     };
     
     

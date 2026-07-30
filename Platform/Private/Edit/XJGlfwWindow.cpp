@@ -3,12 +3,23 @@
 #include "Event/XJWindowEvent.h"
 #include "Event/XJEventDispatcher.h"
 #include <algorithm>
+#include <stdexcept>
+
+
+namespace
+{
+    void GlfwErrorCallback(int error, const char* description)
+    {
+        spdlog::error("GLFW error {}: {}", error, description ? description : "");
+    }
+}
+
 
 namespace XJ
 {
     XJGlfwWindow::XJGlfwWindow(int windowWidth, int windowHeight, const char *title)
     {
-        glfwInit();//初始化Glfw
+        glfwSetErrorCallback(GlfwErrorCallback);//初始化Glfw
         if(!glfwInit())
         {
             spdlog::error("GLFW 初始化失败！");
@@ -24,7 +35,8 @@ namespace XJ
         if(!mGLFWwindow)
         {
             spdlog::error("GLFW 创建窗口失败！");
-            return;
+            glfwTerminate();
+            throw std::runtime_error("XJGlfwWindow failed: glfwCreateWindow failed");
         }
 
         windowMonitor = glfwGetPrimaryMonitor();//获取主显示器
@@ -37,8 +49,6 @@ namespace XJ
                              windowMonitorYPos + (windowMonitorHeight - windowHeight) / 2);//窗口居中显示
         }
 
-        glfwMakeContextCurrent(mGLFWwindow);//设置当前窗口的上下文
-
         XJSetWindowCallbacks(); //设置窗口回调函数
         //show window 显示window
         glfwShowWindow(mGLFWwindow);
@@ -50,17 +60,16 @@ namespace XJ
     }
     XJGlfwWindow::~XJGlfwWindow()
     {
-        glfwDestroyWindow(mGLFWwindow);
+        if(mGLFWwindow)
+        {
+            glfwDestroyWindow(mGLFWwindow);
+            mGLFWwindow = nullptr;
+        }
         glfwTerminate();
     }
     bool XJGlfwWindow::ShouldClose()
     {
-        return glfwWindowShouldClose(mGLFWwindow);
-        spdlog::error("Should close: {0},{1}", glfwWindowShouldClose(mGLFWwindow),"GLFW 内部状态返回窗口是否关闭");
-    }
-    void XJGlfwWindow::SwapBuffer()
-    {
-        glfwSwapBuffers(mGLFWwindow);
+        return !mGLFWwindow || glfwWindowShouldClose(mGLFWwindow);
     }
 
     void XJGlfwWindow::XJSetWindowCallbacks()//设置窗口回调函数
@@ -108,7 +117,7 @@ namespace XJ
 
         glfwSetWindowCloseCallback(mGLFWwindow, [](GLFWwindow* window)
         {//窗口关闭
-            auto *kWindow = static_cast<XJGlfwWindow *>(glfwGetWindowUserPointer(window));
+            auto *kWindow = static_cast<XJGlfwWindow*>(glfwGetWindowUserPointer(window));
             if(kWindow)
             {
                 XJWindowCloseEvent windowCloseEvent{};

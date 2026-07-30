@@ -5,6 +5,14 @@ namespace XJ
 {
     VulkanPhysicalDevices::VulkanPhysicalDevices(VulkanInstance* instance, VulkanSurface* surface)
     {
+        if (!instance || !surface || !surface->IsValid())
+        {
+            spdlog::error("VulkanPhysicalDevices 参数错误，instance 或 surface 无效");
+            throw std::runtime_error("VulkanPhysicalDevices failed: invalid instance or surface");
+        }
+
+        VkSurfaceKHR vkSurface = surface->XJGetSurface();
+
         //查询所有的物理设备
         uint32_t physicalDeviceCount = 0;
         std::vector<VkPhysicalDevice> physicalDevices;
@@ -53,7 +61,7 @@ namespace XJ
             uint32_t score = GetPhysicalDeviceScore(deviceProperties);
 
             uint32_t formatCount = 0;
-            vkGetPhysicalDeviceSurfaceFormatsKHR(physicalDevices[i], surface->mSurface, &formatCount, nullptr);
+            vkGetPhysicalDeviceSurfaceFormatsKHR(physicalDevices[i], vkSurface, &formatCount, nullptr);
 
             std::vector<VkSurfaceFormatKHR> surfaceFormats;
             VkResult surfaceResult = VK_SUCCESS;
@@ -62,7 +70,7 @@ namespace XJ
             {
                 XJDebug_Log(vkGetPhysicalDeviceSurfaceFormatsKHR(
                     physicalDevices[i],
-                    surface->mSurface,
+                    vkSurface,
                     &formatCount,
                     nullptr));
                 
@@ -71,7 +79,7 @@ namespace XJ
                 surfaceResult = formatCount > 0
                     ? vkGetPhysicalDeviceSurfaceFormatsKHR(
                         physicalDevices[i],
-                        surface->mSurface,
+                        vkSurface,
                         &formatCount,
                         surfaceFormats.data())
                     : VK_SUCCESS;
@@ -137,7 +145,7 @@ namespace XJ
             
                 //检查显示队列支持
                 VkBool32 presentSupport = VK_FALSE;
-                vkGetPhysicalDeviceSurfaceSupportKHR(physicalDevices[i], k, /*VkSurfaceKHR*/surface->mSurface, &presentSupport);
+                vkGetPhysicalDeviceSurfaceSupportKHR(physicalDevices[i], k, /*VkSurfaceKHR*/vkSurface, &presentSupport);
                 if(localPresentQueueFamilyInfo.queueFamilyIndex == -1 && presentSupport)
                 {
                     localPresentQueueFamilyInfo.queueFamilyIndex = static_cast<int32_t>(k);

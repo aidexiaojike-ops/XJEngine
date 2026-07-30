@@ -19,6 +19,7 @@ XJEngine 是一个基于 Vulkan 和 ECS 架构的轻量级现代游戏引擎，�
 | 特性 | 描述 |
 |------|------|
 | **Vulkan 渲染器** | 多平台现代图形 API，GPU 驱动渲染管线 |
+| **稳健的 Swapchain 生命周期** | 结构化 acquire/present 结果、窗口尺寸变化重建、减少逐帧阻塞，并明确处理 device-lost 状态 |
 | **ECS 架构** | 基于 EnTT 的高性能实体组件系统 |
 | **事件驱动系统** | 完整的窗口、鼠标、键盘事件处理 |
 | **模块化材质系统** | 可扩展的纹理、采样器、UBO 管线 |
@@ -107,6 +108,7 @@ File -> Importer -> Asset (CPU) -> Factory -> Resource (GPU) -> Renderer
 - **摄像机系统**：`XJCameraController`（Core/Camera）、`XJCameraSystem`（ECS 适配）
 - **资产系统**：`XJModelImporter`、`XJTextureImporter`、`XJAssetRegistry`、`XJAssetRegistryScanner`、`XJAssetBootstrap`、`XJSceneRuntimeUtil`、`XJMeshAssetLoader`
 - **编辑器系统**：`XJEditorSceneController`、`XJEditorCameraManager`、`XJEditorSceneService`、`XJUIContext`、`XJEditorRenderer`、`XJEditorUILayer`、编辑器面板
+- **Vulkan 平台层**：`XJSwapchainAcquireResult`/`XJSwapchainPresentResult` 区分成功、重建和设备丢失状态；`VulkanInstance` 自动选择最高支持到 Vulkan 1.3 的 API 版本；`VulkanSurface`、`XJGlfwWindow`、`XJVulkanTextureSampler` 增加句柄校验、生命周期顺序和 RAII 释放
 
 ## 🛠️ 构建
 
@@ -174,6 +176,9 @@ unlitMat->XJSetMixValue(0.5f);
 ### 编辑器 UI 集成
 
 ```cpp
+XJ::XJEditorRendererInitInfo kUIRendererInfo = {};
+kUIRendererInfo.apiVersion = kRenderContext->XJGetInstance()->XJGetApiVersion();
+
 mUIContext = std::make_unique<XJ::XJUIContext>();
 mEditorRenderer = std::make_unique<XJ::XJEditorRenderer>();
 mUIContext->Init(static_cast<GLFWwindow*>(XJGetWindow()->XJGetImplWindowPointer()));
@@ -219,7 +224,7 @@ cmake .. -DXJ_VULKAN_SDK_URL=<url> -DXJ_VULKAN_DOWNLOAD_TIMEOUT=3600
 
 ## 🐛 已知问题
 
-1. 内存管理和资源释放仍有进一步优化空间
+1. 高层资源所有权路径仍需继续审查
 2. macOS / MoltenVK 覆盖测试仍然有限
 3. 编辑器面板体系还在持续补全中
 
@@ -228,7 +233,8 @@ cmake .. -DXJ_VULKAN_SDK_URL=<url> -DXJ_VULKAN_DOWNLOAD_TIMEOUT=3600
 ### 短期
 
 - [ ] 完善编辑器面板（Hierarchy / Inspector / Stats）
-- [ ] 优化资源生命周期管理
+- [x] ~~完善 Vulkan Sampler 所有权与 RenderContext 销毁顺序~~
+- [ ] 审查剩余高层资源所有权路径
 - [ ] 增加核心系统单元测试
 - [ ] 补充 API 文档
 
