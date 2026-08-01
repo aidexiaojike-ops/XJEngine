@@ -494,12 +494,10 @@ namespace XJ
         mPipelineConfig.depthStencilState.depthCompareOp = depthStencilState.depthCompareOp;
         mPipelineConfig.depthStencilState.depthBoundsTestEnable = depthStencilState.depthBoundsTestEnable;
         mPipelineConfig.depthStencilState.stencilTestEnable = depthStencilState.stencilTestEnable;
-        mPipelineConfig.depthStencilState.front = depthStencilState.front;;
+        mPipelineConfig.depthStencilState.front = depthStencilState.front;
         mPipelineConfig.depthStencilState.back = depthStencilState.back;
         mPipelineConfig.depthStencilState.minDepthBounds = depthStencilState.minDepthBounds;
         mPipelineConfig.depthStencilState.maxDepthBounds = depthStencilState.maxDepthBounds;
-        // mPipelineConfig.depthStencilState.cullMode = VK_CULL_MODE_NONE; //深度测试时关闭剔除，确保所有面都参与深度测试
-        //mPipelineConfig.depthStencilState = depthStencilState;
         return this;
     }
     XJVulkanPipeline *XJVulkanPipeline::SetColorBlendAttachmentState(VkBool32 blendEnable, VkBlendFactor srcColorBlendFactor, VkBlendFactor dstColorBlendFactor ,VkBlendOp colorBlendOp,

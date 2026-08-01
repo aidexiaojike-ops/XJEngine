@@ -14,9 +14,9 @@ namespace XJ
         private:
             /* data */
             void EngineLog();//整个引擎的Log
-            void LogBuddha();
         public:
             SpdlogDebug();
+            ~SpdlogDebug();
             #ifdef _WIN32
             void enableConsoleColor(); // 声明为命名空间内的非static函数
             #endif

@@ -144,7 +144,7 @@ namespace XJ
         KEY_MOD_CAPS_LOCK = 0x0010,
         KEY_MOD_NUM_LOCK = 0x0020,
     };
-    static const char* KeyToString(Key key)//将键枚举转换为字符串
+    inline const char* KeyToString(Key key)//将键枚举转换为字符串
     {
         switch (key)
         {
@@ -273,7 +273,7 @@ namespace XJ
         return "KEY_UNKNOWN";
     }
     
-    static const char* XJKeyModToStr(KeyMod keyMod){
+    inline const char* XJKeyModToStr(KeyMod keyMod){
         switch (keyMod) {
             case KEY_MOD_SHIFT: return "MOD_SHIFT";
             case KEY_MOD_CONTROL: return "MOD_CONTROL";

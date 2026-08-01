@@ -27,7 +27,7 @@ namespace XJ
             XJMaterialPipelineRuntime* GetDefaultMaterialRuntime();
             XJMaterialPipelineRuntime* ResolveMaterialRuntime(const XJMaterial* material);
 
-            void ReCreateMaterialDescPool(
+            bool ReCreateMaterialDescPool(
                 XJMaterialPipelineRuntime& runtime,
                 uint32_t materialCount);
 

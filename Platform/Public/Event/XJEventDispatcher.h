@@ -17,7 +17,7 @@ namespace XJ
 
     struct EventHandlerEntry//事件处理函数条目，包含事件观察者和事件处理函数
     {
-        XJEventObserver *eventType;
+        XJEventObserver *observer;
         FuncEventHandler funchandler;
     };
 
@@ -43,12 +43,22 @@ namespace XJ
             
                 EventHandlerEntry handler
                 {
-                    .eventType = observer,
+                    .observer = observer,
                     .funchandler = eventFunc
                 };
             
                 std::lock_guard<std::mutex> lock(mObserverHandlerMutex);
-                mObserverHandlerMap[T::XJGetStaticType()].push_back(handler);
+                auto& handlers = mObserverHandlerMap[T::XJGetStaticType()];
+                auto exists = std::find_if(
+                    handlers.begin(),
+                    handlers.end(),
+                    [observer](const EventHandlerEntry& entry)
+                    {
+                        return entry.observer == observer;
+                    });
+
+                if (exists == handlers.end())
+                    handlers.push_back(handler);
             }
 
             void DestroyObserverHandler(XJEventObserver* observer);//销毁事件观察者的事件处理函数

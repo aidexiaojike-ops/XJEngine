@@ -4,7 +4,7 @@
 #include "Graphic/XJVulkanBuffer.h"
 #include "Graphic/XJVulkanDescriptorSet.h"
 #include "Graphic/XJVulkanDevice.h"
-#include "Graphic/VulkanImageView.h"
+#include "Graphic/XJVulkanImageView.h"
 #include "Render/Material/XJMaterialPipelineRuntimeDescriptor.h"
 #include "Render/Material/XJUnlitMaterialBindingUtils.h"
 #include "Render/Resource/XJMaterial.h"
@@ -117,7 +117,7 @@ namespace XJ
         if (!materialBuffer)
             return false;
 
-        materialBuffer->WriteData(const_cast<uint8_t*>(block.GetDataPtr()));
+        materialBuffer->WriteData(block.GetDataPtr());
 
         if (!runtime.ShaderLayout.HasPrimaryMaterialUbo())
         {

@@ -1,11 +1,11 @@
-#ifndef VULKAN_QUEUE_H
-#define VULKAN_QUEUE_H
+#ifndef XJ_VULKAN_QUEUE_H
+#define XJ_VULKAN_QUEUE_H
 
 #include "Graphic/VulkanCommon.h"
 
 namespace XJ
 {
-    class VulkanQueue
+    class XJVulkanQueue
     {
         private:
 
@@ -17,15 +17,15 @@ namespace XJ
 
 
         public:
-            VulkanQueue(uint32_t familyIndex, uint32_t index, VkQueue queue, bool canPresent);
-            ~VulkanQueue();
+            XJVulkanQueue(uint32_t familyIndex, uint32_t index, VkQueue queue, bool canPresent);
+            ~XJVulkanQueue();
 
             void WaitIdle() const;
 
             VkQueue XJGetQueue(){return mQueue;}
 
             void Submit(
-                std::vector<VkCommandBuffer> commandBuffers,
+                const std::vector<VkCommandBuffer>& commandBuffers,
                 const std::vector<VkSemaphore>& waitSemaphores = {},
                 const std::vector<VkSemaphore>& signalSemaphores = {},
                 VkFence FrameFence = VK_NULL_HANDLE,

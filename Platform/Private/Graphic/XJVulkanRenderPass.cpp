@@ -1,12 +1,12 @@
 #include "Graphic/XJVulkanRenderPass.h"
 #include "Graphic/XJVulkanDevice.h"
 #include "Graphic/XJVulkanFrameBuffer.h"
-#include "Graphic/VulkanPhysicalDevices.h"
+#include "Graphic/XJVulkanPhysicalDevices.h"
 
 
 namespace XJ
 {
-    XJVulkanRenderPass::XJVulkanRenderPass(XJVulkanDevice* device, VulkanPhysicalDevices* physicalDevices, const std::vector<Attachment> &attachments, const std::vector<RenderSubPass> &subPasses)
+    XJVulkanRenderPass::XJVulkanRenderPass(XJVulkanDevice* device, XJVulkanPhysicalDevices* physicalDevices, const std::vector<Attachment> &attachments, const std::vector<RenderSubPass> &subPasses)
                                         : mDevice(device),mPhysicalDevices(physicalDevices), mAttachments(attachments), mSubPasses(subPasses)
     {
         // 如果附件和子通道为空，创建默认配置

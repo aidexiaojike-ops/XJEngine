@@ -16,7 +16,7 @@ namespace XJ
     };
 
     // VkPipelineRasterizationStateCreateInfo XJGetPipelineRasterizationStateCreateInfo;
-    struct PipelineVertexInputStare//顶点输入状态
+    struct PipelineVertexInputState//顶点输入状态
     {
         std::vector<VkVertexInputBindingDescription> vertexBindingDescriptions;
         std::vector<VkVertexInputAttributeDescription> vertexAttributeDescriptions;
@@ -83,7 +83,7 @@ namespace XJ
 
     struct PipelineConfig
     {
-        PipelineVertexInputStare vertexInputState;//顶点输入状态
+        PipelineVertexInputState vertexInputState;//顶点输入状态
         PipelineInputAssemblyState inputAssemblyState;//输入装配状态
         PipelineRasterizationState rasterizationState;//光栅化状态
         PipelineMultisampleState multisampleState;//多重采样状态

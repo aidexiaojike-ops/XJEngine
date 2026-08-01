@@ -7,7 +7,7 @@ namespace XJ
 {
     class XJVulkanDevice;
     class XJVulkanFrameBuffer;
-    class VulkanPhysicalDevices;
+    class XJVulkanPhysicalDevices;
 
     struct Attachment  //附件 在窗户或者画面能直接看到的效果 或者深度附件 模板 橡树等等
     {
@@ -36,7 +36,7 @@ namespace XJ
     {
         private:
             XJVulkanDevice *mDevice;
-            VulkanPhysicalDevices* mPhysicalDevices;
+            XJVulkanPhysicalDevices* mPhysicalDevices;
             VkRenderPass mRenderPass = VK_NULL_HANDLE;
 
          
@@ -45,7 +45,7 @@ namespace XJ
 
             /* data */
         public:
-            XJVulkanRenderPass(XJVulkanDevice* device, VulkanPhysicalDevices* physicalDevices, const std::vector<Attachment> &attachments = {}, const std::vector<RenderSubPass> &subPass = {});
+            XJVulkanRenderPass(XJVulkanDevice* device, XJVulkanPhysicalDevices* physicalDevices, const std::vector<Attachment> &attachments = {}, const std::vector<RenderSubPass> &subPass = {});
             ~XJVulkanRenderPass();
             XJVulkanRenderPass(const XJVulkanRenderPass&) = delete;
             XJVulkanRenderPass& operator=(const XJVulkanRenderPass&) = delete;

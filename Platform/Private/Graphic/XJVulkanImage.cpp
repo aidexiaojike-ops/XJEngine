@@ -16,7 +16,7 @@ namespace XJ
         imageCreateInfo.flags = 0;
         imageCreateInfo.imageType = VK_IMAGE_TYPE_2D;//二维图像  图片类型
         imageCreateInfo.format = format;//图片的格式
-        imageCreateInfo.extent = {extent.width, extent.height, extent.depth};//图片的尺寸  宽高深度
+        imageCreateInfo.extent = extent;//图片的尺寸  宽高深度
         imageCreateInfo.mipLevels = 1;//mip 级别 数量
         imageCreateInfo.arrayLayers = 1;//数组层数
         imageCreateInfo.samples = sampleCount;//采样数
@@ -262,6 +262,9 @@ namespace XJ
                     barrier.srcAccessMask = VK_ACCESS_HOST_WRITE_BIT | VK_ACCESS_TRANSFER_WRITE_BIT;
                 }
                 barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+                break;
+            case VK_IMAGE_LAYOUT_PRESENT_SRC_KHR:
+                barrier.dstAccessMask = 0;
                 break;
             default:
                 spdlog::error("Unsupported layout transition : {0} --> {1}", vk_image_layout_string(oldLayout), vk_image_layout_string(newLayout));

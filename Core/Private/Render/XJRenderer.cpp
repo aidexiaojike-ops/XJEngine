@@ -1,7 +1,7 @@
 #include "Render/XJRenderer.h"
 
 #include "XJApplication.h"
-#include "Graphic/VulkanQueue.h"
+#include "Graphic/XJVulkanQueue.h"
 #include "Graphic/XJVulkanPipeline.h"
 #include "Graphic/VulkanCommon.h"
 #include "Graphic/XJVulkanBuffer.h"

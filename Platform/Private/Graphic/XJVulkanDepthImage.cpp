@@ -1,13 +1,37 @@
 #include "Graphic/XJVulkanDepthImage.h"
 #include "Graphic/XJVulkanDevice.h"
-#include "Graphic/VulkanPhysicalDevices.h"
+#include "Graphic/XJVulkanPhysicalDevices.h"
 
 namespace XJ
 {
-    XJVulkanDepthImage::XJVulkanDepthImage(XJVulkanDevice* device, VulkanPhysicalDevices* physicalDevice, uint32_t width, uint32_t height, VkSampleCountFlagBits samples)
+    XJVulkanDepthImage::XJVulkanDepthImage(XJVulkanDevice* device, XJVulkanPhysicalDevices* physicalDevice, uint32_t width, uint32_t height, VkSampleCountFlagBits samples)
         : mDevice(device), mPhysicalDevices(physicalDevice), mWidth(width), mHeight(height),mSampleCount(samples) 
     {
+        if (!mDevice || !mDevice->IsValid())
+        {
+            spdlog::error("XJVulkanDepthImage create failed: device is invalid");
+            return;
+        }
+
+        if (!mPhysicalDevices || mPhysicalDevices->XJGetPhysicalDevice() == VK_NULL_HANDLE)
+        {
+            spdlog::error("XJVulkanDepthImage create failed: physical device is invalid");
+            return;
+        }
+
+        if (mWidth == 0 || mHeight == 0)
+        {
+            spdlog::error("XJVulkanDepthImage create failed: invalid extent {}x{}", mWidth, mHeight);
+            return;
+        }
+
         mFormat = FindDepthFormat();
+        if (mFormat == VK_FORMAT_UNDEFINED)
+        {
+            spdlog::error("XJVulkanDepthImage create failed: no supported depth format");
+            return;
+        }
+
         spdlog::debug("创建深度图像: {}x{}, 格式: {}", width, height, vk_format_string(mFormat));
     }
     
@@ -19,6 +43,34 @@ namespace XJ
     bool XJVulkanDepthImage::Create()
     {
         Destroy();
+
+        if (!mDevice || !mDevice->IsValid())
+        {
+            spdlog::error("创建深度图像失败: device is invalid");
+            return false;
+        }
+
+        if (!mPhysicalDevices || mPhysicalDevices->XJGetPhysicalDevice() == VK_NULL_HANDLE)
+        {
+            spdlog::error("创建深度图像失败: physical device is invalid");
+            return false;
+        }
+
+        if (mWidth == 0 || mHeight == 0)
+        {
+            spdlog::error("创建深度图像失败: invalid extent {}x{}", mWidth, mHeight);
+            return false;
+        }
+
+        if (mFormat == VK_FORMAT_UNDEFINED)
+        {
+            mFormat = FindDepthFormat();
+            if (mFormat == VK_FORMAT_UNDEFINED)
+            {
+                spdlog::error("创建深度图像失败: no supported depth format");
+                return false;
+            }
+        }
 
         if (!CreateImage())
         {
@@ -70,6 +122,13 @@ namespace XJ
     // 查找支持的深度格式
     VkFormat XJVulkanDepthImage::FindDepthFormat() const
     {
+        if (!mPhysicalDevices || mPhysicalDevices->XJGetPhysicalDevice() == VK_NULL_HANDLE)
+        {
+            spdlog::error("FindDepthFormat failed: physical device is invalid");
+            return VK_FORMAT_UNDEFINED;
+        }
+
+
         std::vector<VkFormat> candidates = {
             VK_FORMAT_D32_SFLOAT,   // 优先使用 D32_SFLOAT
             VK_FORMAT_D32_SFLOAT_S8_UINT,
@@ -96,6 +155,24 @@ namespace XJ
     // 创建深度图像
     bool XJVulkanDepthImage::CreateImage()
     {
+        if (!mDevice || !mDevice->IsValid())
+        {
+            spdlog::error("Create depth image failed: device is invalid");
+            return false;
+        }
+
+        if (mFormat == VK_FORMAT_UNDEFINED)
+        {
+            spdlog::error("Create depth image failed: format is undefined");
+            return false;
+        }
+
+        if (mWidth == 0 || mHeight == 0)
+        {
+            spdlog::error("Create depth image failed: invalid extent {}x{}", mWidth, mHeight);
+            return false;
+        }
+        
         VkImageCreateInfo imageInfo{};
         imageInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
         imageInfo.imageType = VK_IMAGE_TYPE_2D;

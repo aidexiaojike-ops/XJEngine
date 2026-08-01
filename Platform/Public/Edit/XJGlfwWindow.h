@@ -38,7 +38,7 @@ namespace XJ
             // GLFWwindow* XJGetWindow() { return window; }
             bool ShouldClose();
 
-            void* XJGetImplWindowPointer() const  {return mGLFWwindow;};//获取底层窗口指针，供Vulkan使用
+            GLFWwindow* XJGetImplWindowPointer() const  {return mGLFWwindow;};//获取底层窗口指针，供Vulkan使用
 
             void XJGetMousePos(glm::vec2 &mousPose);//获取鼠标位置，供Vulkan使用
             bool IsMouseDown(MouseButton mouseButton = MOUSE_BUTTON_LEFT) const;//获取鼠标按键状态，供Vulkan使用
@@ -47,7 +47,7 @@ namespace XJ
             bool IsKeyDown(int key) const;//获取键盘按键状态，供Vulkan使用
             bool IsKeyUp(int key) const;//获取键盘按键
 
-            bool IsWindowMinimized() const {return mGLFWwindow && glfwGetWindowAttrib(mGLFWwindow, GLFW_ICONIFIED); }//窗口最小化
+            bool IsWindowMinimized() const {return mGLFWwindow && glfwGetWindowAttrib(mGLFWwindow, GLFW_ICONIFIED) != 0; }//窗口最小化
             VkExtent2D XJGetFramebufferExtent() const;
     };
     

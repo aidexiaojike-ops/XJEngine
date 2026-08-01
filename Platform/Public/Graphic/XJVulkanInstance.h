@@ -1,5 +1,5 @@
-#ifndef VULKAN_INSTANCE_H
-#define VULKAN_INSTANCE_H
+#ifndef XJ_VULKAN_INSTANCE_H
+#define XJ_VULKAN_INSTANCE_H
 
 #include "Graphic/VulkanCommon.h"
 #include "Edit/EditIncludes.h"
@@ -9,19 +9,19 @@
 
 namespace XJ
 {
-    class VulkanInstance
+    class XJVulkanInstance
     {
         private:
             /* data */
-            uint32_t availableLayerCount;
-            uint32_t availableExtensionCount;
+            uint32_t availableLayerCount = 0;
+            uint32_t availableExtensionCount = 0;
             uint32_t mApiVersion = VK_API_VERSION_1_0;
         public:
-            VulkanInstance();
-            ~VulkanInstance();
+            XJVulkanInstance();
+            ~XJVulkanInstance();
 
-            VulkanInstance(const VulkanInstance&) = delete;
-            VulkanInstance& operator=(const VulkanInstance&) = delete;
+            XJVulkanInstance(const XJVulkanInstance&) = delete;
+            XJVulkanInstance& operator=(const XJVulkanInstance&) = delete;
             
             VkInstance mInstance = nullptr;
             bool bShouldValidate = true;

@@ -10,7 +10,8 @@
 //m = member（成员变量）
 //k = konstant（常量）
 
-#define XJDebug_Log(func) check_result(func, __FILE__, __LINE__, #func);
+#define XJDebug_Log(func) do { check_result((func), __FILE__, __LINE__, #func); } while (0)
+#define XJ_VK_CHECK(func) check_result((func), __FILE__, __LINE__, #func)
 #define ARRAY_SIZE(arr) (sizeof(arr) / sizeof((arr)[0]))//std::size
 
 struct DeviceFeature
@@ -20,7 +21,7 @@ struct DeviceFeature
 };
 
 //构建layer 实验层和extension 扩展 
-static bool checkDeviceFeature(const char* label,// 标签，用于打印日志
+inline bool checkDeviceFeature(const char* label,// 标签，用于打印日志
                             bool bExtension,// true = 检查扩展，false = 检查 feature
                             uint32_t availableCount,// 可用扩展/特性的数量
                             void * available, // 可用扩展/特性的数组（void* 类型）
@@ -67,19 +68,31 @@ static bool checkDeviceFeature(const char* label,// 标签，用于打印日志
     
 }
 
-static void check_result(VkResult result, const char* fileName, uint32_t lineNumber, const char* funcName)
+inline bool check_result(VkResult result, const char* fileName, uint32_t lineNumber, const char* funcName)
 {
-     if (result == VK_SUCCESS) 
-     {
-        //spdlog::trace("Vulkan 调用成功：文件：{} 行号：{} 函数：{}", fileName, lineNumber, funcName);
-        return;
+    if (result == VK_SUCCESS)
+        return true;
+
+    if (result > 0)
+    {
+        spdlog::warn(
+            "Vulkan 返回非致命状态：VkResult = {}，文件：{}，行号：{}，函数：{}",
+            static_cast<int>(result),
+            fileName,
+            lineNumber,
+            funcName);
+
+        return true;
     }
 
-    spdlog::error("Vulkan 错误：VkResult = {}，文件：{}，行号：{}, 函数：{}", 
-                  static_cast<int>(result), fileName, lineNumber, funcName);
+    spdlog::error(
+        "Vulkan 错误：VkResult = {}，文件：{}，行号：{}，函数：{}",
+        static_cast<int>(result),
+        fileName,
+        lineNumber,
+        funcName);
 
-    if (result < 0)
-        abort();
+    return false;
 }
 
 // ========== 格式化 VkFormat（表面格式） ==========

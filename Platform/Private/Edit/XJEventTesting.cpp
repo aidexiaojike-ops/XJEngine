@@ -11,7 +11,7 @@ namespace XJ
         mObserver =std::make_shared<XJ::XJEventObserver>();
       
 
-        mObserver->OnEvent<XJMouseButtonReleaseEvent>([this](const XJMouseButtonReleaseEvent& event)//鼠标按钮释放事件处理函数
+        mObserver->OnEvent<XJMouseButtonReleaseEvent>([](const XJMouseButtonReleaseEvent& event)//鼠标按钮释放事件处理函数
         {    //spdlog::info("Mouse Button Released at position: ({})",event.ToString());
         });
         mObserver->OnEvent<XJMouseButtonPressEvent>([](const XJMouseButtonPressEvent& event)//鼠标按钮按下事件处理函数
@@ -55,13 +55,5 @@ namespace XJ
         });
    
 
-    }
-    XJEventTesting::~XJEventTesting()
-    {
-        mObserver.reset();
-    }
-    void XJEventTesting::TestMemberFunc(const XJMouseButtonReleaseEvent &event)
-    {
-        spdlog::info("Mouse Button Released at position: ({})",event.ToString());
     }
 }

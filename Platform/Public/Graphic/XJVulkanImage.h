@@ -42,8 +42,6 @@ namespace XJ
             VkExtent3D mExtent;
             VkImageUsageFlags mUsage;
 
-            bool mIsSwapchainImage = false;  // 🔧 添加这个标志
-
             VkSampleCountFlagBits mSampleCount; // 多重采样数量
     };
     

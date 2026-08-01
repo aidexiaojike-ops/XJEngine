@@ -21,7 +21,7 @@ namespace XJ
         return true;
     }
     
-    void XJGamePreview::CreateRenderPass(VulkanPhysicalDevices* physicalDevices)
+    void XJGamePreview::CreateRenderPass(XJVulkanPhysicalDevices* physicalDevices)
     {
         VkFormat colorFormat = mDevice->XJGetSettings().surfaceFormat;
         VkFormat depthFormat = mDevice->XJGetSettings().depthFormat;

@@ -26,7 +26,7 @@ namespace XJ
             XJEntity* mGameCamera  = nullptr;
             
         protected:
-            virtual void CreateRenderPass(VulkanPhysicalDevices* physicalDevices) override;
+            virtual void CreateRenderPass(XJVulkanPhysicalDevices* physicalDevices) override;
     };
     
 

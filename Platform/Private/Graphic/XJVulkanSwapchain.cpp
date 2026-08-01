@@ -1,8 +1,8 @@
 #include "Graphic/XJVulkanSwapchain.h"
 #include "Graphic/XJVulkanDevice.h"
-#include "Graphic/VulkanPhysicalDevices.h"
-#include "Graphic/VulkanSurface.h"
-#include "Graphic/VulkanQueue.h"
+#include "Graphic/XJVulkanPhysicalDevices.h"
+#include "Graphic/XJVulkanSurface.h"
+#include "Graphic/XJVulkanQueue.h"
 #include <algorithm>
 /*交换链 内部是几张图片 运行的时候从交换链里面取一张图片  把图片当作画布在里面绘制想要的内容（绘制过场叫渲染） 
 **绘制完后（渲染完成）把图片还给交换链    交换链把提交过来的图片给显示（surface window）  这个过场叫呈现 present
@@ -12,7 +12,7 @@
 */
 namespace XJ
 {
-    XJVulkanSwapchain::XJVulkanSwapchain(VulkanPhysicalDevices* physicalDevice, XJVulkanDevice* device, VulkanSurface* surface) 
+    XJVulkanSwapchain::XJVulkanSwapchain(XJVulkanPhysicalDevices* physicalDevice, XJVulkanDevice* device, XJVulkanSurface* surface) 
     : mPhysicalDevice(physicalDevice), mDevice(device), mSurface(surface)
     {
         ReCreate();
@@ -117,7 +117,7 @@ namespace XJ
         //swapchainInfo.compositeAlpha = VK_COMPOSITE_ALPHA_INHERIT_BIT_KHR;
         swapchainInfo.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
         swapchainInfo.presentMode = mSurfaceInfo.presentMode;
-        swapchainInfo.clipped = VK_FALSE;
+        swapchainInfo.clipped = VK_TRUE;
         swapchainInfo.oldSwapchain = oldSwapchain;
   
         VkResult ret = vkCreateSwapchainKHR(device, &swapchainInfo, nullptr, &mSwapchain);
@@ -190,7 +190,7 @@ namespace XJ
         int32_t foundFormatIndex = -1;// 查找与设置中的格式匹配的表面格式
         for(int i = 0; i< formatCount; i++)
         {
-            if(formats[i].format == settings.surfaceFormat && formats[i].colorSpace == VK_COLORSPACE_SRGB_NONLINEAR_KHR)
+            if(formats[i].format == settings.surfaceFormat && formats[i].colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR)
             {
                 foundFormatIndex = i;
                 break;
@@ -296,7 +296,7 @@ namespace XJ
             return present;
         }
 
-        VulkanQueue* presentQueue = mDevice->XJGetFirstPresentQueue();
+        XJVulkanQueue* presentQueue = mDevice->XJGetFirstPresentQueue();
         if (!presentQueue || presentQueue->XJGetQueue() == VK_NULL_HANDLE)
         {
             present.result = VK_ERROR_INITIALIZATION_FAILED;

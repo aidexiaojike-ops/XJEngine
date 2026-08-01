@@ -23,7 +23,7 @@ namespace XJ
         if (!mDevice)
             return false;
 
-        VulkanPhysicalDevices* physicalDevices =
+        XJVulkanPhysicalDevices* physicalDevices =
             renderContext->XJGetPhysicalDevices();
 
         if (!physicalDevices)
@@ -200,7 +200,7 @@ namespace XJ
 
     }
 
-    void XJViewport::CreateRenderPass(VulkanPhysicalDevices* physicalDevices)
+    void XJViewport::CreateRenderPass(XJVulkanPhysicalDevices* physicalDevices)
     {
         VkFormat colorFormat =
             mDevice->XJGetSettings().surfaceFormat;

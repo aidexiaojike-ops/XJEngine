@@ -19,6 +19,11 @@
 
 namespace XJ
 { 
+    namespace
+    {
+        constexpr uint32_t NUM_MATERIAL_BATCH = 16;
+    }
+
     void XJUnlitMaterialSystem::OnInit(XJVulkanRenderPass *renderPass) 
     {//添加内容查看shader Uniform  UBO
        
@@ -36,7 +41,11 @@ namespace XJ
         }
 
         //重新创建材质
-        ReCreateMaterialDescPool(*defaultRuntime, NUM_MATERIAL_BATCH);
+        if (!ReCreateMaterialDescPool(*defaultRuntime, NUM_MATERIAL_BATCH))
+        {
+            spdlog::error("Unlit material system failed to create material descriptor pool.");
+            return;
+        }
        
     }
     void XJUnlitMaterialSystem::OnRender(XJVulkanCommandBuffer cmdBuffer, XJRenderTarget* renderTarget) 
@@ -85,12 +94,51 @@ namespace XJ
         uint32_t kMaterialCount = XJMaterialFactory::GetInstance()->GetMaterialSize<XJUnlitMaterial>();//材质数量
         std::unordered_set<XJMaterialPipelineRuntime*> forceUpdateRuntimes;
 
-        if(kMaterialCount > defaultRuntime->LastDescriptorSetCount)
+        std::unordered_map<XJMaterialPipelineRuntime*, uint32_t> requiredDescriptorCountByRuntime;
+        //预扫描
+        for (const XJMaterialRenderItem& item : renderItems)
         {
-            spdlog::debug("Unlit: pool resize, count={} -> {}", defaultRuntime->LastDescriptorSetCount, kMaterialCount);
+            XJMaterial* material = item.Material;
+            if (!material || material->XJGetIndex() < 0)
+                continue;
+        
+            XJMaterialPipelineRuntime* runtime = ResolveMaterialRuntime(material);
+            if (!runtime || !runtime->IsValid())
+                continue;
+        
+            const uint32_t requiredCount = material->GetIndex() + 1;
+            uint32_t& currentRequiredCount = requiredDescriptorCountByRuntime[runtime];
+        
+            if (currentRequiredCount < requiredCount)
+                currentRequiredCount = requiredCount;
+        }
 
-            ReCreateMaterialDescPool(*defaultRuntime, kMaterialCount);
-            forceUpdateRuntimes.insert(defaultRuntime);
+        if (requiredDescriptorCountByRuntime.find(defaultRuntime) == requiredDescriptorCountByRuntime.end())
+            requiredDescriptorCountByRuntime[defaultRuntime] = kMaterialCount;
+
+        for (auto& [runtime, requiredCount] : requiredDescriptorCountByRuntime)
+        {
+            if (requiredCount < kMaterialCount)
+                requiredCount = kMaterialCount;
+        
+            if (requiredCount > runtime->LastDescriptorSetCount)
+            {
+                spdlog::debug(
+                    "Unlit: runtime pool resize before command recording, shader='{}', count={} -> {}",
+                    runtime->ShaderLayout.ShaderPath.generic_string(),
+                    runtime->LastDescriptorSetCount,
+                    requiredCount);
+                
+                if (!ReCreateMaterialDescPool(*runtime, requiredCount))
+                {
+                    spdlog::error(
+                        "Unlit: failed to resize material descriptor pool, shader='{}'.",
+                        runtime->ShaderLayout.ShaderPath.generic_string());
+                    return;
+                }
+            
+                forceUpdateRuntimes.insert(runtime);
+            }
         }
 
         XJMaterialPipelineRuntime* boundRuntime = nullptr;
@@ -122,24 +170,12 @@ namespace XJ
             if (updatedFrameRuntimes.insert(runtime).second)
                 XJMaterialRuntimeUploader::UpdateFrameUboDescSet(uploadContext, *runtime);
         
-            if (materialIndex >= runtime->LastDescriptorSetCount)
-            {
-                spdlog::debug(
-                    "Unlit: runtime pool resize, shader='{}', count={} -> {}",
-                    runtime->ShaderLayout.ShaderPath.generic_string(),
-                    runtime->LastDescriptorSetCount,
-                    kMaterialCount);
-                
-                ReCreateMaterialDescPool(*runtime, kMaterialCount);
-                forceUpdateRuntimes.insert(runtime);
-            }
-        
             if (boundRuntime != runtime)
             {
                 runtime->Pipeline->BindPipeline(cmdBuffer);
                 boundRuntime = runtime;
             }
-        
+            //越界保护
             if (materialIndex >= runtime->MaterialParamDescSets.size() ||
                 materialIndex >= runtime->MaterialResourceDescSets.size())
             {

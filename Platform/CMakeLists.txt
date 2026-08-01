@@ -9,18 +9,17 @@ set(PLATFORM_SRC
     ${CMAKE_CURRENT_SOURCE_DIR}/Private/Edit/XJGlfwWindow.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/Private/Edit/XJEventTesting.cpp
 
-    ${CMAKE_CURRENT_SOURCE_DIR}/Private/Graphic/VulkanInstance.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/Private/Graphic/VulkanSurface.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/Private/Graphic/VulkanPhysicalDevices.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/Private/Graphic/XJVulkanInstance.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/Private/Graphic/XJVulkanSurface.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/Private/Graphic/XJVulkanPhysicalDevices.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/Private/Graphic/XJVulkanDevice.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/Private/Graphic/VulkanQueue.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/Private/Graphic/XJVulkanQueue.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/Private/Graphic/XJVulkanSwapchain.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/Private/Graphic/XJVulkanRenderPass.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/Private/Graphic/XJVulkanFrameBuffer.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/Private/Graphic/VulkanImageView.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/Private/Graphic/XJVulkanImageView.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/Private/Graphic/XJVulkanPipeline.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/Private/Graphic/XJVulkanCommandBuffer.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/Private/Graphic/XJVulkanAddModelAssets.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/Private/Graphic/XJVulkanImage.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/Private/Graphic/XJVulkanGeometryUtil.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/Private/Graphic/XJVulkanBuffer.cpp

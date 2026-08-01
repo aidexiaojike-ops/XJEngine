@@ -1,10 +1,10 @@
-#include "Graphic/VulkanQueue.h"
+#include "Graphic/XJVulkanQueue.h"
 
 
 
 namespace XJ
 {
-    VulkanQueue::VulkanQueue(uint32_t familyIndex, uint32_t index, VkQueue queue, bool canPresent) : familyIndex(familyIndex)
+    XJVulkanQueue::XJVulkanQueue(uint32_t familyIndex, uint32_t index, VkQueue queue, bool canPresent) : familyIndex(familyIndex)
         , index(index)
         , mQueue(queue)
         , canPresent(canPresent)
@@ -12,18 +12,18 @@ namespace XJ
 
         spdlog::trace("创建新队列： {0} - {1} - {2}, 现在：{3}", familyIndex, index, (void*) queue, canPresent);
     }
-    VulkanQueue::~VulkanQueue()
+    XJVulkanQueue::~XJVulkanQueue()
     {
 
     }
 
-    void VulkanQueue::WaitIdle() const //等待队列处理完成
+    void XJVulkanQueue::WaitIdle() const //等待队列处理完成
     {
         XJDebug_Log(vkQueueWaitIdle(mQueue));
     }   
 
-    void VulkanQueue::Submit(
-        std::vector<VkCommandBuffer> commandBuffers,
+    void XJVulkanQueue::Submit(
+        const std::vector<VkCommandBuffer>& commandBuffers,
         const std::vector<VkSemaphore>& waitSemaphores,
         const std::vector<VkSemaphore>& signalSemaphores,
         VkFence FrameFence,

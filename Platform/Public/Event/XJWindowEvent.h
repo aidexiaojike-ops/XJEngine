@@ -54,6 +54,8 @@ namespace XJ
             {
                 return XJEvent::ToString() + "(xPos: " + std::to_string(mXPos) + ", yPos: " + std::to_string(mYPos) + ")";
             }
+            [[nodiscard]] int32_t XJGetXPos() const { return mXPos; }
+            [[nodiscard]] int32_t XJGetYPos() const { return mYPos; }
         private:
             int32_t mXPos;
             int32_t mYPos;
@@ -70,6 +72,8 @@ namespace XJ
             {
                 return XJEvent::ToString() + "(width: " + std::to_string(mWidth) + ", height: " + std::to_string(mHeight) + ")";
             }
+            [[nodiscard]] uint32_t XJGetWidth() const { return mWidth; }
+            [[nodiscard]] uint32_t XJGetHeight() const { return mHeight; }
         private:
             uint32_t mWidth;
             uint32_t mHeight;

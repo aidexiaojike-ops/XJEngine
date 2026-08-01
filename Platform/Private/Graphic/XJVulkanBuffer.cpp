@@ -1,6 +1,6 @@
 #include "Graphic/XJVulkanBuffer.h"
 #include "Graphic/XJVulkanDevice.h"
-#include "Graphic/VulkanQueue.h"
+#include "Graphic/XJVulkanQueue.h"
 #include "Graphic/XJVulkanCommandBuffer.h"
 #include <stdexcept>
 
@@ -78,7 +78,29 @@ namespace XJ
 
     void XJVulkanBuffer::CopyToBuffer(XJVulkanDevice* device, VkBuffer srcBuffer, VkBuffer dstBuffer, size_t size)
     {
+        if (!device || !device->IsValid())
+        {
+            spdlog::error("CopyToBuffer failed: device is invalid");
+            return;
+        }
+
+        if (srcBuffer == VK_NULL_HANDLE || dstBuffer == VK_NULL_HANDLE || size == 0)
+        {
+            spdlog::error(
+                "CopyToBuffer failed: invalid argument, src={}, dst={}, size={}",
+                static_cast<void*>(srcBuffer),
+                static_cast<void*>(dstBuffer),
+                size);
+            return;
+        }
+
         VkCommandBuffer commandBuffer = device->CreateAndBeginOneDefaultCommandBuffer();
+
+        if (commandBuffer == VK_NULL_HANDLE)
+        {
+            spdlog::error("CopyToBuffer failed: command buffer is null");
+            return;
+        }
 
         VkBufferCopy bufferCopy{};
         bufferCopy.srcOffset = 0;
@@ -174,34 +196,82 @@ namespace XJ
         }
 
     }
-    VkResult XJVulkanBuffer::WriteData(void *data)
+    VkResult XJVulkanBuffer::WriteData(const void *data)
     {
-        if(data && bHostVisible)
+        if (!data)
         {
-            void *mapping;
-            VkResult ret = vkMapMemory(mDevice->XJGetDevice(), mBufferMemory, 0, mSize, 0, &mapping);
-            XJDebug_Log(ret);
-            memcpy(mapping, data, mSize);
-            vkUnmapMemory(mDevice->XJGetDevice(), mBufferMemory);
+            spdlog::error("WriteData failed: data is null");
+            return VK_ERROR_INITIALIZATION_FAILED;
+        }
+
+        if (!bHostVisible)
+        {
+            spdlog::error("WriteData failed: buffer is not host visible");
+            return VK_ERROR_MEMORY_MAP_FAILED;
+        }
+
+        if (!mDevice || !mDevice->IsValid() || mBufferMemory == VK_NULL_HANDLE || mSize == 0)
+        {
+            spdlog::error("WriteData failed: buffer is invalid");
+            return VK_ERROR_INITIALIZATION_FAILED;
+        }
+
+        void* mapping = nullptr;
+        VkResult ret = vkMapMemory(mDevice->XJGetDevice(), mBufferMemory, 0, mSize, 0, &mapping);
+        if (ret != VK_SUCCESS)
+        {
+            spdlog::error("WriteData failed: vkMapMemory result={}", static_cast<int>(ret));
             return ret;
         }
-        return VK_ERROR_INITIALIZATION_FAILED;
+
+        memcpy(mapping, data, mSize);
+        vkUnmapMemory(mDevice->XJGetDevice(), mBufferMemory);
+
+        return VK_SUCCESS;
     }
 
-    VkResult XJVulkanBuffer::WriteDataOffset(void *data, size_t offset, size_t size)
+    VkResult XJVulkanBuffer::WriteDataOffset(const void *data, size_t offset, size_t size)
     {
-        if(data && bHostVisible && offset + size <= mSize)//确保写入范围合法
+        if (!data)
         {
-            void *mapping;//映射内存
-            VkResult ret = vkMapMemory(mDevice->XJGetDevice(), mBufferMemory, 0, mSize, 0, &mapping);//映射内存
-            XJDebug_Log(ret);//将数据复制到指定偏移位置
-            if(ret == VK_SUCCESS)
-            {
-                memcpy(static_cast<char*>(mapping) + offset, data, size);//解除内存映射
-                vkUnmapMemory(mDevice->XJGetDevice(), mBufferMemory);//返回结果
-            }
+            spdlog::error("WriteDataOffset failed: data is null");
+            return VK_ERROR_INITIALIZATION_FAILED;
+        }
+
+        if (!bHostVisible)
+        {
+            spdlog::error("WriteDataOffset failed: buffer is not host visible");
+            return VK_ERROR_MEMORY_MAP_FAILED;
+        }
+
+        if (!mDevice || !mDevice->IsValid() || mBufferMemory == VK_NULL_HANDLE)
+        {
+            spdlog::error("WriteDataOffset failed: buffer is invalid");
+            return VK_ERROR_INITIALIZATION_FAILED;
+        }
+
+        if (size == 0 || offset > mSize || size > mSize - offset)//确保写入范围合法
+        {
+            spdlog::error(
+                "WriteDataOffset failed: invalid range, offset={}, size={}, bufferSize={}",
+                offset,
+                size,
+                mSize);
+            return VK_ERROR_INITIALIZATION_FAILED;
+        }
+
+        void *mapping;//映射内存
+        VkResult ret = vkMapMemory(mDevice->XJGetDevice(), mBufferMemory, offset, size, 0, &mapping);//映射内存
+
+        if (ret != VK_SUCCESS)
+        {
+            spdlog::error("WriteDataOffset failed: vkMapMemory result={}", static_cast<int>(ret));
             return ret;
         }
-        return VK_ERROR_INITIALIZATION_FAILED;
+
+        memcpy(mapping, data, size);//解除内存映射
+        vkUnmapMemory(mDevice->XJGetDevice(), mBufferMemory);//返回结果
+
+        return VK_SUCCESS;
     }
 }

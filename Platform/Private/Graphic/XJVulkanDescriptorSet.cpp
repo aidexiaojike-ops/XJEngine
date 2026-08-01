@@ -95,12 +95,7 @@ namespace XJ
                 spdlog::warn("AllocateDescriptorSet skipped: count is 0");
                 return {};
             }
-           // 准备与 count 相同数量的描述符集布局引用（所有引用相同布局）
-            std::vector<VkDescriptorSetLayout> setLayouts(count);
-            for (uint32_t i = 0; i < count; ++i)
-            {
-                setLayouts[i] = setLayout->XJGetDescriptorSet();// 从布局对象获取 VkDescriptorSetLayout
-            }
+            std::vector<VkDescriptorSetLayout> setLayouts(count, setLayout->XJGetDescriptorSet());
 
              // 准备一个向量存储分配得到的描述符集句柄
             std::vector<VkDescriptorSet> descriptorSets(count, VK_NULL_HANDLE);

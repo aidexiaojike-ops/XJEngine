@@ -1,9 +1,9 @@
-#include "Graphic/VulkanImageView.h"
+#include "Graphic/XJVulkanImageView.h"
 #include "Graphic/XJVulkanDevice.h"
 
 namespace XJ
 {
-    VulkanImageView::VulkanImageView(XJVulkanDevice* device, VkImage image, VkFormat format, VkImageAspectFlags aspectFlags)
+    XJVulkanImageView::XJVulkanImageView(XJVulkanDevice* device, VkImage image, VkFormat format, VkImageAspectFlags aspectFlags)
         : mDevice(device)
     {
         VkImageViewCreateInfo imageViewInfo = {};
@@ -29,7 +29,7 @@ namespace XJ
 
     }
 
-    VulkanImageView::~VulkanImageView()
+    XJVulkanImageView::~XJVulkanImageView()
     {
         if (!mDevice || !mDevice->IsValid())
         {

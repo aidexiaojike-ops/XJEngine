@@ -1,9 +1,9 @@
-#ifndef VULKAN_PHYSICALDEVICES_H
-#define VULKAN_PHYSICALDEVICES_H
+#ifndef XJ_VULKAN_PHYSICALDEVICES_H
+#define XJ_VULKAN_PHYSICALDEVICES_H
 
 #include "Edit/EditIncludes.h"
-#include "Graphic/VulkanInstance.h"
-#include "Graphic/VulkanSurface.h"
+#include "Graphic/XJVulkanInstance.h"
+#include "Graphic/XJVulkanSurface.h"
 
 
 namespace XJ
@@ -15,11 +15,11 @@ namespace XJ
         uint32_t queueCount = 0;
     };
 
-    class VulkanPhysicalDevices
+    class XJVulkanPhysicalDevices
     {
         public:
-            VulkanPhysicalDevices(VulkanInstance* instance, VulkanSurface* surface);
-            ~VulkanPhysicalDevices();
+            XJVulkanPhysicalDevices(XJVulkanInstance* instance, XJVulkanSurface* surface);
+            ~XJVulkanPhysicalDevices();
 
             VkPhysicalDevice XJGetPhysicalDevice() { return physicalDevice; }
             VkPhysicalDeviceMemoryProperties XJGetPhysicalDeviceMemoryProperties() { return memoryProperties; }

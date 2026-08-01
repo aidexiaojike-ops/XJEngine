@@ -2,9 +2,9 @@
 #define XJ_RENDER_CONTEXT_H
 
 
-#include "Graphic/VulkanInstance.h"
-#include "Graphic/VulkanSurface.h"
-#include "Graphic/VulkanPhysicalDevices.h"
+#include "Graphic/XJVulkanInstance.h"
+#include "Graphic/XJVulkanSurface.h"
+#include "Graphic/XJVulkanPhysicalDevices.h"
 #include "Graphic/XJVulkanDevice.h"
 #include "Graphic/XJVulkanSwapchain.h"
 
@@ -20,16 +20,16 @@ namespace XJ
 
             XJVulkanSwapchain* XJGetSwapchain() const { return mSwapchain.get(); }
             XJVulkanDevice* XJGetDevice() const { return mDevice.get(); }
-            VulkanSurface* XJGetSurface() const { return mSurface.get(); }
-            VulkanPhysicalDevices* XJGetPhysicalDevices() const { return mPhysicalDevices.get(); }
-            VulkanInstance* XJGetInstance() const { return mInstance.get(); }
+            XJVulkanSurface* XJGetSurface() const { return mSurface.get(); }
+            XJVulkanPhysicalDevices* XJGetPhysicalDevices() const { return mPhysicalDevices.get(); }
+            XJVulkanInstance* XJGetInstance() const { return mInstance.get(); }
 
         private:
             /* data */
 
-            std::unique_ptr<VulkanInstance>    mInstance;
-            std::unique_ptr<VulkanSurface>     mSurface;
-            std::unique_ptr<VulkanPhysicalDevices> mPhysicalDevices;
+            std::unique_ptr<XJVulkanInstance>    mInstance;
+            std::unique_ptr<XJVulkanSurface>     mSurface;
+            std::unique_ptr<XJVulkanPhysicalDevices> mPhysicalDevices;
             std::unique_ptr<XJVulkanDevice>      mDevice;
             std::unique_ptr<XJVulkanSwapchain>   mSwapchain;
     };

@@ -56,7 +56,7 @@ namespace XJ
             AssetDropCallback mAssetDropCallback;
 
         protected:
-            virtual void CreateRenderPass(VulkanPhysicalDevices* physicalDevices) override;//创建适用于场景预览的 Vulkan 渲染通道，配置颜色和深度附件，以及子通道的依赖关系
+            virtual void CreateRenderPass(XJVulkanPhysicalDevices* physicalDevices) override;//创建适用于场景预览的 Vulkan 渲染通道，配置颜色和深度附件，以及子通道的依赖关系
 
     };
 }

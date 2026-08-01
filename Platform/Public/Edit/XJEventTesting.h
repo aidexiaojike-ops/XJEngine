@@ -11,10 +11,8 @@ namespace XJ
     {
         public:
             XJEventTesting();
-            ~XJEventTesting();
+            ~XJEventTesting() = default;
         private:
-            void TestMemberFunc(const XJMouseButtonReleaseEvent &event);
-        
             std::shared_ptr<XJ::XJEventObserver> mObserver;
     };
 

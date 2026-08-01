@@ -51,11 +51,11 @@ namespace XJ
         return mPipelineRuntimeCache.Resolve(material->GetShaderPath());
     }
 
-    void XJMaterialRenderSystemBase::ReCreateMaterialDescPool(
+    bool XJMaterialRenderSystemBase::ReCreateMaterialDescPool(
         XJMaterialPipelineRuntime& runtime,
         uint32_t materialCount)
     {
-        XJMaterialPipelineRuntimeDescriptor::ReCreateMaterialDescPool(
+        return XJMaterialPipelineRuntimeDescriptor::ReCreateMaterialDescPool(
             XJGetDevice(),
             runtime,
             materialCount);

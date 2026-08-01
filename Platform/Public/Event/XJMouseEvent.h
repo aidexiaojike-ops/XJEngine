@@ -18,7 +18,7 @@ namespace XJ
         MOUSE_BUTTON_LAST = MOUSE_BUTTON_8
     };
 //鼠标按钮事件类，包含鼠标按钮按下和鼠标按钮释放事件
-    static const char* XJMouseButtonToStr(MouseButton button){
+    inline const char* XJMouseButtonToStr(MouseButton button){
         switch (button) {
             case MOUSE_BUTTON_LEFT: return "MOUSE_BUTTON_LEFT";
             case MOUSE_BUTTON_RIGHT: return "MOUSE_BUTTON_RIGHT";
@@ -48,12 +48,12 @@ namespace XJ
                 return ss.str();
             }
             //判断是否按下了Shift、Control、Alt、Super、CapsLock和NumLock键，以及是否是重复事件
-            [[nodiscard]] bool IsShiftPressed() const { return mKeyMod & KEY_MOD_SHIFT; };
-            [[nodiscard]] bool IsControlPressed() const { return mKeyMod & KEY_MOD_CONTROL; };
-            [[nodiscard]] bool IsAltPressed() const { return mKeyMod & KEY_MOD_ALT; };
-            [[nodiscard]] bool IsSuperPressed() const { return mKeyMod & KEY_MOD_SUPER; };
-            [[nodiscard]] bool IsCapsLockPressed() const { return mKeyMod & KEY_MOD_CAPS_LOCK; };   
-            [[nodiscard]] bool IsNumLockPressed() const { return mKeyMod & KEY_MOD_NUM_LOCK; };      
+            [[nodiscard]] bool IsShiftPressed() const { return (mKeyMod & KEY_MOD_SHIFT) != 0; };
+            [[nodiscard]] bool IsControlPressed() const { return (mKeyMod & KEY_MOD_CONTROL) != 0; };
+            [[nodiscard]] bool IsAltPressed() const { return (mKeyMod & KEY_MOD_ALT) != 0; };
+            [[nodiscard]] bool IsSuperPressed() const { return (mKeyMod & KEY_MOD_SUPER) != 0; };
+            [[nodiscard]] bool IsCapsLockPressed() const { return (mKeyMod & KEY_MOD_CAPS_LOCK) != 0; };   
+            [[nodiscard]] bool IsNumLockPressed() const { return (mKeyMod & KEY_MOD_NUM_LOCK) != 0; };      
             [[nodiscard]] bool IsRepeat() const { return mRepeat; };
 
             MouseButton mMouseButton;

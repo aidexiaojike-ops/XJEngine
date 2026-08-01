@@ -10,7 +10,7 @@ namespace XJ
     {
         private:
             XJVulkanDevice* mDevice;
-            VulkanPhysicalDevices* mPhysicalDevices;
+            XJVulkanPhysicalDevices* mPhysicalDevices;
             VkImage mDepthImage = VK_NULL_HANDLE;
             VkDeviceMemory mDepthImageMemory = VK_NULL_HANDLE;
             VkImageView mDepthImageView = VK_NULL_HANDLE;
@@ -21,7 +21,7 @@ namespace XJ
             VkSampleCountFlagBits mSampleCount = VK_SAMPLE_COUNT_1_BIT;
 
         public:
-            XJVulkanDepthImage(XJVulkanDevice* device, VulkanPhysicalDevices* physicalDevice, uint32_t width, uint32_t height, VkSampleCountFlagBits samples = VK_SAMPLE_COUNT_1_BIT);
+            XJVulkanDepthImage(XJVulkanDevice* device, XJVulkanPhysicalDevices* physicalDevice, uint32_t width, uint32_t height, VkSampleCountFlagBits samples = VK_SAMPLE_COUNT_1_BIT);
             ~XJVulkanDepthImage();
             XJVulkanDepthImage(const XJVulkanDepthImage&) = delete;
             XJVulkanDepthImage& operator=(const XJVulkanDepthImage&) = delete;

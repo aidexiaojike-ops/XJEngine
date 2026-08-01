@@ -1,4 +1,4 @@
-﻿#include "XJEntryPoint.h"
+#include "XJEntryPoint.h"
 #include "Edit/Mathinclude.h"
 #include "Edit/XJEventTesting.h"
 #include "Edit/FileUtil.h"
@@ -6,6 +6,7 @@
 
 #include "Graphic/XJVulkanRenderPass.h"
 #include "Graphic/XJVulkanCommandBuffer.h"
+#include "Graphic/XJVulkanImage.h"
 #include "Graphic/VulkanCommon.h"
 
 #include "Render/XJRenderTarget.h"
@@ -57,7 +58,7 @@ protected:
 
         XJ::XJRenderContext *kRenderContext = XJApplication::XJGetAppContext()->renderContext;
         XJ::XJVulkanDevice* kDevice = kRenderContext->XJGetDevice();
-        XJ::VulkanPhysicalDevices* kPhysicalDevices = kRenderContext->XJGetPhysicalDevices();
+        XJ::XJVulkanPhysicalDevices* kPhysicalDevices = kRenderContext->XJGetPhysicalDevices();
         XJ::XJVulkanSwapchain* kSwapchain = kRenderContext->XJGetSwapchain();
       
          // 配置 RenderPass 附件
@@ -146,10 +147,10 @@ protected:
 
         mUIContext = std::make_unique<XJ::XJUIContext>();
         mEditorRenderer = std::make_unique<XJ::XJEditorRenderer>();
-        mUIContext->Init(static_cast<GLFWwindow*>(XJGetWindow()->XJGetImplWindowPointer()));
+        mUIContext->Init(XJGetWindow()->XJGetImplWindowPointer());
         mEditorRenderer->Init(kUIRendererInfo);
         ///拖拽资产到UI 生成json文件和UUID
-        GLFWwindow* glfwWindow = static_cast<GLFWwindow*>(XJGetWindow()->XJGetImplWindowPointer());
+        GLFWwindow* glfwWindow = XJGetWindow()->XJGetImplWindowPointer();
 
         glfwSetWindowUserPointer(glfwWindow, this);
         glfwSetDropCallback(glfwWindow,[](GLFWwindow* window, int count, const char** paths)
@@ -437,7 +438,8 @@ protected:
         }
 
         // 正式视图 RT
-        if (mRenderTarget->BeginRenderTarget(kCommandBuffer))
+        bool swapchainRenderPassBegan = mRenderTarget->BeginRenderTarget(kCommandBuffer);
+        if (swapchainRenderPassBegan)
         {
             //// 改为由 GLFW 窗口统一处理，不再直接渲染方块：
             // mRenderTarget->RenderMaterialSystem(kCommandBuffer);
@@ -445,10 +447,23 @@ protected:
             if (mEditorRenderer && mUIContext)
                 mEditorRenderer->RenderDrawData(kCommandBuffer, mUIContext->XJGetDrawData());
             // ===== Viewport Vulkan UI 已绘制完成 =====
-            updateImGuiPlatformWindows();
              // ===== UI 渲染结束 =====
             mRenderTarget->EndRenderTarget(kCommandBuffer);// 结束渲染通道
         }
+        else
+        {
+            const auto& swapchainImages = kSwapchain->XJGetSwapchainImages();
+            if (imageIndex >= 0 && static_cast<size_t>(imageIndex) < swapchainImages.size())
+            {
+                XJ::XJVulkanImage::TransitionLayout(
+                    kCommandBuffer,
+                    swapchainImages[static_cast<size_t>(imageIndex)],
+                    VK_IMAGE_LAYOUT_UNDEFINED,
+                    VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
+            }
+        }
+
+        updateImGuiPlatformWindows();
         
       
         XJ::XJVulkanCommandPool::EndCommandBuffer(kCommandBuffer);

@@ -2,14 +2,14 @@
 #define VULKAN_FRAMEBUFFER_H
 
 #include "Graphic/VulkanCommon.h"
-#include "Graphic/VulkanImageView.h"
+#include "Graphic/XJVulkanImageView.h"
 #include "Graphic/XJVulkanDepthImage.h"  
 
 namespace XJ
 {
     class XJVulkanDevice;
     class XJVulkanRenderPass;
-    // class VulkanImageView;
+    // class XJVulkanImageView;
     class XJVulkanImage;
     // class XJVulkanDepthImage;
 
@@ -23,15 +23,15 @@ namespace XJ
             uint32_t mWidth = 0;
             uint32_t mHeight = 0;
 
-            std::vector<std::shared_ptr<VulkanImageView>> mColorViews;
-            // std::vector<std::shared_ptr<VulkanImageView>> mDepthViews; // 新增：深度图像视图向量
-            std::vector<std::shared_ptr<VulkanImageView>> mResolveViews;
+            std::vector<std::shared_ptr<XJVulkanImageView>> mColorViews;
+            // std::vector<std::shared_ptr<XJVulkanImageView>> mDepthViews; // 新增：深度图像视图向量
+            std::vector<std::shared_ptr<XJVulkanImageView>> mResolveViews;
 
             std::vector<std::shared_ptr<XJVulkanImage>> mColorImages;
             std::shared_ptr<XJVulkanDepthImage> mDepthImage;
             std::shared_ptr<XJVulkanImage> mResolveImage;
 
-            //std::vector<std::shared_ptr<VulkanImageView>> mDepthImageViews; // 新增：深度图像视图
+            //std::vector<std::shared_ptr<XJVulkanImageView>> mDepthImageViews; // 新增：深度图像视图
 
         public:
             // 构造函数现在接受颜色图像向量、深度图像指针、解析图像指针
@@ -50,7 +50,7 @@ namespace XJ
                      uint32_t width, uint32_t height);
 
 
-            std::shared_ptr<VulkanImageView> XJGetColorImageView(uint32_t index = 0) const
+            std::shared_ptr<XJVulkanImageView> XJGetColorImageView(uint32_t index = 0) const
             {
                 return (index < mColorViews.size()) ? mColorViews[index] : nullptr;
             }

@@ -1,7 +1,7 @@
 #include "Graphic/XJVulkanFrameBuffer.h"
 #include "Graphic/XJVulkanDevice.h"
 #include "Graphic/XJVulkanRenderPass.h"
-#include "Graphic/VulkanImageView.h"
+#include "Graphic/XJVulkanImageView.h"
 #include "Graphic/XJVulkanImage.h"
 #include "Graphic/XJVulkanDepthImage.h"
 
@@ -14,6 +14,24 @@ namespace XJ
                                              uint32_t width, uint32_t height)
         : mDevice(device), mRenderPass(renderPass), mDepthImage(depthImage), mResolveImage(resolveImage), mWidth(width), mHeight(height)
     {
+        if (!mDevice || !mDevice->IsValid())
+        {
+            spdlog::error("XJVulkanFrameBuffer create failed: device is invalid");
+            return;
+        }
+
+        if (!mRenderPass || mRenderPass->XJGetRenderPass() == VK_NULL_HANDLE)
+        {
+            spdlog::error("XJVulkanFrameBuffer create failed: render pass is invalid");
+            return;
+        }
+
+        if (width == 0 || height == 0)
+        {
+            spdlog::error("XJVulkanFrameBuffer create failed: invalid extent {}x{}", width, height);
+            return;
+        }
+
         ReCreate(colorImages, depthImage, resolveImage, width, height);
     }
     
@@ -41,105 +59,127 @@ namespace XJ
     {
         
 
-        // 销毁旧的帧缓冲
-        if(mFrameBuffer != VK_NULL_HANDLE && mDevice && mDevice->IsValid())
+        if (!mDevice || !mDevice->IsValid())
         {
-            mDevice->WaitIdle();
-            vkDestroyFramebuffer(mDevice->XJGetDevice(), mFrameBuffer, nullptr);
-            mFrameBuffer = VK_NULL_HANDLE;
+            spdlog::error("FrameBuffer ReCreate failed: device is invalid");
+            return false;
         }
 
-        mWidth = width;
-        mHeight = height;
-        mColorImages = colorImages;
-        mDepthImage = depthImage;
-        mResolveImage = resolveImage;
-        mColorViews.clear();
-        // mDepthViews.clear();
-        mResolveViews.clear();
-        // 准备附件数组（颜色附件 + 深度附件）
-        std::vector<VkImageView> attachments;
-
-         // 1. 添加颜色附件（交换链图像）
-        for (size_t  i = 0; i < mColorImages.size(); i++)
+        if (!mRenderPass || mRenderPass->XJGetRenderPass() == VK_NULL_HANDLE)
         {
-            if (!mColorImages[i] || !mColorImages[i]->IsValid()) 
+            spdlog::error("FrameBuffer ReCreate failed: render pass is invalid");
+            return false;
+        }
+
+        if (width == 0 || height == 0)
+        {
+            spdlog::error("FrameBuffer ReCreate failed: invalid extent {}x{}", width, height);
+            return false;
+        }
+        std::vector<std::shared_ptr<XJVulkanImageView>> newColorViews;
+        std::vector<std::shared_ptr<XJVulkanImageView>> newResolveViews;
+        std::vector<VkImageView> attachments;// 准备附件数组（颜色附件 + 深度附件）
+
+        newColorViews.reserve(colorImages.size());
+         // 1. 添加颜色附件（交换链图像）
+        for (size_t i = 0; i < colorImages.size(); ++i)
+        {
+            if (!colorImages[i] || !colorImages[i]->IsValid())
             {
-                spdlog::error("颜色图像无效");
+                spdlog::error("FrameBuffer ReCreate failed: color image {} is invalid", i);
                 return false;
             }
-       
-            auto colorView = std::make_shared<VulkanImageView>(mDevice, 
-                             mColorImages[i]->XJGetImage(), 
-                             mColorImages[i]->XJGetFormat(), 
-                             VK_IMAGE_ASPECT_COLOR_BIT);
-            if (!colorView->XJGetImageView()) 
-            {
-            spdlog::error("颜色图像视图创建失败");
-            return false;
-            }
-            mColorViews.push_back(colorView);
-            attachments.push_back(mColorViews[i]->XJGetImageView());
-        }
 
-            // 2. 添加深度附件（如果存在）
-        if (mDepthImage && mDepthImage->IsValid())
+            auto colorView = std::make_shared<XJVulkanImageView>(
+                mDevice,
+                colorImages[i]->XJGetImage(),
+                colorImages[i]->XJGetFormat(),
+                VK_IMAGE_ASPECT_COLOR_BIT);
+
+            if (!colorView || colorView->XJGetImageView() == VK_NULL_HANDLE)
+            {
+                spdlog::error("FrameBuffer ReCreate failed: color image view {} create failed", i);
+                return false;
+            }
+
+            attachments.push_back(colorView->XJGetImageView());
+            newColorViews.push_back(colorView);
+        }
+         // 2. 添加深度附件（如果存在）
+        if (depthImage && depthImage->IsValid())
         {
-            attachments.push_back(mDepthImage->XJGetImageView());
+            attachments.push_back(depthImage->XJGetImageView());
         }
         else
         {
-            spdlog::warn("深度图像无效或缺失  ptr={}  isValid={}  image={}  view={}",
-                (void*)mDepthImage.get(),
-                mDepthImage ? (int)mDepthImage->IsValid() : -1,
-                mDepthImage ? (void*)mDepthImage->XJGetImage() : nullptr,
-                mDepthImage ? (void*)mDepthImage->XJGetImageView() : nullptr);
+            spdlog::warn(
+                "FrameBuffer ReCreate/深度图像无效或缺失: depth image is invalid or missing, ptr={}, IsValid={}, image={}, view={}",
+                (void*)depthImage.get(),
+                depthImage ? static_cast<int>(depthImage->IsValid()) : -1,
+                depthImage ? (void*)depthImage->XJGetImage() : nullptr,
+                depthImage ? (void*)depthImage->XJGetImageView() : nullptr);
         }
-       
         // 3. 添加解析附件（对应索引2）
-        if (mResolveImage && mResolveImage->IsValid())
+        if (resolveImage && resolveImage->IsValid())
         {
-            auto resolveView = std::make_shared<VulkanImageView>
-            (
+            auto resolveView = std::make_shared<XJVulkanImageView>(
                 mDevice,
-                mResolveImage->XJGetImage(),
-                mResolveImage->XJGetFormat(),
-                VK_IMAGE_ASPECT_COLOR_BIT
-            );
-            spdlog::debug("帧缓冲添加深度附件: {}", static_cast<void*>(resolveView->XJGetImageView()));
-            mResolveViews.push_back(resolveView);
-            attachments.push_back(resolveView->XJGetImageView());
-        }
-       
-        
-        spdlog::debug("帧缓冲附件：颜色={}, 深度={}, 解析={}", 
-              mColorViews.size(),
-              (mDepthImage && mDepthImage->IsValid()) ? 1 : 0,
-              mResolveViews.size());
-        for (size_t i = 0; i < attachments.size(); i++) {
-            spdlog::debug("  附件[{}]: {}", i, (void*)attachments[i]);
-        }
-   
-        spdlog::debug("创建帧缓冲，总附件数量: {}", attachments.size());
+                resolveImage->XJGetImage(),
+                resolveImage->XJGetFormat(),
+                VK_IMAGE_ASPECT_COLOR_BIT);
 
+            if (!resolveView || resolveView->XJGetImageView() == VK_NULL_HANDLE)
+            {
+                spdlog::error("FrameBuffer ReCreate failed: resolve image view create failed");
+                return false;
+            }
+            spdlog::debug("帧缓冲添加深度附件: {}", static_cast<void*>(resolveView->XJGetImageView()));
+            attachments.push_back(resolveView->XJGetImageView());
+            newResolveViews.push_back(resolveView);
+        }
+
+        if (attachments.empty())
+        {
+            spdlog::error("FrameBuffer ReCreate failed: no attachments");
+            return false;
+        }
+
+        VkFramebuffer newFrameBuffer = VK_NULL_HANDLE;
         //创建帧缓冲
-        VkFramebufferCreateInfo frameBufferInfo = {};
+        VkFramebufferCreateInfo frameBufferInfo{};
         frameBufferInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
         frameBufferInfo.pNext = nullptr;
         frameBufferInfo.flags = 0;
         frameBufferInfo.renderPass = mRenderPass->XJGetRenderPass();
         frameBufferInfo.attachmentCount = static_cast<uint32_t>(attachments.size());
         frameBufferInfo.pAttachments = attachments.data();
-        frameBufferInfo.width = mWidth; 
-        frameBufferInfo.height = mHeight;
+        frameBufferInfo.width = width;
+        frameBufferInfo.height = height;
         frameBufferInfo.layers = 1;
 
-        VkResult ret = vkCreateFramebuffer(mDevice->XJGetDevice(), &frameBufferInfo, nullptr, &mFrameBuffer);
+        VkResult ret = vkCreateFramebuffer(mDevice->XJGetDevice(), &frameBufferInfo, nullptr, &newFrameBuffer);
         if (ret != VK_SUCCESS)
         {
             spdlog::error("创建帧缓冲失败: {}", vk_result_string(ret));
             return false;
         }
+
+        VkFramebuffer oldFrameBuffer = mFrameBuffer;
+        mFrameBuffer = newFrameBuffer;
+        mWidth = width;
+        mHeight = height;
+        mColorImages = colorImages;
+        mDepthImage = depthImage;
+        mResolveImage = resolveImage;
+        mColorViews = std::move(newColorViews);
+        mResolveViews = std::move(newResolveViews);
+
+        if (oldFrameBuffer != VK_NULL_HANDLE)
+        {
+            mDevice->WaitIdle();
+            vkDestroyFramebuffer(mDevice->XJGetDevice(), oldFrameBuffer, nullptr);
+        }
+
         
         spdlog::trace("函数来自: {0}, 创建帧缓冲结果：{1}, width: {2}, height: {3}, 附件数量: {4}", 
             __FUNCTION__, vk_result_string(ret), mWidth, mHeight, attachments.size());

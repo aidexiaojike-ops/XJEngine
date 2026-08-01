@@ -1,7 +1,7 @@
 #include "Graphic/XJVulkanDevice.h"
 #include "Graphic/VulkanCommon.h"
-#include "Graphic/VulkanQueue.h"
-#include "Graphic/VulkanPhysicalDevices.h"
+#include "Graphic/XJVulkanQueue.h"
+#include "Graphic/XJVulkanPhysicalDevices.h"
 #include "Graphic/XJVulkanCommandBuffer.h"
 
 namespace XJ
@@ -12,7 +12,7 @@ namespace XJ
         { VK_KHR_SWAPCHAIN_EXTENSION_NAME, true }
         //{ "VK_KHR_portability_subset", true}
     }; 
-    XJVulkanDevice::XJVulkanDevice(VulkanPhysicalDevices* physicalDevices, uint32_t graphicsQueueCount, uint32_t presentQueueCount, const VkSettings &settings) 
+    XJVulkanDevice::XJVulkanDevice(XJVulkanPhysicalDevices* physicalDevices, uint32_t graphicsQueueCount, uint32_t presentQueueCount, const VkSettings &settings) 
     :settings(settings), mPhysicalDevices(physicalDevices)
     {
         if(!physicalDevices)
@@ -214,8 +214,16 @@ namespace XJ
                 static_cast<uint32_t>(graphicsQueueFamilyInfo.queueFamilyIndex),
                 i,
                 &queue);
+            if (queue == VK_NULL_HANDLE)
+            {
+                spdlog::error(
+                    "vkGetDeviceQueue returned null graphics queue, family={}, index={}",
+                    graphicsQueueFamilyInfo.queueFamilyIndex,
+                    i);
+                continue;
+            }
             
-            mGraphicQueue.push_back(std::make_shared<VulkanQueue>(
+            mGraphicQueue.push_back(std::make_shared<XJVulkanQueue>(
                 static_cast<uint32_t>(graphicsQueueFamilyInfo.queueFamilyIndex),
                 i,
                 queue,
@@ -232,8 +240,16 @@ namespace XJ
                 static_cast<uint32_t>(presentQueueFamilyInfo.queueFamilyIndex),
                 queueIndex,
                 &queue);
+            if (queue == VK_NULL_HANDLE)
+            {
+                spdlog::error(
+                    "vkGetDeviceQueue returned null present queue, family={}, index={}",
+                    presentQueueFamilyInfo.queueFamilyIndex,
+                    queueIndex);
+                continue;
+            }
             
-            mPresentQueue.push_back(std::make_shared<VulkanQueue>(
+            mPresentQueue.push_back(std::make_shared<XJVulkanQueue>(
                 static_cast<uint32_t>(presentQueueFamilyInfo.queueFamilyIndex),
                 queueIndex,
                 queue,
@@ -350,7 +366,7 @@ namespace XJ
 
         mDefaultCmdPool->EndCommandBuffer(commandBuffer);
 
-        VulkanQueue* queue = XJGetFirstGraphicQueue();
+        XJVulkanQueue* queue = XJGetFirstGraphicQueue();
         if (queue == nullptr || queue->XJGetQueue() == VK_NULL_HANDLE)
         {
             spdlog::error("{}: graphics queue is null", __FUNCTION__);

@@ -77,33 +77,45 @@ namespace XJ
             return;
         }
         
-        auto oldFrameBuffers = std::move(mFrameBuffers);
-
         // 检查渲染通道是否有效
         if (!mRenderPass) {
             spdlog::error("Render pass is null in ReCreate");
             return;
         }
+ 
 
-     
-        mFrameBuffers.clear();
-        mDepthImages.clear();
-        mFrameBuffers.reserve(mBufferCount);
 
         XJRenderContext *kRenderContext = XJApplication::XJGetAppContext()->renderContext;
-        //vkDeviceWaitIdle(kRenderContext->XJGetDevice()->XJGetDevice());//// 等待设备空闲，确保无命令缓冲区使用旧资源
+        if (!kRenderContext || !kRenderContext->XJGetDevice())
+        {
+            spdlog::error("Render context or device is null in ReCreate");
+            return;
+        }
+
         VkResult idleRet = vkDeviceWaitIdle(kRenderContext->XJGetDevice()->XJGetDevice());
         if (idleRet != VK_SUCCESS)
         {
             spdlog::critical("STEP3-FAIL: ReCreate vkDeviceWaitIdle returned {}", vk_result_string(idleRet));
         }
+
+
         XJVulkanDevice* kDevice = kRenderContext->XJGetDevice();
         XJVulkanSwapchain* kSwapchain = kRenderContext->XJGetSwapchain();
 
+        auto oldFrameBuffers = std::move(mFrameBuffers);
+        auto oldDepthImages = std::move(mDepthImages);
+     
+        mFrameBuffers.clear();
+        mDepthImages.clear();
+        mFrameBuffers.reserve(mBufferCount);
+
+        //vkDeviceWaitIdle(kRenderContext->XJGetDevice()->XJGetDevice());//// 等待设备空闲，确保无命令缓冲区使用旧资源
         std::vector<Attachment> kAttachments = mRenderPass->XJGetAttachments();
         if(kAttachments.empty())
         {
             spdlog::error("Render pass has no attachments. ReCreate aborted.");
+            mFrameBuffers = std::move(oldFrameBuffers);
+            mDepthImages = std::move(oldDepthImages);
             return;
         }
         // 改为：分析所有附件
@@ -175,6 +187,8 @@ namespace XJ
         // 验证附件数量与渲染通道匹配
         if (colorAttachmentIndices.empty()) {
             spdlog::error("没有找到颜色附件");
+            mFrameBuffers = std::move(oldFrameBuffers);
+            mDepthImages = std::move(oldDepthImages);
             return;
         }
 
@@ -238,6 +252,8 @@ namespace XJ
                 
                 if (!colorImg->IsValid()) {
                     spdlog::error("颜色附件创建失败: 索引{}", colorIdx);
+                    mFrameBuffers = std::move(oldFrameBuffers);
+                    mDepthImages = std::move(oldDepthImages);
                     return;
                 }
                 frameColorImages.push_back(colorImg);
@@ -249,9 +265,11 @@ namespace XJ
                 int depthIdx = depthAttachmentIndices[0];
                 const Attachment& depthAttach = kAttachments[depthIdx];
                 
-                VulkanPhysicalDevices* physicalDevices = kRenderContext->XJGetPhysicalDevices();
+                XJVulkanPhysicalDevices* physicalDevices = kRenderContext->XJGetPhysicalDevices();
                 if (!physicalDevices) {
                     spdlog::error("获取物理设备失败");
+                    mFrameBuffers = std::move(oldFrameBuffers);
+                    mDepthImages = std::move(oldDepthImages);
                     return;
                 }
                 
@@ -265,6 +283,8 @@ namespace XJ
                 if (!depthImage->Create() || !depthImage->IsValid()) {
                     spdlog::error("深度图像创建失败，格式: {}, 采样数: {}", 
                                  vk_format_string(depthAttach.format), depthAttach.samples);
+                    mFrameBuffers = std::move(oldFrameBuffers);
+                    mDepthImages = std::move(oldDepthImages);
                     return;
                 }
                 spdlog::debug("深度附件创建成功，采样数: {}, 函数:{}", depthAttach.samples, __FILE__);
@@ -297,6 +317,8 @@ namespace XJ
                     spdlog::debug("解析附件创建成功，使用交换链图像");
                 } else {
                     spdlog::error("交换链图像不足");
+                    mFrameBuffers = std::move(oldFrameBuffers);
+                    mDepthImages = std::move(oldDepthImages);
                     return;
                 }
             }
@@ -326,6 +348,7 @@ namespace XJ
             if (!oldFrameBuffers.empty()) 
             {
                 mFrameBuffers = std::move(oldFrameBuffers);
+                mDepthImages = std::move(oldDepthImages);
                 spdlog::warn("帧缓冲重建失败，使用旧缓冲区");
             } else {
                 spdlog::error("帧缓冲创建失败且无旧缓冲区可恢复");

@@ -1,7 +1,7 @@
 #include "Render/Resource/XJTexture.h"
 #include "Graphic/XJVulkanBuffer.h"
 #include "Graphic/XJVulkanImage.h"
-#include "Graphic/VulkanImageView.h"
+#include "Graphic/XJVulkanImageView.h"
 #include "Graphic/XJVulkanDevice.h"
 #include "Render/XJRenderContext.h"
 #include "XJApplication.h"
@@ -37,7 +37,7 @@ namespace XJ
                  mFormat, VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT, 
                  VK_SAMPLE_COUNT_1_BIT);
         // 创建图像视图
-        mImageView = std::make_shared<VulkanImageView>(kDevice, mImage->XJGetImage(), mFormat, VK_IMAGE_ASPECT_COLOR_BIT);
+        mImageView = std::make_shared<XJVulkanImageView>(kDevice, mImage->XJGetImage(), mFormat, VK_IMAGE_ASPECT_COLOR_BIT);
 
         // copy data to buffer
         std::shared_ptr<XJVulkanBuffer> kStageBuffer = std::make_shared<XJVulkanBuffer>(kDevice, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, size, data, true);

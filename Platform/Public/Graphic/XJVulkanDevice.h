@@ -3,16 +3,16 @@
 
 #include "Edit/EditIncludes.h"
 #include "Graphic/VulkanCommon.h"
-#include "Graphic/VulkanQueue.h"
+#include "Graphic/XJVulkanQueue.h"
 //逻辑设备
 
 namespace XJ
 {   
 
-    // class VulkanQueue;
+    // class XJVulkanQueue;
 
     class XJVulkanCommandPool;
-    class VulkanPhysicalDevices;
+    class XJVulkanPhysicalDevices;
 
     struct VkSettings//创建逻辑设备的时候做存储
     {
@@ -27,7 +27,7 @@ namespace XJ
     {
       
         public:
-            XJVulkanDevice(VulkanPhysicalDevices* physicalDevices, uint32_t graphicsQueueCount, uint32_t presentQueueCount, const VkSettings &settings = {});
+            XJVulkanDevice(XJVulkanPhysicalDevices* physicalDevices, uint32_t graphicsQueueCount, uint32_t presentQueueCount, const VkSettings &settings = {});
             ~XJVulkanDevice();
             XJVulkanDevice(const XJVulkanDevice&) = delete;
             XJVulkanDevice& operator=(const XJVulkanDevice&) = delete;
@@ -40,10 +40,10 @@ namespace XJ
             VkPipelineCache XJGetPipelineCache() const { return mPipelineCache; }
 
 
-            VulkanQueue* XJGetGraphicQueue(uint32_t index) const { return index < mGraphicQueue.size() ? mGraphicQueue[index].get() : nullptr; }
-            VulkanQueue* XJGetFirstGraphicQueue() const { return XJGetGraphicQueue(0); }
-            VulkanQueue* XJGetPresentQueue(uint32_t index) const { return index < mPresentQueue.size() ? mPresentQueue[index].get() : nullptr; }
-            VulkanQueue* XJGetFirstPresentQueue() const { return XJGetPresentQueue(0); }
+            XJVulkanQueue* XJGetGraphicQueue(uint32_t index) const { return index < mGraphicQueue.size() ? mGraphicQueue[index].get() : nullptr; }
+            XJVulkanQueue* XJGetFirstGraphicQueue() const { return XJGetGraphicQueue(0); }
+            XJVulkanQueue* XJGetPresentQueue(uint32_t index) const { return index < mPresentQueue.size() ? mPresentQueue[index].get() : nullptr; }
+            XJVulkanQueue* XJGetFirstPresentQueue() const { return XJGetPresentQueue(0); }
 
             XJVulkanCommandPool *XJGetDefaultCmdPool() const { return mDefaultCmdPool.get(); }
 
@@ -57,10 +57,10 @@ namespace XJ
             void CreateDefaultCommandPool();//创建默认命令池
 
             VkDevice mDevice = VK_NULL_HANDLE;
-            VulkanPhysicalDevices *mPhysicalDevices;
+            XJVulkanPhysicalDevices *mPhysicalDevices;
 
-            std::vector<std::shared_ptr<VulkanQueue>> mGraphicQueue;
-            std::vector<std::shared_ptr<VulkanQueue>> mPresentQueue;
+            std::vector<std::shared_ptr<XJVulkanQueue>> mGraphicQueue;
+            std::vector<std::shared_ptr<XJVulkanQueue>> mPresentQueue;
             std::shared_ptr<XJVulkanCommandPool> mDefaultCmdPool;
 
             VkSettings settings;

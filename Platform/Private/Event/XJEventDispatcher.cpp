@@ -41,7 +41,10 @@ namespace XJ
                 observer.funchandler(event);//调用事件处理函数
             }
         }
-        spdlog::trace("Event {} dispatched in {} ms", event.XJGetEventTypeName(), stopwatch.elapsed().count() * 1000);//输出事件分发时间
+        if (event.XJGetEventType() != EVENT_TYPE_MOUSE_MOVE)
+        {
+            spdlog::trace("Event {} dispatched in {} ms", event.XJGetEventTypeName(), stopwatch.elapsed().count() * 1000);//输出事件分发时间
+        }
     }
 
     XJEventDispatcher* XJEventDispatcher::XJGetInstance()
@@ -68,7 +71,7 @@ namespace XJ
                     handlers.end(),
                     [observer](const EventHandlerEntry& handler)
                     {
-                        return handler.eventType == observer;
+                        return handler.observer == observer;
                     }),
                 handlers.end());
         }

@@ -10,8 +10,8 @@
 
 #include "ECS/XJEntity.h"//获取实体信息
 
-#include "Graphic/VulkanImageView.h"//获取图像视图信息
-#include "Graphic/VulkanPhysicalDevices.h"//获取物理设备信息
+#include "Graphic/XJVulkanImageView.h"//获取图像视图信息
+#include "Graphic/XJVulkanPhysicalDevices.h"//获取物理设备信息
 #include "ECS/Component/XJCameraComponent.h"//获取摄像机组件信息
 
 #include "Asset/Importer/XJTextureImporter.h"
@@ -24,7 +24,7 @@ namespace XJ
     {
 
         XJ::XJRenderContext *kRenderContext = XJApplication::XJGetAppContext()->renderContext;//获取渲染上下文信息
-        XJ::VulkanPhysicalDevices *kPhysicalDevices = kRenderContext->XJGetPhysicalDevices();//获取物理设备信息
+        XJ::XJVulkanPhysicalDevices *kPhysicalDevices = kRenderContext->XJGetPhysicalDevices();//获取物理设备信息
         XJ::XJVulkanDevice* kDevice = XJGetDevice();//获取逻辑设备信息
 
         VkPhysicalDevice physicalDevice  = kPhysicalDevices->XJGetPhysicalDevice();

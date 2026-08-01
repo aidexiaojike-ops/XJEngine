@@ -1,14 +1,78 @@
-#include "Graphic/VulkanPhysicalDevices.h"
+#include "Graphic/XJVulkanPhysicalDevices.h"
 
 
 namespace XJ
 {
-    VulkanPhysicalDevices::VulkanPhysicalDevices(VulkanInstance* instance, VulkanSurface* surface)
+    namespace
+    {
+        bool QuerySurfaceFormats(
+            VkPhysicalDevice physicalDevice,
+            VkSurfaceKHR surface,
+            std::vector<VkSurfaceFormatKHR>& outFormats)
+        {
+            outFormats.clear();
+
+            uint32_t formatCount = 0;
+            VkResult result = VK_SUCCESS;
+
+            do
+            {
+                result = vkGetPhysicalDeviceSurfaceFormatsKHR(
+                    physicalDevice,
+                    surface,
+                    &formatCount,
+                    nullptr);
+
+                XJDebug_Log(result);
+
+                if (result != VK_SUCCESS && result != VK_INCOMPLETE)
+                {
+                    spdlog::error(
+                        "vkGetPhysicalDeviceSurfaceFormatsKHR count query failed: {}",
+                        vk_result_string(result));
+                    outFormats.clear();
+                    return false;
+                }
+
+                if (formatCount == 0)
+                {
+                    spdlog::warn("Physical device has no surface formats.");
+                    outFormats.clear();
+                    return false;
+                }
+
+                outFormats.resize(formatCount);
+
+                result = vkGetPhysicalDeviceSurfaceFormatsKHR(
+                    physicalDevice,
+                    surface,
+                    &formatCount,
+                    outFormats.data());
+
+                XJDebug_Log(result);
+
+                if (result != VK_SUCCESS && result != VK_INCOMPLETE)
+                {
+                    spdlog::error(
+                        "vkGetPhysicalDeviceSurfaceFormatsKHR data query failed: {}",
+                        vk_result_string(result));
+                    outFormats.clear();
+                    return false;
+                }
+            }
+            while (result == VK_INCOMPLETE);
+
+            outFormats.resize(formatCount);
+            return !outFormats.empty();
+        }
+    }
+
+    XJVulkanPhysicalDevices::XJVulkanPhysicalDevices(XJVulkanInstance* instance, XJVulkanSurface* surface)
     {
         if (!instance || !surface || !surface->IsValid())
         {
-            spdlog::error("VulkanPhysicalDevices 参数错误，instance 或 surface 无效");
-            throw std::runtime_error("VulkanPhysicalDevices failed: invalid instance or surface");
+            spdlog::error("XJVulkanPhysicalDevices 参数错误，instance 或 surface 无效");
+            throw std::runtime_error("XJVulkanPhysicalDevices failed: invalid instance or surface");
         }
 
         VkSurfaceKHR vkSurface = surface->XJGetSurface();
@@ -25,7 +89,7 @@ namespace XJ
             if (physicalDeviceCount == 0)
             {
                 spdlog::error("未发现 Vulkan 物理设备");
-                throw std::runtime_error("VulkanPhysicalDevices failed: no physical devices");
+                throw std::runtime_error("XJVulkanPhysicalDevices failed: no physical devices");
             }
         
             physicalDevices.resize(physicalDeviceCount);
@@ -38,7 +102,7 @@ namespace XJ
             if (result != VK_SUCCESS && result != VK_INCOMPLETE)
             {
                 XJDebug_Log(result);
-                throw std::runtime_error("VulkanPhysicalDevices failed: enumerate physical devices failed");
+                throw std::runtime_error("XJVulkanPhysicalDevices failed: enumerate physical devices failed");
             }
         }
         while (result == VK_INCOMPLETE);
@@ -52,7 +116,7 @@ namespace XJ
         QueueFamilyInfo selectedGraphicQueueFamilyInfo{ -1, 0 };
         QueueFamilyInfo selectedPresentQueueFamilyInfo{ -1, 0 };
 
-        for(int32_t i = 0; i < static_cast<int32_t>(physicalDeviceCount); i++)//打印物理设备信息
+        for(uint32_t i = 0; i < physicalDeviceCount; ++i)//打印物理设备信息
         {
             VkPhysicalDeviceProperties deviceProperties;
             vkGetPhysicalDeviceProperties(physicalDevices[i], &deviceProperties);
@@ -60,55 +124,32 @@ namespace XJ
 
             uint32_t score = GetPhysicalDeviceScore(deviceProperties);
 
-            uint32_t formatCount = 0;
-            vkGetPhysicalDeviceSurfaceFormatsKHR(physicalDevices[i], vkSurface, &formatCount, nullptr);
-
             std::vector<VkSurfaceFormatKHR> surfaceFormats;
-            VkResult surfaceResult = VK_SUCCESS;
-
-            do
+            if (!QuerySurfaceFormats(physicalDevices[i], vkSurface, surfaceFormats))
             {
-                XJDebug_Log(vkGetPhysicalDeviceSurfaceFormatsKHR(
-                    physicalDevices[i],
-                    vkSurface,
-                    &formatCount,
-                    nullptr));
-                
-                surfaceFormats.resize(formatCount);
-                
-                surfaceResult = formatCount > 0
-                    ? vkGetPhysicalDeviceSurfaceFormatsKHR(
-                        physicalDevices[i],
-                        vkSurface,
-                        &formatCount,
-                        surfaceFormats.data())
-                    : VK_SUCCESS;
-                    
-                if (surfaceResult != VK_SUCCESS && surfaceResult != VK_INCOMPLETE)
-                {
-                    XJDebug_Log(surfaceResult);
-                    surfaceFormats.clear();
-                    break;
-                }
+                spdlog::warn("物理设备 {} 无法查询有效表面格式，跳过。", i);
+                continue;
             }
-            while (surfaceResult == VK_INCOMPLETE);
 
-            surfaceFormats.resize(formatCount);
-          
-            for(uint32_t j = 0; j < formatCount; j++)
+            for (uint32_t j = 0; j < static_cast<uint32_t>(surfaceFormats.size()); ++j)
             {
-                if(surfaceFormats[j].format == VK_FORMAT_B8G8R8A8_SRGB &&
-                   surfaceFormats[j].colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR)
+                if (surfaceFormats[j].format == VK_FORMAT_B8G8R8A8_SRGB &&
+                    surfaceFormats[j].colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR)
                 {
                     score += 100;
                     spdlog::trace("  物理设备支持首选的表面格式 VK_FORMAT_B8G8R8A8_SRGB 和 VK_COLOR_SPACE_SRGB_NONLINEAR_KHR");
                 }
-                spdlog::trace("  支持的表面格式 {}: Format = {}, ColorSpace = {}", j, vk_format_string(surfaceFormats[j].format), vk_color_space_string(surfaceFormats[j].colorSpace));
+            
+                spdlog::trace(
+                    "  支持的表面格式 {}: Format = {}, ColorSpace = {}",
+                    j,
+                    vk_format_string(surfaceFormats[j].format),
+                    vk_color_space_string(surfaceFormats[j].colorSpace));
             }
-            if(score < maxScore)//当前设备分数不可能成为更优选择
+            if (score < maxScore)//只有更低分才跳过；同分设备允许后到者覆盖先到者
             {
                 continue;
-            } 
+            }
             
             // ★ 必须：初始化为无效值
             QueueFamilyInfo localGraphicQueueFamilyInfo{ -1, 0 };
@@ -145,7 +186,18 @@ namespace XJ
             
                 //检查显示队列支持
                 VkBool32 presentSupport = VK_FALSE;
-                vkGetPhysicalDeviceSurfaceSupportKHR(physicalDevices[i], k, /*VkSurfaceKHR*/vkSurface, &presentSupport);
+                VkResult presentResult = vkGetPhysicalDeviceSurfaceSupportKHR(
+                    physicalDevices[i],
+                    k,
+                    vkSurface,
+                    &presentSupport);
+                
+                if (presentResult != VK_SUCCESS)
+                {
+                    XJDebug_Log(presentResult);
+                    spdlog::warn("查询队列族 {} 的 present support 失败: {}", k, vk_result_string(presentResult));
+                    presentSupport = VK_FALSE;
+                }
                 if(localPresentQueueFamilyInfo.queueFamilyIndex == -1 && presentSupport)
                 {
                     localPresentQueueFamilyInfo.queueFamilyIndex = static_cast<int32_t>(k);
@@ -187,7 +239,7 @@ namespace XJ
             }
         
             maxScore = score;
-            maxScorePhyDeviceIndex = i;
+            maxScorePhyDeviceIndex = static_cast<int32_t>(i);
             selectedGraphicQueueFamilyInfo = localGraphicQueueFamilyInfo;
             selectedPresentQueueFamilyInfo = localPresentQueueFamilyInfo;
         
@@ -216,13 +268,13 @@ namespace XJ
             GraphicQueueFamilyInfo.queueFamilyIndex,
             PresentQueueFamilyInfo.queueFamilyIndex);
     }
-    VulkanPhysicalDevices::~VulkanPhysicalDevices()
+    XJVulkanPhysicalDevices::~XJVulkanPhysicalDevices()
     {
         //待实现
         spdlog::trace("{0} : 销毁 physicalDevice 物理设备 : {1}", __FUNCTION__, (void*)physicalDevice);       
 
     }
-    void VulkanPhysicalDevices::VkDebugPhyPhysicalDevicesCallback(VkPhysicalDeviceProperties &deviceProperties)
+    void XJVulkanPhysicalDevices::VkDebugPhyPhysicalDevicesCallback(VkPhysicalDeviceProperties &deviceProperties)
     {
         spdlog::trace("---------------------检查物理设备--------------------");
 
@@ -250,7 +302,7 @@ namespace XJ
 
          spdlog::trace("---------------------物理设备完成--------------------");
     }
-    uint32_t VulkanPhysicalDevices::GetPhysicalDeviceScore(VkPhysicalDeviceProperties &deviceProperties)//设备评分
+    uint32_t XJVulkanPhysicalDevices::GetPhysicalDeviceScore(VkPhysicalDeviceProperties &deviceProperties)//设备评分
     {
         VkPhysicalDeviceType deviceType = deviceProperties.deviceType;
         uint32_t score = 0;

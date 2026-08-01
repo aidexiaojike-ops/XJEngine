@@ -67,7 +67,7 @@ namespace XJ
             virtual void ReleaseDescriptor();
             virtual bool BeginViewportRender(VkCommandBuffer cmd);
             virtual void EndViewportRender(VkCommandBuffer cmd);
-            virtual void CreateRenderPass(VulkanPhysicalDevices* physicalDevices);
+            virtual void CreateRenderPass(XJVulkanPhysicalDevices* physicalDevices);
 
         protected:
 

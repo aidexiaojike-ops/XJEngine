@@ -1,5 +1,5 @@
-#ifndef XJ_VULAKN_SWAPCHAIN_H
-#define XJ_VULAKN_SWAPCHAIN_H
+#ifndef XJ_VULKAN_SWAPCHAIN_H
+#define XJ_VULKAN_SWAPCHAIN_H
 
 #include "Edit/EditIncludes.h"
 #include "Graphic/VulkanCommon.h"
@@ -7,8 +7,8 @@
 namespace XJ
 {
     class XJVulkanDevice;
-    class VulkanPhysicalDevices;
-    class VulkanSurface;
+    class XJVulkanPhysicalDevices;
+    class XJVulkanSurface;
 
     struct SurfaceInfo
     {
@@ -40,9 +40,9 @@ namespace XJ
             VkSwapchainKHR  mSwapchain = VK_NULL_HANDLE;
             std::vector<VkImage> mImages;//存储交换链里面的图片  
 
-            VulkanPhysicalDevices* mPhysicalDevice;
+            XJVulkanPhysicalDevices* mPhysicalDevice;
             XJVulkanDevice* mDevice;
-            VulkanSurface* mSurface;
+            XJVulkanSurface* mSurface;
 
             int32_t mCurrentImageIndex = -1;//当前图片索引
 
@@ -51,7 +51,7 @@ namespace XJ
             VkExtent2D mExtent{0, 0};
 
         public:
-            XJVulkanSwapchain(VulkanPhysicalDevices* physicalDevice, XJVulkanDevice* device, VulkanSurface* surface);
+            XJVulkanSwapchain(XJVulkanPhysicalDevices* physicalDevice, XJVulkanDevice* device, XJVulkanSurface* surface);
             ~XJVulkanSwapchain();
             XJVulkanSwapchain(const XJVulkanSwapchain&) = delete;
             XJVulkanSwapchain& operator=(const XJVulkanSwapchain&) = delete;

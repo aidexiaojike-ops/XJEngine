@@ -1,14 +1,14 @@
-#ifndef VULKAN_SURFACE_H
-#define VULKAN_SURFACE_H
+#ifndef XJ_VULKAN_SURFACE_H
+#define XJ_VULKAN_SURFACE_H
 
 
 #include "Edit/EditIncludes.h"
 #include "Edit/XJGlfwWindow.h"
-#include "Graphic/VulkanInstance.h"
+#include "Graphic/XJVulkanInstance.h"
 
 namespace XJ
 {
-    class VulkanSurface
+    class XJVulkanSurface
     {
         private:
             // Borrowed window; owner must keep it alive while the render context is alive.
@@ -18,11 +18,11 @@ namespace XJ
             VkInstance mInstance = VK_NULL_HANDLE;
             VkSurfaceKHR mSurface = VK_NULL_HANDLE;
         public:
-            VulkanSurface(XJGlfwWindow* window,VulkanInstance* instance);
-            ~VulkanSurface();
+            XJVulkanSurface(XJGlfwWindow* window,XJVulkanInstance* instance);
+            ~XJVulkanSurface();
 
-            VulkanSurface(const VulkanSurface&) = delete;
-            VulkanSurface& operator=(const VulkanSurface&) = delete;
+            XJVulkanSurface(const XJVulkanSurface&) = delete;
+            XJVulkanSurface& operator=(const XJVulkanSurface&) = delete;
             
             // 可选：提供获取Surface的接口
             VkSurfaceKHR XJGetSurface() { return mSurface; }

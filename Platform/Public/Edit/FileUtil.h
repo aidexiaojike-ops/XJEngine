@@ -22,13 +22,12 @@
 #define XJ_RES_MODEL_DIR                        XJ_RES_ROOT_DIR"Model/"
 #define XJ_RES_MATERIAL_DIR                     XJ_RES_ROOT_DIR"Material/"
 #define XJ_RES_TEXTURE_DIR                      XJ_RES_ROOT_DIR"Texture/"
-#define XJ_RES_SCRNE_DIR                        XJ_RES_ROOT_DIR"Scene/"
+#define XJ_RES_SCENE_DIR                        XJ_RES_ROOT_DIR"Scene/"
+#define XJ_RES_SCRNE_DIR                        XJ_RES_SCENE_DIR
 #define XJ_RES_MESH_DIR                         XJ_RES_ROOT_DIR"Mesh/"
 
 namespace XJ
 {  
-#define NUM_MATERIAL_BATCH                  16
-#define NUM_MATERIAL_BATCH_MAX              2048
      //获取文件名
     static std::string GetFileName(const std::string &filePath)
     {
