@@ -1,6 +1,7 @@
 #ifndef XJ_APPLICATION_CONTEXT_H
 #define XJ_APPLICATION_CONTEXT_H
 
+#include <cstdint>
 
 namespace XJ
 {
@@ -13,6 +14,7 @@ namespace XJ
         XJApplication *app = nullptr;
         XJScene *scene = nullptr;
         XJRenderContext *renderContext = nullptr;
+        uint32_t renderFrameSlot = 0;
     };
 }
 

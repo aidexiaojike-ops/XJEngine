@@ -4,6 +4,7 @@
 #include "Render/Resource/XJMesh.h"
 #include "Render/Resource/XJMaterial.h"
 #include "ECS/XJComponent.h"
+#include <memory>
 
 namespace XJ
 {
@@ -11,19 +12,20 @@ namespace XJ
     class XJMaterialComponent : public XJComponent
     {
         private:
-            /* data */
-            std::vector<XJMesh*> mMeshList; 
+            // 组件持有 Mesh 的 shared_ptr，避免场景实例化上下文析构后 Mesh 被释放。
+            std::vector<std::shared_ptr<XJMesh>> mMeshList; 
+            
+            // Material 目前由 MaterialFactory 管理生命周期，这里先保留裸指针作为分组 key。
             std::unordered_map<T*, std::vector<uint32_t>> mMeshMaterials;
         public:
-         
-
-            void AddMesh(XJMesh *mesh, T *material = nullptr)//添加网格
+            void AddMesh(std::shared_ptr<XJMesh> mesh, T *material = nullptr)//添加网格
             {
                 if(!mesh)
                 {
                     return;
                 }
-                uint32_t meshIndex = mMeshList.size();
+                uint32_t meshIndex = static_cast<uint32_t>(mMeshList.size());
+                // 保存 shared_ptr 所有权，保证组件存在期间 Mesh 不会释放。
                 mMeshList.push_back(mesh);
 
                 if(mMeshMaterials.find(material) != mMeshMaterials.end())
@@ -38,7 +40,7 @@ namespace XJ
 
             uint32_t XJGetMaterialCount()const
             {
-                return mMeshMaterials.size();
+                return static_cast<uint32_t>(mMeshMaterials.size());
             }//获取材质数量
             const std::unordered_map<T*, std::vector<uint32_t>> &XJGetMeshMaterials() const
             {
@@ -48,10 +50,19 @@ namespace XJ
             {
                 if(index < mMeshList.size())
                 {
-                    return mMeshList[index];
+                    return mMeshList[index].get();
                 }
                 return nullptr;
             }//获取mesh指针
+
+            std::shared_ptr<XJMesh> XJGetMeshShared(uint32_t index) const
+            {
+                if(index < mMeshList.size())
+                {
+                    return mMeshList[index];
+                }
+                return nullptr;
+            }
 
     };
     

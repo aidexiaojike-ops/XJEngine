@@ -22,8 +22,10 @@ namespace XJ
             return false;
         }
 
-        if (!runtime.FrameUboBuffer ||
-            runtime.FrameUboDescSet == VK_NULL_HANDLE ||
+        const uint32_t frameSlot = context.FrameSlot % RENDERER_NUM_BUFFER;
+
+        if (!runtime.FrameUboBuffers[frameSlot] ||
+            runtime.FrameUboDescSets[frameSlot] == VK_NULL_HANDLE ||
             !runtime.ShaderLayout.HasPrimaryFrameUbo())
         {
             spdlog::warn("Skip frame UBO update: pipeline runtime frame resources are invalid.");
@@ -39,24 +41,8 @@ namespace XJ
             .time = context.Time
         };
 
-        runtime.FrameUboBuffer->WriteData(&frameUbo);
-
-        VkDescriptorBufferInfo bufferInfo =
-            DescriptorSetWriter::BuildBufferInfo(
-                runtime.FrameUboBuffer->XJGetBuffer(),
-                0,
-                sizeof(frameUbo));
-
-        VkWriteDescriptorSet bufferWrite =
-            DescriptorSetWriter::WriteBuffer(
-                runtime.FrameUboDescSet,
-                runtime.ShaderLayout.PrimaryFrameUboBinding,
-                VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-                &bufferInfo);
-
-        DescriptorSetWriter::UpdateDescriptorSets(
-            context.Device->XJGetDevice(),
-            { bufferWrite });
+        // Descriptor set was written once during runtime creation; each frame only updates its own UBO buffer.
+        runtime.FrameUboBuffers[frameSlot]->WriteData(&frameUbo);
 
         return true;
     }
@@ -65,6 +51,7 @@ namespace XJ
         XJVulkanDevice* device,
         XJMaterialPipelineRuntime& runtime,
         VkDescriptorSet descSet,
+        uint32_t materialBufferIndex,
         XJMaterial* material)
     {
         if (!device)
@@ -99,21 +86,22 @@ namespace XJ
         if (!XJMaterialPipelineRuntimeDescriptor::EnsureMaterialBuffer(
                 device,
                 runtime,
-                material->GetIndex(),
+                materialBufferIndex,
                 block.GetSize()))
         {
             return false;
         }
 
-        if (material->GetIndex() >= runtime.MaterialBuffers.size())
+        if (materialBufferIndex >= runtime.MaterialBuffers.size())
         {
             spdlog::warn(
-                "Skip material params update: material {} buffer index out of bounds.",
-                material->GetIndex());
+                "Skip material params update: material {} buffer index {} out of bounds.",
+                material->GetIndex(),
+                materialBufferIndex);
             return false;
         }
 
-        XJVulkanBuffer* materialBuffer = runtime.MaterialBuffers[material->GetIndex()].get();
+        XJVulkanBuffer* materialBuffer = runtime.MaterialBuffers[materialBufferIndex].get();
         if (!materialBuffer)
             return false;
 

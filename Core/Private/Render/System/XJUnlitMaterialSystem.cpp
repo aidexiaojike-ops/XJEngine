@@ -145,6 +145,7 @@ namespace XJ
         std::unordered_set<XJMaterialPipelineRuntime*> updatedFrameRuntimes;
         //材质是否更新
         std::unordered_map<XJMaterialPipelineRuntime*, std::vector<bool>> updateFlagsByRuntime;
+        const uint32_t frameSlot = uploadContext.FrameSlot % RENDERER_NUM_BUFFER;
 
         for (const XJMaterialRenderItem& item : renderItems)
         {
@@ -154,6 +155,13 @@ namespace XJ
                 spdlog::error("TODO: Default material of error material ?");
                 continue;
             }
+                        
+            if (!item.Mesh)
+            {
+                continue;
+            }
+
+            
         
             const uint32_t materialIndex = material->GetIndex();
         
@@ -175,9 +183,12 @@ namespace XJ
                 runtime->Pipeline->BindPipeline(cmdBuffer);
                 boundRuntime = runtime;
             }
-            //越界保护
-            if (materialIndex >= runtime->MaterialParamDescSets.size() ||
-                materialIndex >= runtime->MaterialResourceDescSets.size())
+            const uint32_t descriptorIndex = frameSlot * runtime->LastDescriptorSetCount + materialIndex;
+
+            // 每个 frame slot 使用独立的材质 descriptor set，避免更新 pending command buffer 正在使用的 set。
+            if (materialIndex >= runtime->LastDescriptorSetCount ||
+                descriptorIndex >= runtime->MaterialParamDescSets.size() ||
+                descriptorIndex >= runtime->MaterialResourceDescSets.size())
             {
                 spdlog::warn(
                     "Skip material {}: descriptor set index is out of bounds.",
@@ -186,21 +197,23 @@ namespace XJ
             }
         
             auto& runtimeUpdateFlags = updateFlagsByRuntime[runtime];
-            if (runtimeUpdateFlags.size() < kMaterialCount)
-                runtimeUpdateFlags.resize(kMaterialCount, false);
+            const uint32_t runtimeUpdateFlagCount = runtime->LastDescriptorSetCount * RENDERER_NUM_BUFFER;
+            if (runtimeUpdateFlags.size() < runtimeUpdateFlagCount)
+                runtimeUpdateFlags.resize(runtimeUpdateFlagCount, false);
         
             const bool forceUpdateRuntime =
                 forceUpdateRuntimes.find(runtime) != forceUpdateRuntimes.end();
         
-            VkDescriptorSet paramsDescSet = runtime->MaterialParamDescSets[materialIndex];
-            VkDescriptorSet resourceDescSet = runtime->MaterialResourceDescSets[materialIndex];
+            VkDescriptorSet paramsDescSet = runtime->MaterialParamDescSets[descriptorIndex];
+            VkDescriptorSet resourceDescSet = runtime->MaterialResourceDescSets[descriptorIndex];
         
-            if (!runtimeUpdateFlags[materialIndex] || forceUpdateRuntime)
+            if (!runtimeUpdateFlags[descriptorIndex] || forceUpdateRuntime)
             {
                 XJMaterialRuntimeUploader::UpdateMaterialParamsDescSet(
                     uploadContext.Device,
                     *runtime,
                     paramsDescSet,
+                    descriptorIndex,
                     material);
                 
                 material->FinishFlushParams();
@@ -213,12 +226,12 @@ namespace XJ
                 
                 material->FinishFlushResoure();
                 
-                runtimeUpdateFlags[materialIndex] = true;
+                runtimeUpdateFlags[descriptorIndex] = true;
             }
         
             VkDescriptorSet descriptorSets[] =
             {
-                runtime->FrameUboDescSet,
+                runtime->FrameUboDescSets[frameSlot],
                 paramsDescSet,
                 resourceDescSet
             };
@@ -242,7 +255,7 @@ namespace XJ
                 0,
                 sizeof(pc),
                 &pc);
-            
+
             item.Mesh->Draw(cmdBuffer);
         }
         

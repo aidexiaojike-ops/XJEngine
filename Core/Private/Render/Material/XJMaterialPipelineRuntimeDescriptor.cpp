@@ -54,15 +54,17 @@ namespace XJ
         //重新申请池子
         std::vector<VkDescriptorPoolSize> poolSizes;
 
+        const uint32_t totalDescriptorSetCount = newDescriptorSetCount * RENDERER_NUM_BUFFER;
+
         auto paramPoolSizes = BuildDescriptorPoolSizes(
             runtime.ShaderLayout.Reflection,
             runtime.ShaderLayout.MaterialParameterSet,
-            newDescriptorSetCount);
+            totalDescriptorSetCount);
 
         auto resourcePoolSizes = BuildDescriptorPoolSizes(
             runtime.ShaderLayout.Reflection,
             runtime.ShaderLayout.MaterialResourceSet,
-            newDescriptorSetCount);
+            totalDescriptorSetCount);
 
         poolSizes.insert(poolSizes.end(), paramPoolSizes.begin(), paramPoolSizes.end());
 
@@ -72,28 +74,28 @@ namespace XJ
         runtime.MaterialDescriptorPool =
             std::make_shared<XJ::XJVulkanDescriptorPool>(
                 device,
-                newDescriptorSetCount * 2,
+                totalDescriptorSetCount * 2,
                 poolSizes);
 
         runtime.MaterialParamDescSets =
-            runtime.MaterialDescriptorPool->AllocateDescriptorSet(
+                runtime.MaterialDescriptorPool->AllocateDescriptorSet(
                 runtime.MaterialParamDescSetLayout.get(),
-                newDescriptorSetCount);
+                totalDescriptorSetCount);
 
         runtime.MaterialResourceDescSets =
-            runtime.MaterialDescriptorPool->AllocateDescriptorSet(
+                runtime.MaterialDescriptorPool->AllocateDescriptorSet(
                 runtime.MaterialResourceDescSetLayout.get(),
-                newDescriptorSetCount);
+                totalDescriptorSetCount);
 
-        if (runtime.MaterialParamDescSets.size() != newDescriptorSetCount ||
-            runtime.MaterialResourceDescSets.size() != newDescriptorSetCount)
+        if (runtime.MaterialParamDescSets.size() != totalDescriptorSetCount ||
+            runtime.MaterialResourceDescSets.size() != totalDescriptorSetCount)
         {
             spdlog::error("ReCreateMaterialDescPool failed: descriptor set allocation count mismatch.");
             return false;
         }
-    // 差值用来创建uBuffer
-        runtime.MaterialBuffers.resize(newDescriptorSetCount);
-        runtime.MaterialBufferSizes.resize(newDescriptorSetCount, 0);
+        // 材质 UBO buffer 也按 frame slot 展开，避免当前帧写入覆盖其他 pending 帧读取的数据。
+        runtime.MaterialBuffers.resize(totalDescriptorSetCount);
+        runtime.MaterialBufferSizes.resize(totalDescriptorSetCount, 0);
         runtime.LastDescriptorSetCount = newDescriptorSetCount;
 
         return true;

@@ -83,6 +83,7 @@ namespace XJ
         if (XJApplication* app = XJGetApp())
         {
             context.FrameId = static_cast<uint32_t>(app->XJGetFrameIndex());
+            context.FrameSlot = XJApplication::XJGetAppContext()->renderFrameSlot;
             context.Time = app->XJGetStartTimeSecond();
         }
 

@@ -63,7 +63,7 @@ namespace XJ
                 defaultSampler);
 
             if (material)
-                comp.AddMesh(gpuMesh.get(), material.get());
+                comp.AddMesh(gpuMesh, material.get());
         }
 
         uiState.Selection.SelectedEntity = static_cast<XJEditorEntityId>(entity->XJGetUUID());

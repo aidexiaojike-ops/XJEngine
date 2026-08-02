@@ -16,6 +16,7 @@
 
 #include "Asset/Importer/XJTextureImporter.h"
 #include "Render/Resource/XJTextureFactory.h"
+#include "Render/Resource/XJTexture.h"
 
 namespace XJ
 {
@@ -75,40 +76,91 @@ namespace XJ
         std::vector<VkDescriptorPoolSize> kPoolSizes = 
         {
             {
-               .type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,      // ← 新增：binding 0 用
-               .descriptorCount = 1
-           },
+                .type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+                .descriptorCount = RENDERER_NUM_BUFFER
+            },
             {
                 .type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC,
-                .descriptorCount = 1
+                .descriptorCount = RENDERER_NUM_BUFFER
             },
             {
                 .type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-                .descriptorCount = 2
+                .descriptorCount = RENDERER_NUM_BUFFER * 2
             },
         };
 
-
-        mDescriptorPool = std::make_shared<XJ::XJVulkanDescriptorPool>(kDevice, 1, kPoolSizes);
-        mDescriptorSets = mDescriptorPool->AllocateDescriptorSet(mDescriptorSetLayout.get(), 1);
+        mDescriptorPool = std::make_shared<XJ::XJVulkanDescriptorPool>(
+            kDevice,
+            RENDERER_NUM_BUFFER,
+            kPoolSizes);
+        
+        mDescriptorSets = mDescriptorPool->AllocateDescriptorSet(
+            mDescriptorSetLayout.get(),
+            RENDERER_NUM_BUFFER);
+        
+        if (mDescriptorSets.size() != RENDERER_NUM_BUFFER)
+        {
+            spdlog::error("XJBaseMaterialSystem descriptor set allocation failed");
+            return;
+        }
         if (mDescriptorSets.empty())
         {
             spdlog::error("XJBaseMaterialSystem descriptor set allocation failed");//如果默认会用 mDescriptorSets[0]，这里马上检查
             return;
         }
         //buffer的资源准备
-        mGlobalBuffer = std::make_shared<XJ::XJVulkanBuffer>(kDevice, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT, sizeof(mGlobalUbo),nullptr,true);
-        mInstanceBuffer = std::make_shared<XJ::XJVulkanBuffer>(kDevice, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT, MAX_ENTITIES * mDynamicAlignment, nullptr, true);
+       for (uint32_t frameSlot = 0; frameSlot < RENDERER_NUM_BUFFER; ++frameSlot)
+        {
+            // 每个帧槽位一套 UBO buffer，防止当前帧 WriteData 覆盖 GPU 正在读的上一帧。
+            mGlobalBuffers[frameSlot] = std::make_shared<XJ::XJVulkanBuffer>(
+                kDevice,
+                VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+                sizeof(GlobalUbo),
+                nullptr,
+                true);
+            
+            mInstanceBuffers[frameSlot] = std::make_shared<XJ::XJVulkanBuffer>(
+                kDevice,
+                VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+                MAX_ENTITIES * mDynamicAlignment,
+                nullptr,
+                true);
+        }
         //贴图
         auto kAssetA = XJTextureImporter::ImportTexture(XJ_RES_TEXTURE_DIR"R.png");
-        if (kAssetA) mTextureA = XJTextureFactory::CreateTextureFromAsset(*kAssetA);
+        if (kAssetA)
+        {
+            mTextureA = XJTextureFactory::CreateTextureFromAsset(*kAssetA);
+        }
+
         auto kAssetB = XJTextureImporter::ImportTexture(XJ_RES_TEXTURE_DIR"R-C.jpeg");
-        if (kAssetB) mTextureB = XJTextureFactory::CreateTextureFromAsset(*kAssetB);
+        if (kAssetB)
+        {
+            mTextureB = XJTextureFactory::CreateTextureFromAsset(*kAssetB);
+        }
+
+        // 硬编码资源缺失时使用 1x1 占位纹理，避免后续 descriptor 写入时解引用空纹理。
+        if (!mTextureA)
+        {
+            RGBAColor whitePixel{255, 255, 255, 255};
+            mTextureA = std::make_shared<XJTexture>(1, 1, &whitePixel);
+            spdlog::warn("Texture R.png missing, using 1x1 white fallback.");
+        }
+
+        if (!mTextureB)
+        {
+            RGBAColor blackPixel{0, 0, 0, 255};
+            mTextureB = std::make_shared<XJTexture>(1, 1, &blackPixel);
+            spdlog::warn("Texture R-C.jpeg missing, using 1x1 black fallback.");
+        }
         // 新增：初始化采样器
         mSamplerA = std::make_shared<XJ::XJSampler>(VK_FILTER_LINEAR, VK_SAMPLER_ADDRESS_MODE_REPEAT);
         mSamplerB = std::make_shared<XJ::XJSampler>(VK_FILTER_LINEAR, VK_SAMPLER_ADDRESS_MODE_REPEAT);
 
-
+        // descriptor 绑定的 buffer/image/sampler 句柄不变，只需要初始化时写一次。
+        // 每帧重写正在被 GPU 使用的 descriptor set 会造成 host 写/GPU 读竞争。
+        UpdateDescriptorSets();
+        
         XJ::ShaderLayout mShaderLayout;
         mShaderLayout.descriptorSetLayouts = {mDescriptorSetLayout->XJGetDescriptorSet()};
 
@@ -207,19 +259,21 @@ namespace XJ
         //透视投影矩阵   CameraCompionent 里设置投影矩阵和视图矩阵
         glm::mat4 projMat = XJGetProjMat(renderTarget);
         glm::mat4 viewMat = XJGetViewMat(renderTarget);
-          // 更新全局UBO
-        mGlobalBuffer->WriteData(&mGlobalUbo);
         
         // 将投影和视图矩阵赋值给全局UBO
-        mGlobalUbo.projMat = projMat;
-        mGlobalUbo.viewMat = viewMat;
+        const uint32_t frameSlot = XJApplication::XJGetAppContext()->renderFrameSlot;
+            
+        // 先更新当前帧槽位的 CPU UBO，再上传到对应 GPU buffer。
+        // 每个 in-flight 帧槽位一份 buffer，避免覆盖 GPU 仍在读取的上一帧数据。
+        mGlobalUbo[frameSlot].projMat = projMat;
+        mGlobalUbo[frameSlot].viewMat = viewMat;
+        mGlobalBuffers[frameSlot]->WriteData(&mGlobalUbo[frameSlot]);
      
-         // 在循环外更新描述符集（只更新一次）
-        UpdateDescriptorSets(cmdBuffer);
+        // descriptor set 在 OnInit 写入一次；每帧只更新 UBO buffer 内容。
 
         uint32_t kEntityIndex = 0; // 实体索引，用于动态UBO偏移计算
         //setup custiom params
-        kView.each([this, &cmdBuffer, &kEntityIndex, projMat, viewMat](const auto &entity, const XJTransformComponent& transComp, const XJBaseMaterialComponent& matComp)
+        kView.each([this, &cmdBuffer, &kEntityIndex, frameSlot](const auto &entity, const XJTransformComponent& transComp, const XJBaseMaterialComponent& matComp)
         {
             auto kMeshMaterials = matComp.XJGetMeshMaterials();
             for(const auto&entry :kMeshMaterials)//要是没有材质酒放弃渲染
@@ -247,16 +301,17 @@ namespace XJ
 
                     if(kMesh && kEntityIndex < MAX_ENTITIES)
                     {
-                        mInstanceUbo.modelMat = transComp.modelMatrix;//设置实例UBO的模型矩阵
+                        mInstanceUbo[frameSlot].modelMat = transComp.modelMatrix;//设置实例UBO的模型矩阵
 
                         //计算动态UBO偏移
                         uint32_t kOffset = kEntityIndex * mDynamicAlignment;
-                        //更新实例UBO数据到动态统一缓冲区
-                        mInstanceBuffer->WriteDataOffset(&mInstanceUbo, kOffset, sizeof(InstanceUbo));//UBO写入数据偏移
+                        // 当前帧槽位写入自己的实例缓冲，避免覆盖 GPU 正在读取的其他帧数据。
+                        mInstanceBuffers[frameSlot]->WriteDataOffset(&mInstanceUbo[frameSlot], kOffset, sizeof(InstanceUbo));//UBO写入数据偏移
 
                         //使用动态偏移绑定描述符集并绘制网格
                         uint32_t kDynamicOffset = kOffset; // 计算动态偏移
-                        vkCmdBindDescriptorSets(cmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, mPipelineLayout->XJGetPipelineLayout(), 0, 1,  mDescriptorSets.data(), 1, &kDynamicOffset);
+                        VkDescriptorSet descriptorSet = mDescriptorSets[frameSlot];
+                        vkCmdBindDescriptorSets(cmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, mPipelineLayout->XJGetPipelineLayout(), 0, 1,  &descriptorSet, 1, &kDynamicOffset);
                         kMesh->Draw(cmdBuffer);
                         kEntityIndex++; // 增加实体索引
                     }
@@ -279,88 +334,80 @@ namespace XJ
         mDescriptorSetLayout.reset();
         mDescriptorPool.reset();
     }
-    void XJBaseMaterialSystem::UpdateDescriptorSets(VkCommandBuffer cmdBuffer)
+    void XJBaseMaterialSystem::UpdateDescriptorSets()
     {
-        if (mDescriptorSets.empty() || mDescriptorSets[0] == VK_NULL_HANDLE) 
+        if (!mTextureA || !mTextureA->XJGetImageView() ||
+            !mTextureB || !mTextureB->XJGetImageView() ||
+            !mSamplerA || !mSamplerB)
         {
-            spdlog::error("UpdateDescriptorSets called but mDescriptorSets[0] is null!");
+            spdlog::error("UpdateDescriptorSets failed: texture or sampler is not ready.");
             return;
         }
-        XJ::XJRenderContext *kRenderContext = XJ::XJApplication::XJGetAppContext()->renderContext;
+
         XJ::XJVulkanDevice* kDevice = XJGetDevice();
-
-        VkDescriptorBufferInfo globalBufferInfo{};
-        globalBufferInfo.buffer = mGlobalBuffer->XJGetBuffer();
-        globalBufferInfo.offset = 0;
-        globalBufferInfo.range = sizeof(mGlobalUbo);
-
-        VkDescriptorBufferInfo instanceBufferInfo{};
-        instanceBufferInfo.buffer = mInstanceBuffer->XJGetBuffer();
-        instanceBufferInfo.offset = 0;
-        instanceBufferInfo.range = sizeof(InstanceUbo);//// 单个实例大小
-
-        VkDescriptorImageInfo textureAImageBufferInfo{};
-        textureAImageBufferInfo.sampler = mSamplerA->XJGetSampler();
-        textureAImageBufferInfo.imageView = mTextureA->XJGetImageView()->XJGetImageView();
-        textureAImageBufferInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-
-        VkDescriptorImageInfo textureBImageBufferInfo{};
-        textureBImageBufferInfo.sampler = mSamplerB->XJGetSampler();
-        textureBImageBufferInfo.imageView = mTextureB->XJGetImageView()->XJGetImageView();
-        textureBImageBufferInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-
-        VkDescriptorSet descriptorSet = mDescriptorSets[0];
-
-        std::vector<VkWriteDescriptorSet> writeDescriptorSet = 
+        if (!kDevice || !kDevice->IsValid())
         {
-            {
-                .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-                .pNext = nullptr,
-                .dstSet = descriptorSet,
-                .dstBinding = 0,
-                .dstArrayElement = 0,
-                .descriptorCount = 1,
-                .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-                .pBufferInfo = &globalBufferInfo
-                
-            },//全局参数
-            {
-                .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-                .pNext = nullptr,
-                .dstSet = descriptorSet,
-                .dstBinding = 1,
-                .dstArrayElement = 0,
-                .descriptorCount = 1,
-                .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC,
-                .pBufferInfo = &instanceBufferInfo
-                
-            },//实例参数
-            {
-                .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-                .pNext = nullptr,
-                .dstSet = descriptorSet,
-                .dstBinding = 2,
-                .dstArrayElement = 0,
-                .descriptorCount = 1,
-                .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-                .pImageInfo  = &textureAImageBufferInfo
-                
-            },//贴图A
-            {
-                .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-                .pNext = nullptr,
-                .dstSet = descriptorSet,
-                .dstBinding = 3,
-                .dstArrayElement = 0,
-                .descriptorCount = 1,
-                .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-                .pImageInfo  = &textureBImageBufferInfo
-                
-            }//贴图B
-        };
+            spdlog::error("UpdateDescriptorSets failed: device is invalid.");
+            return;
+        }
 
-        vkUpdateDescriptorSets(kDevice->XJGetDevice(),
-        writeDescriptorSet.size(), writeDescriptorSet.data(), 0, nullptr);
+        if (mDescriptorSets.size() != RENDERER_NUM_BUFFER)
+        {
+            spdlog::error("UpdateDescriptorSets failed: descriptor set count is invalid.");
+            return;
+        }
+
+        for (uint32_t frameSlot = 0; frameSlot < RENDERER_NUM_BUFFER; ++frameSlot)
+        {
+            if (mDescriptorSets[frameSlot] == VK_NULL_HANDLE ||
+                !mGlobalBuffers[frameSlot] ||
+                !mInstanceBuffers[frameSlot])
+            {
+                spdlog::error("UpdateDescriptorSets failed: frame resource {} is invalid.", frameSlot);
+                return;
+            }
+        }
+        std::array<VkDescriptorBufferInfo, RENDERER_NUM_BUFFER> globalBufferInfos{};
+        std::array<VkDescriptorBufferInfo, RENDERER_NUM_BUFFER> instanceBufferInfos{};
+        std::array<VkDescriptorImageInfo, RENDERER_NUM_BUFFER> textureAImageInfos{};
+        std::array<VkDescriptorImageInfo, RENDERER_NUM_BUFFER> textureBImageInfos{};
+
+        std::vector<VkWriteDescriptorSet> writeDescriptorSet;
+        writeDescriptorSet.reserve(RENDERER_NUM_BUFFER * 4);
+
+        for (uint32_t frameSlot = 0; frameSlot < RENDERER_NUM_BUFFER; ++frameSlot)
+        {
+            globalBufferInfos[frameSlot].buffer = mGlobalBuffers[frameSlot]->XJGetBuffer();
+            globalBufferInfos[frameSlot].offset = 0;
+            globalBufferInfos[frameSlot].range = sizeof(GlobalUbo);
+
+            instanceBufferInfos[frameSlot].buffer = mInstanceBuffers[frameSlot]->XJGetBuffer();
+            instanceBufferInfos[frameSlot].offset = 0;
+            instanceBufferInfos[frameSlot].range = sizeof(InstanceUbo);
+
+            textureAImageInfos[frameSlot].sampler = mSamplerA->XJGetSampler();
+            textureAImageInfos[frameSlot].imageView = mTextureA->XJGetImageView()->XJGetImageView();
+            textureAImageInfos[frameSlot].imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+
+            textureBImageInfos[frameSlot].sampler = mSamplerB->XJGetSampler();
+            textureBImageInfos[frameSlot].imageView = mTextureB->XJGetImageView()->XJGetImageView();
+            textureBImageInfos[frameSlot].imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+
+            VkDescriptorSet descriptorSet = mDescriptorSets[frameSlot];
+
+            // 每个 descriptor set 固定绑定自己的 per-frame buffer，只在初始化时写一次。
+            writeDescriptorSet.push_back({.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET, .pNext = nullptr, .dstSet = descriptorSet, .dstBinding = 0, .dstArrayElement = 0, .descriptorCount = 1, .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, .pBufferInfo = &globalBufferInfos[frameSlot]});
+            writeDescriptorSet.push_back({.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET, .pNext = nullptr, .dstSet = descriptorSet, .dstBinding = 1, .dstArrayElement = 0, .descriptorCount = 1, .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC, .pBufferInfo = &instanceBufferInfos[frameSlot]});
+            writeDescriptorSet.push_back({.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET, .pNext = nullptr, .dstSet = descriptorSet, .dstBinding = 2, .dstArrayElement = 0, .descriptorCount = 1, .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, .pImageInfo = &textureAImageInfos[frameSlot]});
+            writeDescriptorSet.push_back({.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET, .pNext = nullptr, .dstSet = descriptorSet, .dstBinding = 3, .dstArrayElement = 0, .descriptorCount = 1, .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, .pImageInfo = &textureBImageInfos[frameSlot]});
+        }
+
+        vkUpdateDescriptorSets(
+            kDevice->XJGetDevice(),
+            static_cast<uint32_t>(writeDescriptorSet.size()),
+            writeDescriptorSet.data(),
+            0,
+            nullptr);
 
     }
 }

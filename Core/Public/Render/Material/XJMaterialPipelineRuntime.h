@@ -2,7 +2,9 @@
 #define XJ_MATERIAL_PIPELINE_RUNTIME_H
 
 #include "Render/Material/XJMaterialShaderRuntimeLayout.h"
+#include "Render/XJRenderer.h"
 
+#include <array>
 #include <cstdint>
 #include <memory>
 #include <vector>
@@ -27,8 +29,8 @@ namespace XJ
         std::shared_ptr<XJVulkanPipeline> Pipeline;
         //描述符集
         std::shared_ptr<XJVulkanDescriptorPool> FrameDescriptorPool;
-        VkDescriptorSet FrameUboDescSet = VK_NULL_HANDLE;
-        std::shared_ptr<XJVulkanBuffer> FrameUboBuffer;
+        std::array<VkDescriptorSet, RENDERER_NUM_BUFFER> FrameUboDescSets{};
+        std::array<std::shared_ptr<XJVulkanBuffer>, RENDERER_NUM_BUFFER> FrameUboBuffers;
 
         std::shared_ptr<XJVulkanDescriptorPool> MaterialDescriptorPool;
         uint32_t LastDescriptorSetCount = 0;
@@ -47,8 +49,8 @@ namespace XJ
                 PipelineLayout &&
                 Pipeline &&
                 FrameDescriptorPool &&
-                FrameUboDescSet != VK_NULL_HANDLE &&
-                FrameUboBuffer &&
+                FrameUboDescSets[0] != VK_NULL_HANDLE &&
+                FrameUboBuffers[0] &&
                 ShaderLayout.HasPrimaryFrameUbo() &&
                 ShaderLayout.HasPrimaryMaterialUbo();;
         }
@@ -75,8 +77,11 @@ namespace XJ
         {
             ClearMaterialDescriptors();
 
-            FrameUboBuffer.reset();
-            FrameUboDescSet = VK_NULL_HANDLE;
+            for (uint32_t frameSlot = 0; frameSlot < RENDERER_NUM_BUFFER; ++frameSlot)
+            {
+                FrameUboBuffers[frameSlot].reset();
+                FrameUboDescSets[frameSlot] = VK_NULL_HANDLE;
+            }
             FrameDescriptorPool.reset();
 
             Pipeline.reset();

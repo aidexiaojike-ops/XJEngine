@@ -22,7 +22,7 @@ namespace XJ
         XJDebug_Log(vkQueueWaitIdle(mQueue));
     }   
 
-    void XJVulkanQueue::Submit(
+    VkResult XJVulkanQueue::Submit(
         const std::vector<VkCommandBuffer>& commandBuffers,
         const std::vector<VkSemaphore>& waitSemaphores,
         const std::vector<VkSemaphore>& signalSemaphores,
@@ -76,6 +76,8 @@ namespace XJ
             spdlog::error("Submit [{}] FAILED: {}", caller, vk_result_string(ret));
         }
         XJDebug_Log(ret);
+
+        return ret;
     }
 
 }

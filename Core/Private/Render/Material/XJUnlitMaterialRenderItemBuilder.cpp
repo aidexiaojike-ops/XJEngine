@@ -28,7 +28,7 @@ namespace XJ
 
                 for (const auto& meshIndex : entry.second)
                 {
-                    XJMesh* mesh = matComp.XJGetMesh(meshIndex);
+                    std::shared_ptr<XJMesh> mesh = matComp.XJGetMeshShared(meshIndex);
                     if (!mesh)
                         continue;
 

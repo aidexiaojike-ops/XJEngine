@@ -20,6 +20,7 @@ namespace XJ
         glm::ivec2 Resolution{0, 0};
 
         uint32_t FrameId = 0;
+        uint32_t FrameSlot = 0;
         float Time = 0.0f;
     };
 
@@ -34,6 +35,7 @@ namespace XJ
                 XJVulkanDevice* device,
                 XJMaterialPipelineRuntime& runtime,
                 VkDescriptorSet descSet,
+                uint32_t materialBufferIndex,
                 XJMaterial* material);
 
             static bool UpdateMaterialResourceDescSet(

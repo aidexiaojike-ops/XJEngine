@@ -24,7 +24,7 @@ namespace XJ
 
             VkQueue XJGetQueue(){return mQueue;}
 
-            void Submit(
+            VkResult Submit(
                 const std::vector<VkCommandBuffer>& commandBuffers,
                 const std::vector<VkSemaphore>& waitSemaphores = {},
                 const std::vector<VkSemaphore>& signalSemaphores = {},

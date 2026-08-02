@@ -33,10 +33,10 @@ namespace XJ
 
             std::vector<VkSemaphore> mImageAvailableSemaphores;//图像可用信号量
             std::vector<VkSemaphore> mSubmitedSemaphores;//提交信号量
-            std::vector<VkFence> mAcquireFences;  // 用于图像获取
+            // std::vector<VkFence> mAcquireFences;  // 用于图像获取
             std::vector<VkFence> mSubmitFences;   // 用于队列提交
 
-
+            bool RecreateSignaledFence(XJVulkanDevice* device, VkFence& fence);
         public:
             XJRenderer(/* args */);
             ~XJRenderer();

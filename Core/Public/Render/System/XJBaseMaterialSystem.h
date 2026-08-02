@@ -3,12 +3,9 @@
 
 #include "Render/System/XJMaterialSystem.h"
 #include "ECS/Component/Material/XJBaseMaterialComponent.h"
-// #include "ECS/Component/Material/XJMeshComponent.h"
 #include "ECS/Component/XJTransformComponent.h"
-
-//#include "Graphic/XJVulkanDescriptorSet.h"  // 解决 XJVulkanDescriptorPool 定义
-//#include "Render/Resource/XJTexture.h"          // 解决 XJTexture 定义
-//#include "Render/XJSampler.h"
+#include "Render/XJRenderer.h"
+#include <array>
 
 namespace XJ
 {
@@ -49,19 +46,22 @@ namespace XJ
             void OnRender(XJVulkanCommandBuffer cmdBuffer, XJRenderTarget *renderTarget) override;
             void OnDestroy() override;
 
-            void UpdateDescriptorSets(VkCommandBuffer cmdBuffer);
+            void UpdateDescriptorSets();
 
 
-            GlobalUbo mGlobalUbo;
-            InstanceUbo mInstanceUbo;
-            std::shared_ptr<XJ::XJVulkanBuffer> mGlobalBuffer;
-            std::shared_ptr<XJ::XJVulkanBuffer> mInstanceBuffer;
+           // 每个 in-flight 帧槽位一份 CPU/GPU UBO，避免 CPU 写当前帧时覆盖 GPU 仍在读的上一帧数据。
+            std::array<GlobalUbo, RENDERER_NUM_BUFFER> mGlobalUbo{};
+            std::array<InstanceUbo, RENDERER_NUM_BUFFER> mInstanceUbo{};
+           std::array<std::shared_ptr<XJ::XJVulkanBuffer>, RENDERER_NUM_BUFFER> mGlobalBuffers;
+            std::array<std::shared_ptr<XJ::XJVulkanBuffer>, RENDERER_NUM_BUFFER> mInstanceBuffers;
+
             std::shared_ptr<XJ::XJTexture> mTextureA;
             std::shared_ptr<XJ::XJTexture> mTextureB;
             std::shared_ptr<XJ::XJSampler> mSamplerA;
             std::shared_ptr<XJ::XJSampler> mSamplerB;
 
-            std::vector<VkDescriptorSet>                        mDescriptorSets;
+            // 每个帧槽位一个 descriptor set，分别绑定该槽位自己的 UBO buffer。
+            std::vector<VkDescriptorSet> mDescriptorSets;
             std::shared_ptr<XJVulkanDescriptorPool>  mDescriptorPool;
             
     };

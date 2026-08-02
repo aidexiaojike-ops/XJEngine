@@ -90,35 +90,71 @@ namespace XJ
         {
             {
                 .type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-                .descriptorCount = 1
+                .descriptorCount = RENDERER_NUM_BUFFER
             },
         };
 
         runtime.FrameDescriptorPool =
             std::make_shared<XJ::XJVulkanDescriptorPool>(
                 device,
-                1,
+                RENDERER_NUM_BUFFER,
                 framePoolSizes);
 
         auto frameDescSets =
             runtime.FrameDescriptorPool->AllocateDescriptorSet(
                     runtime.FrameUboDescSetLayout.get(),
-                    1);
-        if (frameDescSets.empty())
+                    RENDERER_NUM_BUFFER);
+        if (frameDescSets.size() != RENDERER_NUM_BUFFER)
         {
-            spdlog::error("Material pipeline runtime build failed: frame descriptor set allocation failed.");
+            // 每个 in-flight 帧槽位都需要独立 frame UBO descriptor set。
+            // 分配失败或数量不对时不能继续，否则后续按槽位取 descriptor 会越界。
+            spdlog::error("Material pipeline runtime build failed: frame descriptor set allocation failed, count={}.", frameDescSets.size());
             return false;
         }
-        runtime.FrameUboDescSet = frameDescSets[0];
 
+        std::array<VkDescriptorBufferInfo, RENDERER_NUM_BUFFER> frameBufferInfos{};
+        std::vector<VkWriteDescriptorSet> frameDescriptorWrites;
+        frameDescriptorWrites.reserve(RENDERER_NUM_BUFFER);
 
-        runtime.FrameUboBuffer =
-            std::make_shared<XJ::XJVulkanBuffer>(
-                device,
-                VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
-                sizeof(FrameUbo),
-                nullptr,
-                true);
+        for (uint32_t frameSlot = 0; frameSlot < RENDERER_NUM_BUFFER; ++frameSlot)
+        {
+            if (frameDescSets[frameSlot] == VK_NULL_HANDLE)
+            {
+                spdlog::error("Material pipeline runtime build failed: frame descriptor set {} is null.", frameSlot);
+                return false;
+            }
+
+            runtime.FrameUboDescSets[frameSlot] = frameDescSets[frameSlot];
+            runtime.FrameUboBuffers[frameSlot] =
+                std::make_shared<XJ::XJVulkanBuffer>(
+                    device,
+                    VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+                    sizeof(FrameUbo),
+                    nullptr,
+                    true);
+
+            if (!runtime.FrameUboBuffers[frameSlot])
+            {
+                spdlog::error("Material pipeline runtime build failed: frame UBO buffer {} create failed.", frameSlot);
+                return false;
+            }
+
+            frameBufferInfos[frameSlot] =
+                DescriptorSetWriter::BuildBufferInfo(
+                    runtime.FrameUboBuffers[frameSlot]->XJGetBuffer(),
+                    0,
+                    sizeof(FrameUbo));
+
+            // Frame descriptor sets bind per-frame UBO buffers once at runtime creation.
+            frameDescriptorWrites.push_back(
+                DescriptorSetWriter::WriteBuffer(
+                    runtime.FrameUboDescSets[frameSlot],
+                    runtime.ShaderLayout.PrimaryFrameUboBinding,
+                    VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+                    &frameBufferInfos[frameSlot]));
+        }
+
+        DescriptorSetWriter::UpdateDescriptorSets(device->XJGetDevice(), frameDescriptorWrites);
         //常量
         VkPushConstantRange modelPC =
         {
