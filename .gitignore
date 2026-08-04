@@ -5,3 +5,6 @@ bin/
 logs/
 Platform/External/VulkanSDK/
 ThirdParty/VulkanSDK/
+
+# 意外产生的输出文件
+stdout

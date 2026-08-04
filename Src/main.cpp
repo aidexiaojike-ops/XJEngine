@@ -1,4 +1,4 @@
-#include "XJEntryPoint.h"
+﻿#include "XJEntryPoint.h"
 #include "Edit/Mathinclude.h"
 #include "Edit/XJEventTesting.h"
 #include "Edit/FileUtil.h"
@@ -264,11 +264,15 @@ protected:
     }
     void OnSceneDestroy(XJ::XJScene *scene) override
     {
-        // 可以在这里补充场景销毁时的清理逻辑，例如释放资源等
         spdlog::info("Scene destroyed");
 
         mRuntimeScene = nullptr;
+
+        mEditorCameraManager.ClearAllCameraReferences();
+        
         mEditorSceneController.SetScene(nullptr);
+        mEditorSceneController.SetDefaultResources(nullptr, nullptr);
+        mEditorSceneController.ClearRuntimeReferences();
 
         mEditorUIState.Selection.SelectedEntity = XJ::XJ_INVALID_EDITOR_ENTITY_ID;
         mEditorUIState.Selection.SelectedAsset = 0;
@@ -277,8 +281,6 @@ protected:
         mEditorUIState.SceneRequests = {};
         mEditorUIState.SceneView = {};
         mEditorUIState.SelectedEntityDetails = {};
-
-        mEditorCameraManager.ClearAllCameraReferences();
     }
 
     // UI
@@ -297,8 +299,14 @@ protected:
     
     void OnUIDestroy() override
     {
-        if (ImGui::GetCurrentContext())//退出的时候保存UI
+        if (ImGui::GetCurrentContext())
             ImGui::SaveIniSettingsToDisk(ImGui::GetIO().IniFilename);
+
+        // Preview windows are destroyed below; remove camera bindings first so later
+        // scene shutdown does not write through dangling viewport pointers.
+        mEditorCameraManager.ClearAllCameraReferences();
+        mEditorCameraManager.BindViewports(nullptr, nullptr, nullptr);
+
         if (mEditorUILayer)
         {
             mEditorUILayer->SaveConfig();
@@ -306,11 +314,29 @@ protected:
             mEditorUILayer.reset();
         }
 
-        if (mScenePreview) mScenePreview->Shutdown();
-        if (mGamePreview) mGamePreview->Shutdown();
+        if (mScenePreview)
+        {
+            mScenePreview->Shutdown();
+            mScenePreview.reset();
+        }
 
-        mEditorRenderer.reset();
-        mUIContext.reset();
+        if (mGamePreview)
+        {
+            mGamePreview->Shutdown();
+            mGamePreview.reset();
+        }
+
+        if (mEditorRenderer)
+        {
+            mEditorRenderer->Shutdown();
+            mEditorRenderer.reset();
+        }
+
+        if (mUIContext)
+        {
+            mUIContext->Shutdown();
+            mUIContext.reset();
+        }
     }
 
 
@@ -482,11 +508,13 @@ protected:
         //mEditorRenderer->Shutdown();
         //mUIContext->Shutdown();
         mEditorCameraManager.ClearAllCameraReferences();
-        mEditorSceneController.SetScene(nullptr);
 
         XJ::XJRenderContext *kRenderContext = XJApplication::XJGetAppContext()->renderContext;
         XJ::XJVulkanDevice* kDevice = kRenderContext->XJGetDevice();
         vkDeviceWaitIdle(kDevice->XJGetDevice());// 等待设备空闲
+        mEditorSceneController.SetDefaultResources(nullptr, nullptr);
+        mEditorSceneController.SetScene(nullptr);
+
         mWhiteTexture.reset();// 白色纹理
         mBlackTexture.reset();// 黑色纹理
         mMultiPixelTexture.reset();// 多像素纹理

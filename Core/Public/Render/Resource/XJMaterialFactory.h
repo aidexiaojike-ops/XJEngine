@@ -8,6 +8,10 @@
 #include "Asset/Serialization/XJShaderAssetSerializer.h"
 #include "Render/Material/XJMaterialParameterBlockBuilder.h"
 
+#include <mutex>
+#include <typeindex>
+#include <algorithm>
+
 namespace XJ
 {
 
@@ -20,20 +24,23 @@ namespace XJ
             XJMaterialFactory(const XJMaterialFactory&) = delete;
             XJMaterialFactory &operator = (const XJMaterialFactory&) = delete;
             
-            void SetAssetRegistry(XJAssetRegistry* registry) { mAssetRegistry = registry; }
+            void SetAssetRegistry(XJAssetRegistry* registry) { std::scoped_lock lock(mMutex);
+                                mAssetRegistry = registry; }
 
             std::shared_ptr<XJUnlitMaterial> CreateFromAsset(const XJMaterialAsset& asset,
                                     const std::shared_ptr<XJTexture>& defaultTex,
                                     const std::shared_ptr<XJSampler>& defaultSampler);
 
-            static XJMaterialFactory* GetInstance(){
-                return &mMaterialFactory;
+            static XJMaterialFactory* GetInstance()
+            {
+                // 函数局部静态避免跨 TU 静态初始化顺序问题。
+                // 这里故意不在全局静态对象析构阶段主动清 GPU 资源，资源应在渲染上下文销毁前由场景/组件释放。
+                static XJMaterialFactory instance;
+                return &instance;
             }
 
-            ~XJMaterialFactory()
-            {
-                mMaterials.clear();
-            }
+            ~XJMaterialFactory() = default;
+
 
             std::shared_ptr<XJUnlitMaterial> CreateDefaultMaterial(
                                             const std::shared_ptr<XJTexture>& defaultTexture,
@@ -43,40 +50,71 @@ namespace XJ
             template<typename T>
             size_t GetMaterialSize()
             {
-                uint32_t typeId = entt::type_id<T>().hash();
-                if(mMaterials.find(typeId) == mMaterials.end())
+                std::scoped_lock lock(mMutex);
+
+                const std::type_index typeIndex = std::type_index(typeid(T));
+                auto it = mMaterials.find(typeIndex);
+                if(it == mMaterials.end())
                 {
                     return 0;
                 }
-                return mMaterials[typeId].size();  // 原: return mMaterials;
+
+                auto& materialList = it->second;
+
+                // 工厂只保存 weak_ptr；这里顺手清理已经被场景/组件释放的材质。
+                materialList.erase
+                (
+                    std::remove_if(materialList.begin(), materialList.end(),
+                        [](const std::weak_ptr<XJMaterial>& material)
+                        {
+                            return material.expired();
+                        }),
+                    materialList.end()
+                );
+                
+                return materialList.size();  // 原: return mMaterials;
             }
 
             template<typename T>
             std::shared_ptr<T> CreateMaterial()//可以提供外界创建一个材质类型ID
             {
                 auto mat = std::make_shared<T>();
-                uint32_t typeId = entt::type_id<T>().hash();//entt 拿到 typeId
+
+                std::scoped_lock lock(mMutex);
+
+                const std::type_index typeId = std::type_index(typeid(T));
+                auto& materials = mMaterials[typeId];
                 
-                uint32_t index = 0;
-                if(mMaterials.find(typeId) == mMaterials.end())
-                {
-                    mMaterials.insert({ typeId, { mat }});
-                } 
-                else
-                {
-                    index = mMaterials[typeId].size();
-                    mMaterials[typeId].push_back(mat);
-                }
-                mat->mIndex = index;//材质索引
+               // 清理已经释放的材质，避免材质列表只增不减。
+                materials.erase(
+                    std::remove_if(
+                        materials.begin(),
+                        materials.end(),
+                        [](const std::weak_ptr<XJMaterial>& material)
+                        {
+                            return material.expired();
+                        }),
+                    materials.end());
+
+                const uint32_t index = static_cast<uint32_t>(materials.size());
+                mat->mIndex = index;
+
+                // 工厂不强持有材质，避免材质和 GPU 资源被单例拖到进程退出才析构。
+                materials.push_back(mat);
                 return mat;
             }
         
         private:
             XJMaterialFactory() = default;
-            static XJMaterialFactory mMaterialFactory;
             XJAssetRegistry* mAssetRegistry = nullptr;
-            std::unordered_map<uint32_t, std::vector<std::shared_ptr<XJMaterial>>> mMaterials;//所有材质放到这个数据结构里面
-            
+
+            // 保护材质列表、纹理缓存和 asset registry 指针。
+            mutable std::mutex mMutex;
+
+            // 用 type_index 避免 entt hash 截断和理论碰撞。
+            std::unordered_map<std::type_index, std::vector<std::weak_ptr<XJMaterial>>> mMaterials;
+
+            // 纹理缓存本来就是 weak_ptr，保留弱引用，但访问必须加锁。
             std::unordered_map<XJAssetHandle, std::weak_ptr<XJTexture>> mTextureCache;
             std::shared_ptr<XJTexture> GetOrLoadTexture(XJAssetHandle handle, const std::shared_ptr<XJTexture>& fallback);
 

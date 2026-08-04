@@ -35,9 +35,20 @@ namespace XJ
     {
         // 在这里可以添加应用程序停止时的清理代码
         spdlog::info("应用程序停止");
-        OnUIDestroy();   // Shutdown 在设备销毁前
-        UnLoadScene();//卸载场景
+        // 先停 UI/场景/用户资源；此时 renderContext 仍有效，纹理/采样器析构还能安全访问设备。
+        OnUIDestroy();
+        UnLoadScene();
         OnDestroy();
+
+        // 用户资源释放后，再销毁渲染上下文和窗口。
+        mRenderContext.reset();
+        mWindow.reset();
+
+        // 最后清空全局上下文，避免后续代码拿到悬垂指针。
+        sAppContext.scene = nullptr;
+        sAppContext.renderContext = nullptr;
+        sAppContext.app = nullptr;
+        sAppContext.renderFrameSlot = 0;
     }
 
     void XJApplication::MainLoop()

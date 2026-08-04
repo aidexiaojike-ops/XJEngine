@@ -331,9 +331,23 @@ namespace XJ
     {
         mPipeline.reset();
         mPipelineLayout.reset();
-        mDescriptorSetLayout.reset();
+
+        mDescriptorSets.clear();
         mDescriptorPool.reset();
+        mDescriptorSetLayout.reset();
+
+        for (auto& buffer : mGlobalBuffers)
+            buffer.reset();
+
+        for (auto& buffer : mInstanceBuffers)
+            buffer.reset();
+
+        mTextureA.reset();
+        mTextureB.reset();
+        mSamplerA.reset();
+        mSamplerB.reset();
     }
+    
     void XJBaseMaterialSystem::UpdateDescriptorSets()
     {
         if (!mTextureA || !mTextureA->XJGetImageView() ||

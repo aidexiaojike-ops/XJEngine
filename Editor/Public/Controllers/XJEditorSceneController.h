@@ -82,6 +82,8 @@ namespace XJ
 
             void SetShouldExposeEntityCallback(ShouldExposeEntityCallback callback);
             void SetDefaultMeshHandle(XJAssetHandle handle);//设置默认mesh
+
+            void ClearRuntimeReferences();
         
         private:
             void ResetSceneRequestState(XJEditorUIState& uiState);// 重置场景请求状态

@@ -577,4 +577,20 @@ namespace XJ
         if (mAfterMutationCallback)
             mAfterMutationCallback();
     }
+
+    void XJEditorSceneController::ClearRuntimeReferences()
+    {
+        mScene = nullptr;
+        mDefaultTexture.reset();
+        mDefaultSampler.reset();
+        mSceneAsset.reset();
+        mInstantiateContext = {};
+    
+        mBeforeDeleteCallback = {};
+        mAfterMutationCallback = {};
+        mBeforeOpenSceneCallback = {};
+        mAfterOpenSceneCallback = {};
+        mCanDeleteEntityCallback = {};
+        mShouldExposeEntityCallback = {};
+    }
 }

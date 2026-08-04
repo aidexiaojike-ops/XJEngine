@@ -261,27 +261,35 @@ namespace XJ
         CreateDefaultCommandPool();
     }
     XJVulkanDevice::~XJVulkanDevice()
-    {   
-        
+    {
         if (mDevice == VK_NULL_HANDLE)
-        {
             return;
-        }
 
+        spdlog::trace("~XJVulkanDevice begin: {}", static_cast<void*>(mDevice));
+
+        spdlog::trace("~XJVulkanDevice wait idle begin");
         WaitIdle();
+        spdlog::trace("~XJVulkanDevice wait idle end");
 
+        spdlog::trace("~XJVulkanDevice command pool reset begin");
         mDefaultCmdPool = nullptr;
+        spdlog::trace("~XJVulkanDevice command pool reset end");
 
         if (mPipelineCache != VK_NULL_HANDLE)
         {
+            spdlog::trace("~XJVulkanDevice pipeline cache destroy begin: {}", static_cast<void*>(mPipelineCache));
             vkDestroyPipelineCache(mDevice, mPipelineCache, nullptr);
             mPipelineCache = VK_NULL_HANDLE;
+            spdlog::trace("~XJVulkanDevice pipeline cache destroy end");
         }
 
+        spdlog::trace("~XJVulkanDevice destroy device begin");
         vkDestroyDevice(mDevice, nullptr);
+        spdlog::trace("~XJVulkanDevice destroy device end");
+
         mDevice = VK_NULL_HANDLE;
-        
     }
+    
     void XJVulkanDevice::WaitIdle() const
     {
         if (mDevice != VK_NULL_HANDLE)

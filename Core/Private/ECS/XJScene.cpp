@@ -15,13 +15,8 @@ namespace XJ
     //析构函数：在销毁场景时清理所有资源
     XJScene::~XJScene()
     {
-        // 释放根节点
+        DestroyAllEntity();
         mRootNode.reset();
-        // 销毁所有实体
-       DestroyAllEntity();
-
-         // 清空实体映射表
-        mEntities.clear();
     }
     // CreateEntity：根据名称创建一个实体
     // 如果没有提供名称，将使用默认名称 "Entity"

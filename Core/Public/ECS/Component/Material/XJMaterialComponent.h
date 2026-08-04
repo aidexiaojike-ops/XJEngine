@@ -12,13 +12,16 @@ namespace XJ
     class XJMaterialComponent : public XJComponent
     {
         private:
-            // 组件持有 Mesh 的 shared_ptr，避免场景实例化上下文析构后 Mesh 被释放。
-            std::vector<std::shared_ptr<XJMesh>> mMeshList; 
+            // 组件持有 Mesh，避免实例化上下文或缓存释放后留下悬垂指针。
+            std::vector<std::shared_ptr<XJMesh>> mMeshList;
             
-            // Material 目前由 MaterialFactory 管理生命周期，这里先保留裸指针作为分组 key。
+            // 组件持有 Material，避免工厂改成 weak cache 后材质被提前释放。
+            std::vector<std::shared_ptr<T>> mMaterialOwners;
+            
+            // 仍用裸指针作为分组 key；对象所有权由 mMaterialOwners 持有。
             std::unordered_map<T*, std::vector<uint32_t>> mMeshMaterials;
         public:
-            void AddMesh(std::shared_ptr<XJMesh> mesh, T *material = nullptr)//添加网格
+            void AddMesh(std::shared_ptr<XJMesh> mesh, std::shared_ptr<T> material = nullptr)//添加网格
             {
                 if(!mesh)
                 {
@@ -26,16 +29,15 @@ namespace XJ
                 }
                 uint32_t meshIndex = static_cast<uint32_t>(mMeshList.size());
                 // 保存 shared_ptr 所有权，保证组件存在期间 Mesh 不会释放。
-                mMeshList.push_back(mesh);
+                mMeshList.push_back(std::move(mesh));
 
-                if(mMeshMaterials.find(material) != mMeshMaterials.end())
-                {
-                    mMeshMaterials[material].push_back(meshIndex);
-                }
-                else
-                {
-                    mMeshMaterials.insert({material, {meshIndex}});
-                }
+                T* materialKey = material.get();
+
+                 // 组件持有材质 shared_ptr，避免工厂改为 weak cache 后材质释放。
+                 if (material)
+                     mMaterialOwners.push_back(std::move(material));
+
+                 mMeshMaterials[materialKey].push_back(meshIndex);
             };
 
             uint32_t XJGetMaterialCount()const

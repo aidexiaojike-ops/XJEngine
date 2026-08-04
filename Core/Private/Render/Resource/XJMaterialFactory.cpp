@@ -197,29 +197,36 @@ namespace XJ
         }
     }
 
-    XJMaterialFactory XJMaterialFactory::mMaterialFactory{};
 
     std::shared_ptr<XJTexture> XJMaterialFactory::GetOrLoadTexture(XJAssetHandle handle, const std::shared_ptr<XJTexture>& fallback)
     {
         if (handle == 0)
             return fallback;
 
-        auto cacheIt = mTextureCache.find(handle);
-        if (cacheIt != mTextureCache.end())
+        XJAssetRegistry* registry = nullptr;
         {
-            if (auto texture = cacheIt->second.lock())
-                return texture;
+            std::scoped_lock lock(mMutex);
+            
+            auto cacheIt = mTextureCache.find(handle);
+            if (cacheIt != mTextureCache.end())
+            {
+                if (auto texture = cacheIt->second.lock())
+                    return texture;
 
-            mTextureCache.erase(cacheIt);
+                mTextureCache.erase(cacheIt);
+            } 
+
+            registry = mAssetRegistry;
         }
 
-        if (!mAssetRegistry)
+       
+        if (!registry)
         {
             spdlog::warn("Texture load fallback: material factory has no asset registry, handle={}", handle);
             return fallback;
         }
 
-        auto meta = mAssetRegistry->GetMeta(handle);
+        auto meta = registry->GetMeta(handle);
         if (!meta || meta->Type != XJAssetType::Texture)
         {
             spdlog::warn("Texture load fallback: invalid texture handle={}", handle);
@@ -240,7 +247,10 @@ namespace XJ
             return fallback;
         }
 
-        mTextureCache[handle] = texture;
+        {
+            std::scoped_lock lock(mMutex);
+            mTextureCache[handle] = texture;
+        }
         return texture;
     }
 

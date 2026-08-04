@@ -20,18 +20,28 @@ namespace XJ
     }
     XJTexture::~XJTexture()
     {
-        XJ::XJRenderContext *renderContext = XJApplication::XJGetAppContext()->renderContext;
-        XJ::XJVulkanDevice *kDevice  = renderContext->XJGetDevice();
-        // vkDestroySampler(kDevice->XJGetDevice(), mSampler, nullptr);
-        mImage.reset();
+        // ImageView 依赖 Image，先释放 view 再释放 image。
+        // 不在析构里重新从全局 context 取 device，避免 Stop 后全局指针已清空时崩溃。
         mImageView.reset();
+        mImage.reset();
     }
 
     void XJTexture::CreateImage(size_t size, void *data) 
     {
          // 获取渲染上下文和设备
         XJ::XJRenderContext *kRenderCxt = XJApplication::XJGetAppContext()->renderContext;
+        if (!kRenderCxt)
+        {
+            spdlog::error("XJTexture::CreateImage failed: render context is null");
+            return;
+        }
+
         XJ::XJVulkanDevice *kDevice = kRenderCxt->XJGetDevice();
+        if (!kDevice || !kDevice->IsValid())
+        {
+            spdlog::error("XJTexture::CreateImage failed: device is invalid");
+            return;
+        }
         // 创建 Vulkan 图像（大小为 mWidth x mHeight，格式为 mFormat，包含两种用途：传输目标和可采样）
         mImage = std::make_shared<XJVulkanImage>(kDevice, VkExtent3D{ mWidth, mHeight, 1 }, 
                  mFormat, VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT, 

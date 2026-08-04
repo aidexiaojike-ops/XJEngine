@@ -143,7 +143,7 @@ namespace XJ
         if (!mat)
             return;
             
-        comp.AddMesh(gpuMesh, mat.get());
+        comp.AddMesh(gpuMesh, mat);
     }
 
     void XJSceneInstantiator::ApplyCamera(const XJSceneEntityData& data, XJEntity& entity)
