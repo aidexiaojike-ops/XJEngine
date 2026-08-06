@@ -272,24 +272,28 @@ namespace XJ
         if (assetHandle == 0)
             return result;
 
-        auto& registry = scene.XJGetEcsRegistry();
+        const auto& registry = scene.XJGetEcsRegistry();
 
         auto meshView = registry.view<XJMeshAssetRefComponent>();
-        meshView.each([&](auto entity, XJMeshAssetRefComponent& meshRef)
+        for (auto entity : meshView)
         {
+            const auto& meshRef = meshView.get<XJMeshAssetRefComponent>(entity);
+
             if (meshRef.Mesh.Handle != assetHandle)
-                return;
+                continue;
 
             XJEntity* xjEntity = scene.XJGetEntities(entity);
             if (!xjEntity)
-                return;
+                continue;
 
             result.push_back(static_cast<XJEditorEntityId>(xjEntity->XJGetUUID()));
-        });
+        }
 
         auto materialView = registry.view<XJMaterialAssetRefComponent>();
-        materialView.each([&](auto entity, XJMaterialAssetRefComponent& materialRef)
+        for (auto entity : materialView)
         {
+            const auto& materialRef = materialView.get<XJMaterialAssetRefComponent>(entity);
+
             for (const auto& material : materialRef.Materials)
             {
                 if (material.Handle != assetHandle)
@@ -301,20 +305,22 @@ namespace XJ
 
                 break;
             }
-        });
+        }
 
         auto sceneView = registry.view<XJSceneAssetRefComponent>();
-        sceneView.each([&](auto entity, XJSceneAssetRefComponent& sceneRef)
+        for (auto entity : sceneView)
         {
+            const auto& sceneRef = sceneView.get<XJSceneAssetRefComponent>(entity);
+
             if (sceneRef.SourceScene.Handle != assetHandle)
-                return;
+                continue;
 
             XJEntity* xjEntity = scene.XJGetEntities(entity);
             if (!xjEntity)
-                return;
+                continue;
 
             result.push_back(static_cast<XJEditorEntityId>(xjEntity->XJGetUUID()));
-        });
+        }
 
         return result;
     }

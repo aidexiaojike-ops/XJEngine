@@ -6,45 +6,77 @@
 #include "spdlog/spdlog.h"
 #include "Graphic/XJVulkanDepthImage.h"
 #include "ECS/XJEntity.h"
+#include "ECS/XJScene.h"
 #include "ECS/Component/XJCameraComponent.h"
+
+#include <stdexcept>
 
 namespace XJ
 {
     XJRenderTarget::XJRenderTarget(XJVulkanRenderPass *rederPass)
     {
-        XJRenderContext *renderContext = XJApplication::XJGetAppContext()->renderContext;
+        if (!rederPass)
+        {
+            spdlog::error("XJRenderTarget constructor failed: render pass is null.");
+            throw std::invalid_argument("XJRenderTarget requires a valid render pass");
+        }
+
+        XJRenderContext* renderContext = XJApplication::XJGetAppContext()->renderContext;
         if (!renderContext)
         {
-            spdlog::error("Render context is null in XJRenderTarget constructor");
-            return;
+            spdlog::error("XJRenderTarget constructor failed: render context is null.");
+            throw std::runtime_error("XJRenderTarget requires a valid render context");
         }
+
         XJVulkanSwapchain* swapchain = renderContext->XJGetSwapchain();
         if (!swapchain)
         {
-            spdlog::error("Swapchain is null in XJRenderTarget constructor");
-            return;
+            spdlog::error("XJRenderTarget constructor failed: swapchain is null.");
+            throw std::runtime_error("XJRenderTarget requires a valid swapchain");
         }
 
         mRenderPass = rederPass;
-        mBufferCount = swapchain->XJGetSwapchainImages().size();
+        mBufferCount = static_cast<uint32_t>(swapchain->XJGetSwapchainImages().size());
         mExtent = {swapchain->XJGetWidth(), swapchain->XJGetHeight()};
         bSwapchainTarget = true;
 
         Init();
         ReCreate();
-        // 如果创建失败，至少设置一个默认帧缓冲区
-        if (mFrameBuffers.empty()) 
+
+        if (mFrameBuffers.empty())
         {
-            spdlog::error("Failed to create any framebuffers in constructor");
-            mBufferCount = std::max(1u, mBufferCount);
+            spdlog::error("XJRenderTarget constructor failed: no framebuffer was created.");
+            throw std::runtime_error("XJRenderTarget failed to create framebuffers");
         }
         
     }
     XJRenderTarget::XJRenderTarget(XJVulkanRenderPass *rederPass,uint32_t bufferCount, VkExtent2D extent)
                 :   mRenderPass(rederPass), mBufferCount(bufferCount), mExtent(extent), bSwapchainTarget(false)
     {
+        if (!mRenderPass)
+        {
+            spdlog::error("XJRenderTarget constructor failed: render pass is null.");
+            throw std::invalid_argument("XJRenderTarget requires a valid render pass");
+        }
+
+        if (mBufferCount == 0 || mExtent.width == 0 || mExtent.height == 0)
+        {
+            spdlog::error(
+                "XJRenderTarget constructor failed: invalid buffer count or extent. count={}, extent={}x{}",
+                mBufferCount,
+                mExtent.width,
+                mExtent.height);
+            throw std::invalid_argument("XJRenderTarget requires non-zero buffer count and extent");
+        }
+
         Init();
         ReCreate();
+
+        if (mFrameBuffers.empty())
+        {
+            spdlog::error("XJRenderTarget constructor failed: no framebuffer was created.");
+            throw std::runtime_error("XJRenderTarget failed to create framebuffers");
+        }
     }
     XJRenderTarget::~XJRenderTarget()
     {
@@ -54,8 +86,55 @@ namespace XJ
         }
         mMaterialSystemList.clear();
     }
+
+    void XJRenderTarget::XJSetCamera(XJEntity* camera)
+    {
+        // 不保存裸指针，只保存 UUID。camera 之后被销毁也不会留下悬垂指针。
+        mCameraId = camera ? camera->XJGetUUID() : XJUUID{0};
+    }
+
+    void XJRenderTarget::XJClearCamera()
+    {
+        mCameraId = XJUUID{0};
+    }
+
+    XJEntity* XJRenderTarget::XJGetCamera() const
+    {
+        if(!mCameraId)
+            return nullptr;
+
+        XJAppContext* appContext = XJApplication::XJGetAppContext();
+        if(!appContext || !appContext->scene)
+            return nullptr;
+
+        XJScene* scene = appContext->scene;
+
+        //从当前 scene 的实体表按 UUID 查询。实体已删除或 scene 已卸载时自然返回 nullptr。
+        for(const auto& [enttEntity, entity] : scene->GetEntities())
+        {
+            if(entity->XJGetUUID() == mCameraId)
+                return entity.get();
+        }
+
+        return nullptr; // 没有找到对应的实体
+    }
+
     void XJRenderTarget::Init()
     {
+        if (!mRenderPass)
+        {
+            spdlog::error("XJRenderTarget::Init failed: render pass is null.");
+            return;
+        }
+
+        const uint32_t attachmentCount = mRenderPass->XJGetAttachmentSize();
+        if (attachmentCount == 0)
+        {
+            spdlog::error("XJRenderTarget::Init failed: render pass has no attachments.");
+            return;
+        }
+
+        // clear values 数量必须和 render pass attachment 数量一致。
         mClearValues.resize(mRenderPass->XJGetAttachmentSize());
         SetColorClearValue({0.0f, 0.0f, 0.0f, 1.0f});//默认颜色清除值为黑色
         SetDepthClearValue({1.0f, 0});//默认深度清除值为1.0，模板清除值为0
@@ -161,14 +240,14 @@ namespace XJ
             else if (isResolveAttachment[idx])
             {
                 resolveAttachmentIndices.push_back(idx);
-                spdlog::debug("解析附件[{}]: format={}, samples={}", 
-                             idx, vk_format_string(attach.format), attach.samples);
+                spdlog::debug("解析附件[{}]: format={}, samples={}",
+                             idx, vk_format_string(attach.format), static_cast<int>(attach.samples));
             }
             else 
             {
                 colorAttachmentIndices.push_back(idx);
-                spdlog::debug("颜色附件[{}]: format={}, samples={}", 
-                             idx, vk_format_string(attach.format), attach.samples);
+                spdlog::debug("颜色附件[{}]: format={}, samples={}",
+                             idx, vk_format_string(attach.format), static_cast<int>(attach.samples));
             }
         }
 
@@ -178,10 +257,9 @@ namespace XJ
         for (int idx : colorAttachmentIndices) 
         {
             const auto& attach = kAttachments[idx];
-            static_cast<int>(attach.finalLayout), static_cast<int>(attach.samples);
-            spdlog::debug("颜色附件[{}]: format={}, finalLayout={}, samples={}", 
-                          idx, vk_format_string(attach.format), 
-                          attach.finalLayout, attach.samples);
+            spdlog::debug("颜色附件[{}]: format={}, finalLayout={}, samples={}",
+                          idx, vk_format_string(attach.format),
+                          vk_image_layout_string(attach.finalLayout), static_cast<int>(attach.samples));
         }
         
         // 验证附件数量与渲染通道匹配
@@ -216,8 +294,8 @@ namespace XJ
                         colorAttach.usage,
                         colorAttach.samples
                     );
-                    spdlog::debug("多重采样颜色附件[{}]: 创建新图像，采样数={}", 
-                                  colorIdx, colorAttach.samples);
+                    spdlog::debug("多重采样颜色附件[{}]: 创建新图像，采样数={}",
+                                  colorIdx, static_cast<int>(colorAttach.samples));
                 }
                 else 
                 {
@@ -281,13 +359,13 @@ namespace XJ
                     depthAttach.samples  // 使用渲染通道指定的采样数
                 );
                 if (!depthImage->Create() || !depthImage->IsValid()) {
-                    spdlog::error("深度图像创建失败，格式: {}, 采样数: {}", 
-                                 vk_format_string(depthAttach.format), depthAttach.samples);
+                    spdlog::error("深度图像创建失败，格式: {}, 采样数: {}",
+                                 vk_format_string(depthAttach.format), static_cast<int>(depthAttach.samples));
                     mFrameBuffers = std::move(oldFrameBuffers);
                     mDepthImages = std::move(oldDepthImages);
                     return;
                 }
-                spdlog::debug("深度附件创建成功，采样数: {}, 函数:{}", depthAttach.samples, __FILE__);
+                spdlog::debug("深度附件创建成功，采样数: {}, 函数:{}", static_cast<int>(depthAttach.samples), __FILE__);
                 mDepthImages.push_back(depthImage);
             }
             
@@ -359,6 +437,12 @@ namespace XJ
     }
     bool XJRenderTarget::BeginRenderTarget(VkCommandBuffer commandBuffer)
     {
+        if (!mRenderPass)
+        {
+            spdlog::error("BeginRenderTarget failed: render pass is null.");
+            return false;
+        }
+
         if (mFrameBuffers.empty()) {
             spdlog::warn("紧急重建帧缓冲");
             ReCreate();
@@ -383,9 +467,10 @@ namespace XJ
         UpdateIfNeeded();//如果需要更新帧缓冲（例如窗口大小改变时），重新创建帧缓冲
        
         //if(XJEntity::HasComponent<XJCameraComponent>(mCamera))
-        if(XJEntity::HasComponent<XJCameraComponent>(mCamera) && mExtent.width > 0 && mExtent.height > 0)
+        XJEntity* camera = XJGetCamera();
+        if(XJEntity::HasComponent<XJCameraComponent>(camera) && mExtent.width > 0 && mExtent.height > 0)
         {
-            mCamera->GetComponent<XJCameraComponent>().XJSetAspectRatio(mExtent.width * 1.0f / mExtent.height);//更新摄像机的投影矩阵
+            camera->GetComponent<XJCameraComponent>().XJSetAspectRatio(mExtent.width * 1.0f / mExtent.height);//更新摄像机的投影矩阵
         }
 
         if(bSwapchainTarget)
@@ -445,7 +530,19 @@ namespace XJ
     //同步缓冲区计数
     void XJRenderTarget::SetExtent(const VkExtent2D extent)
     {
-        XJRenderContext *kRenderContext = XJApplication::XJGetAppContext()->renderContext;
+        XJRenderContext* kRenderContext = XJApplication::XJGetAppContext()->renderContext;
+        if (bSwapchainTarget)
+        {
+            if (!kRenderContext || !kRenderContext->XJGetSwapchain())
+            {
+                spdlog::error("SetExtent failed: render context or swapchain is null.");
+                return;
+            }       
+
+            XJVulkanSwapchain* kSwapchain = kRenderContext->XJGetSwapchain();
+            mBufferCount = static_cast<uint32_t>(kSwapchain->XJGetSwapchainImages().size());
+        }
+
         if(bSwapchainTarget)
         {
             XJVulkanSwapchain* kSwapchain = kRenderContext->XJGetSwapchain();
@@ -462,6 +559,12 @@ namespace XJ
     }
     void XJRenderTarget::SetColorClearValue(VkClearColorValue colorClearValue)
     {
+        if (!mRenderPass)
+        {
+            spdlog::error("SetColorClearValue failed: render pass is null.");
+            return;
+        }
+
         std::vector<Attachment> renderPassAttachments = mRenderPass->XJGetAttachments();
         for (size_t i = 0; i < renderPassAttachments.size(); ++i)
         {
@@ -475,6 +578,12 @@ namespace XJ
     }
     void XJRenderTarget::SetDepthClearValue(VkClearDepthStencilValue depthClearValue)
     {
+        if (!mRenderPass)
+        {
+            spdlog::error("SetColorClearValue failed: render pass is null.");
+            return;
+        }
+
         std::vector<Attachment> renderPassAttachments = mRenderPass->XJGetAttachments();
         for (size_t i = 0; i < renderPassAttachments.size(); ++i)
         {

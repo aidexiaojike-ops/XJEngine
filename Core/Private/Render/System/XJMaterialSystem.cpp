@@ -36,26 +36,33 @@ namespace XJ
     }
     const glm::mat4 XJMaterialSystem::XJGetProjMat(XJRenderTarget *renderTarget) const
     {
-        glm::mat4 kProjMat{1.f};
+        glm::mat4 projMat{1.f};
+
+        if(!renderTarget)
+            return projMat;
+
         XJEntity *kCamera = renderTarget->XJGetCamera();
         if(XJEntity::HasComponent<XJCameraComponent>(kCamera))
         {
             auto &kCameraComp = kCamera->GetComponent<XJCameraComponent>();
-            kProjMat = kCameraComp.XJGetProjectionMatrix();
+            projMat = kCameraComp.XJGetProjectionMatrix();
         }
-        return kProjMat;
+        return projMat;
 
     }
     const glm::mat4 XJMaterialSystem::XJGetViewMat(XJRenderTarget *renderTarget) const
     {
-        glm::mat4 vKiewMat{1.f};
+        glm::mat4 viewMat{1.f};
+
+        if (!renderTarget)
+            return viewMat;
         XJEntity *kCamera = renderTarget->XJGetCamera();
         if(XJEntity::HasComponent<XJCameraComponent>(kCamera))
         {
             auto &kCameraComp = kCamera->GetComponent<XJCameraComponent>();
-            vKiewMat = kCameraComp.XJGetViewMatrix();
+            viewMat = kCameraComp.XJGetViewMatrix();
         }
-        return vKiewMat;
+        return viewMat;
 
     }
 }

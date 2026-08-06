@@ -11,7 +11,7 @@ namespace XJ
     {
         std::vector<XJMaterialRenderItem> items;
 
-        entt::registry& registry = scene.XJGetEcsRegistry();
+        const auto& registry = scene.XJGetEcsRegistry();
         auto view = registry.view<XJTransformComponent, XJUnlitMaterialComponent>();
 
         view.each([&items](const auto& entity, const XJTransformComponent& transComp, const XJUnlitMaterialComponent& matComp)

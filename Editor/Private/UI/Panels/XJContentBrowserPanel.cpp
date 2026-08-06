@@ -123,7 +123,8 @@ namespace XJ
             return;
         }
 
-        const auto& metas = registry->XJGetAllMetas();
+        // const auto& metas = registry->XJGetAllMetas();
+        const auto metas = registry->XJGetAllMetas();
         if (metas.empty())
         {
             ImGui::TextDisabled("No assets registered");

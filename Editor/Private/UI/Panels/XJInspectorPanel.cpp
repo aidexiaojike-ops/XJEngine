@@ -888,7 +888,8 @@ namespace XJ
 
                     if (mState.AssetRegistry)
                     {
-                        for (const auto& [handle, meta] : mState.AssetRegistry->XJGetAllMetas())
+                        const auto metas = mState.AssetRegistry->XJGetAllMetas();
+                        for (const auto& [handle, meta] : metas)
                         {
                             if (meta.Type != XJAssetType::Texture)
                                 continue;
@@ -972,7 +973,9 @@ namespace XJ
             const std::string search = searchBuffer;
 
             bool found = false;
-            for (const auto& [handle, meta] : mState.AssetRegistry->XJGetAllMetas())
+
+            const auto metas = mState.AssetRegistry->XJGetAllMetas();
+            for (const auto& [handle, meta] : metas)
             {
                 if (meta.Type != XJAssetType::Mesh)
                     continue;
@@ -1057,8 +1060,8 @@ namespace XJ
             const std::string search = searchText;
 
             bool found = false;
-
-            for (const auto& [handle, meta] : mState.AssetRegistry->XJGetAllMetas())
+            const auto metas = mState.AssetRegistry->XJGetAllMetas();
+            for (const auto& [handle, meta] : metas)
             {
                 if (meta.Type != XJAssetType::Material)
                     continue;

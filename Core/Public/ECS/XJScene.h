@@ -33,8 +33,13 @@ namespace XJ
             friend class XJEntity;///< 允许 XJEntity 访问场景内部成员
             
         public:
-            entt::registry &XJGetEcsRegistry() {return mEcsRegistry;}//获取注册表
+            // 只允许外部读取 registry，不能直接 create/destroy。
+            // 实体生命周期必须走 XJScene::CreateEntity / DestroyEntity，保证 mEcsRegistry、mEntities、Node 层级同步。
+            const entt::registry& XJGetEcsRegistry() const { return mEcsRegistry; }//获取注册表
+
             XJEntity *XJGetEntities(entt::entity enttEntity) const;
+            XJEntity* FindEntityByUUID(const XJUUID &id) const; //通过UUID查找实体 
+
             XJNode *XJGetRootNode() const {return mRootNode.get();}//获取场景根节点
 
             XJScene();//初始化场景
@@ -44,6 +49,7 @@ namespace XJ
             XJEntity* CreateEntityWithUUID(const XJUUID &id, const std::string &name = "");
             XJEntity* CreateEntityWithTransform(const std::string& name);//添加transform组件
             XJEntity* CreateEntityWithUUIDAndTransform(const XJUUID& id, const std::string& name);//添加一个带有transform组件的实体
+            
             void DestroyEntity(const XJEntity *entity);//销毁指定的实体。
             void DestroyAllEntity();//销毁场景中所有的实体。
 

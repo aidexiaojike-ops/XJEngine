@@ -3,7 +3,9 @@
 
 #include "XJRenderContext.h"
 #include "ECS/XJSystem.h"
+#include "ECS/XJUUID.h"
 #include "Render/System/XJMaterialSystem.h"
+#include "spdlog/spdlog.h"
 
 namespace XJ
 {
@@ -25,15 +27,17 @@ namespace XJ
 
             XJVulkanRenderPass *mRenderPass = nullptr;
             std::vector<VkClearValue> mClearValues;//清除值数组
-            uint32_t mBufferCount;
+            // 构造失败或未初始化时也保持确定值，避免 UB。
+            uint32_t mBufferCount = 0;
             uint32_t mCurrentBufferIndex = 0;//当前帧缓冲索引
-            VkExtent2D mExtent;
+            VkExtent2D mExtent{0, 0};
     
             bool bSwapchainTarget = false; // 标志是否为交换链目标
             bool bBeginRenderTarget = false; // 标志是否已开始渲染目标
 
-            XJEntity *mCamera = nullptr;//摄像机事件
-
+            // 只保存摄像机实体 ID，不保存 XJEntity*。
+             // 场景销毁或实体删除后，XJGetCamera() 会从当前 scene 查询，查不到就返回 nullptr。
+            XJUUID mCameraId{0};
             bool bShouldUpdate = false; // 标志是否需要更新帧缓冲（例如窗口大小改变时） 
              /* data */
 
@@ -67,6 +71,12 @@ namespace XJ
             template<typename T, typename... Args>
             void AddMaterialSystem(Args&&... args)
             {
+                if (!mRenderPass)
+                {
+                    spdlog::error("AddMaterialSystem failed: render pass is null.");
+                    return;
+                }
+
                 std::shared_ptr<XJMaterialSystem> system = std::make_shared<T>(std::forward<Args>(args)...);//实例化材质系统
                 system->OnInit(mRenderPass);//初始化
                 mMaterialSystemList.push_back(system);//添加
@@ -80,8 +90,19 @@ namespace XJ
                 }
             }
 
-            void XJSetCamera(XJEntity *camera) { mCamera = camera; }
-            XJEntity *XJGetCamera() const { return mCamera; }
+            bool IsValid() const
+            {
+                return mRenderPass != nullptr &&
+                       mBufferCount > 0 &&
+                       mExtent.width > 0 &&
+                       mExtent.height > 0 &&
+                       !mFrameBuffers.empty();
+            }
+
+            void XJSetCamera(XJEntity *camera);
+            void XJClearCamera();
+            XJEntity* XJGetCamera() const;
+            XJUUID XJGetCameraId() const { return mCameraId; }
 
     };
 }

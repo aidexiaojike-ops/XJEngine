@@ -5,6 +5,7 @@
 #include <filesystem>
 #include <unordered_map>
 #include <optional>
+#include <mutex>
 //资产数据库。负责 handle -> path/type/name。Scene 加载时靠它把 handle 找回真实资产。
 //读取序列化，根据场景序列加载对应的资产
 namespace XJ
@@ -33,8 +34,10 @@ namespace XJ
             bool Save(const std::filesystem::path& path) const;//将整个注册表的元数据序列化到文件（例如保存为 JSON 或二进制），用于持久化
             bool Load(const std::filesystem::path& path);//从文件反序列化恢复注册表状态
 
-            const std::unordered_map<XJAssetHandle, XJAssetMeta>& XJGetAllMetas() const { return mMetas; }//获取注册表中所有资产的元数据，供场景加载或编辑器 UI 使用
+             // 返回快照，不返回内部 map 引用。否则调用方遍历时 registry 被修改仍会数据竞争。
+            std::unordered_map<XJAssetHandle, XJAssetMeta> XJGetAllMetas() const;//获取注册表中所有资产的元数据，供场景加载或编辑器 UI 使用
         private:
+            mutable std::mutex mMutex;
             std::unordered_map<XJAssetHandle, XJAssetMeta> mMetas;
     };
 }

@@ -1,10 +1,9 @@
 #include "Camera/XJCameraController.h"
+#include "Camera/XJCameraMath.h"
 
 #include "ECS/XJEntity.h"
 #include "ECS/Component/XJCameraComponent.h"
 #include "ECS/Component/XJTransformComponent.h"
-
-#include <cmath>
 
 namespace XJ
 {
@@ -52,21 +51,16 @@ namespace XJ
         if (mode == CameraMode::Free)
         {
             if (!XJEntity::HasComponent<XJTransformComponent>(cameraEntity))
-                return;
-
-            auto& transformComp = cameraEntity->GetComponent<XJTransformComponent>();
-
-            float yaw = glm::radians(transformComp.rotation.x);
-            float pitch = glm::radians(-transformComp.rotation.y);
-
-            glm::vec3 direction;
-            direction.x = std::cos(yaw) * std::cos(pitch);
-            direction.y = std::sin(pitch);
-            direction.z = std::sin(yaw) * std::cos(pitch);
-            direction = glm::normalize(direction);
-
-            transformComp.position += direction * yOffset * mCameraMoveSpeed * 10.0f;
-            transformComp.UpdateModelMatrix();
+                 return;
+                    
+             auto& transformComp = cameraEntity->GetComponent<XJTransformComponent>();
+                    
+              const glm::vec3 forward = CameraMath::BuildForwardFromYawPitch(
+                  transformComp.rotation.x,
+                  transformComp.rotation.y);
+                
+             transformComp.position += forward * yOffset * mCameraMoveSpeed * 10.0f;
+             transformComp.UpdateModelMatrix();
         }
         else if (mode == CameraMode::Orbit)
         {
@@ -125,7 +119,7 @@ namespace XJ
 
             yaw += mouseDelta.x * mMouseSensitivity;
             pitch += mouseDelta.y * mMouseSensitivity;
-            pitch = glm::clamp(pitch, -89.0f, 89.0f);
+            pitch = CameraMath::ClampPitch(pitch);
 
             transformComp.rotation.x = yaw;
             transformComp.rotation.y = pitch;
@@ -134,19 +128,16 @@ namespace XJ
 
         if (rightDown)
         {
-            float yaw = glm::radians(transformComp.rotation.x);
-            float pitch = glm::radians(transformComp.rotation.y);
-
-            glm::vec3 forward;
-            forward.x = std::cos(yaw) * std::cos(pitch);
-            forward.y = std::sin(pitch);
-            forward.z = std::sin(yaw) * std::cos(pitch);
-            forward = glm::normalize(forward);
-
-            glm::vec3 right = glm::normalize(glm::cross(forward, glm::vec3(0.0f, 1.0f, 0.0f)));
-            glm::vec3 up = glm::cross(right, forward);
-
-            glm::vec3 moveVector = (right * -mouseDelta.x + up * mouseDelta.y) * mCameraMoveSpeed;
+            const glm::vec3 forward = CameraMath::BuildForwardFromYawPitch(
+                transformComp.rotation.x,
+                transformComp.rotation.y);
+                    
+            const glm::vec3 right = CameraMath::BuildRightFromForward(forward);
+            const glm::vec3 up = glm::normalize(glm::cross(right, forward));
+                    
+            const glm::vec3 moveVector =
+                (right * -mouseDelta.x + up * mouseDelta.y) * mCameraMoveSpeed;
+                    
             transformComp.position += moveVector;
             transformComp.UpdateModelMatrix();
         }
@@ -200,7 +191,7 @@ namespace XJ
 
             yaw += mouseDelta.x * mMouseSensitivity;
             pitch += mouseDelta.y * mMouseSensitivity;
-            pitch = glm::clamp(pitch, -89.0f, 89.0f);
+            pitch = CameraMath::ClampPitch(pitch);
 
             transformComp.rotation.x = yaw;
             transformComp.rotation.y = pitch;

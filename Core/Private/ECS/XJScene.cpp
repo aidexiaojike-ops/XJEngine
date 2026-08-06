@@ -3,6 +3,8 @@
 #include "ECS/XJEntity.h"
 #include "ECS/Component/XJTransformComponent.h"
 
+#include <spdlog/spdlog.h>
+
 namespace XJ
 {
 
@@ -26,25 +28,64 @@ namespace XJ
         return CreateEntityWithUUID(XJUUID(), name);
     }
 
+    XJEntity* XJScene::FindEntityByUUID(const XJUUID &id) const
+    {
+        if(!id)
+            return nullptr; // 如果 UUID 无效，直接返回空指针
+
+        for (const auto& [enttEntity, entity] : mEntities)
+        {
+            if (!entity)
+                continue;
+
+            if (entity && entity->XJGetUUID() == id)
+                return entity.get();
+        }
+        return nullptr; // 如果没有找到对应的实体，返回空指针
+    }
+
     // CreateEntityWithUUID：根据指定的 UUID 和名称创建实体
     // 此方法会给实体添加一个默认的 Transform 组件，并返回该实体的指针
     XJEntity* XJScene::CreateEntityWithUUID(const XJUUID &id, const std::string &name) 
     {
+        // UUID 是序列化、层级恢复、编辑器选择的稳定身份。重复 UUID 会让查找和父子关系恢复混乱。
+        if (id && FindEntityByUUID(id))
+        {
+            spdlog::error(
+                "CreateEntityWithUUID failed: duplicate uuid={}, name='{}'",
+                static_cast<uint64_t>(id),
+                name);
+            return nullptr;
+        }
         // 使用 ECS 注册表创建一个新的实体
-        auto enttEntity = mEcsRegistry.create();
+        entt::entity enttEntity = mEcsRegistry.create();
 
-        // 将新创建的实体加入到实体列表中，存储为一个智能指针
-        mEntities.insert({ enttEntity, std::make_shared<XJEntity>(enttEntity, this) });
+        auto entity = std::make_shared<XJEntity>(enttEntity, this);
+        auto [it, inserted] = mEntities.emplace(enttEntity, entity);
 
-        // 设置该实体的父节点为场景的根节点
-        mRootNode->XJAddChild(mEntities[enttEntity].get());
+        if (!inserted)
+        {
+            // 理论上 entt::create 不应返回 mEntities 已存在的 id。
+            // 如果发生，必须回滚 registry，避免 registry 和 mEntities 脱同步。
+            spdlog::critical(
+                "CreateEntityWithUUID failed: entity id already exists in mEntities, entt={}",
+                static_cast<uint32_t>(enttEntity));
 
+            if (mEcsRegistry.valid(enttEntity))
+                mEcsRegistry.destroy(enttEntity);
+
+            return nullptr;
+        }
+
+        XJEntity* xjEntity = it->second.get();
+
+        if (mRootNode)
+            mRootNode->XJAddChild(xjEntity); // 设置该实体的父节点为场景的根节点
         // 为实体设置唯一的 UUID（如果未提供名称则使用默认值）
-        mEntities[enttEntity]->XJSetUUID(id);
-        mEntities[enttEntity]->XJSetName(name.empty() ? "Entity" : name);
+        xjEntity->XJSetUUID(id);
+        xjEntity->XJSetName(name.empty() ? "Entity" : name);
 
-        // 返回实体的指针
-        return mEntities[enttEntity].get();
+        return xjEntity;
     }
 
     XJEntity* XJScene::CreateEntityWithTransform(const std::string& name)
@@ -66,32 +107,39 @@ namespace XJ
     }
 
      // DestroyEntity：销毁指定的实体并清除其相关资源
-    void XJScene::DestroyEntity(const XJEntity *entity) 
+    void XJScene::DestroyEntity(const XJEntity* entity)
     {
         if (!entity)
             return;
-
+    
         auto it = mEntities.find(entity->GetEcsEntity());
         if (it == mEntities.end())
             return;
-
+    
+        // 防止传入旧 scene 或旧包装对象，但 entt id 碰巧相同，误删当前 scene 的实体。
+        if (it->second.get() != entity)
+        {
+            spdlog::warn("DestroyEntity skipped: entity wrapper does not belong to this scene.");
+            return;
+        }
+    
         XJEntity* entityToDestroy = it->second.get();
-
+    
         std::vector<XJNode*> children = entityToDestroy->XJGetChildren();
         for (XJNode* child : children)
         {
             if (XJEntity* childEntity = dynamic_cast<XJEntity*>(child))
                 DestroyEntity(childEntity);
         }
-
-        if (entityToDestroy->IsValid())
-            mEcsRegistry.destroy(entityToDestroy->GetEcsEntity());
-
+    
         XJNode* parent = entityToDestroy->XJGetParent();
         if (parent)
             parent->XJRemoveChild(entityToDestroy);
-
-        mEntities.erase(entityToDestroy->GetEcsEntity());
+    
+        if (mEcsRegistry.valid(entityToDestroy->GetEcsEntity()))
+            mEcsRegistry.destroy(entityToDestroy->GetEcsEntity());
+    
+        mEntities.erase(it);
     }
 
      
@@ -110,13 +158,14 @@ namespace XJ
     // GetEntity：根据实体 ID 获取对应的实体对象
     XJEntity *XJScene::XJGetEntities(entt::entity enttEntity) const
     {
-        // 如果实体存在于列表中，返回该实体的指针
-        if(mEntities.find(enttEntity) != mEntities.end())
-        {
-            return mEntities.at(enttEntity).get();
-        }
-         // 如果实体不存在，返回空指针
-        return nullptr;
+        auto it = mEntities.find(enttEntity);
+        if (it == mEntities.end())
+            return nullptr;
+
+        if (!mEcsRegistry.valid(enttEntity))
+            return nullptr;
+
+        return it->second.get();
     }
 
     const std::unordered_map<entt::entity, std::shared_ptr<XJEntity>>& XJScene::GetEntities() const

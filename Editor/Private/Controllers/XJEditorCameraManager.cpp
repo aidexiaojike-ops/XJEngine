@@ -177,6 +177,11 @@ namespace XJ
             mGamePreview->SetCamera(mGameCameraEntity);
 
         if (mRenderTarget)
-            mRenderTarget->XJSetCamera(mGameCameraEntity);
+        {
+            if (mGameCameraEntity)
+                mRenderTarget->XJSetCamera(mGameCameraEntity);
+            else
+                mRenderTarget->XJClearCamera();
+        }
     }
 }

@@ -108,14 +108,21 @@ namespace XJ
             XJMaterialFactory() = default;
             XJAssetRegistry* mAssetRegistry = nullptr;
 
-            // 保护材质列表、纹理缓存和 asset registry 指针。
+           // 只保护工厂内部 CPU 状态：
+            // - mMaterials
+            // - mTextureCache
+            // - mAssetRegistry 指针读取/写入
+            //
+            // 注意：这个锁不保证 Vulkan 资源创建线程安全。
+            // GetOrLoadTexture() 最终会创建 XJTexture，当前 XJTexture 会使用默认 command pool/queue 上传，
+            // 因此运行时纹理创建仍必须在渲染线程执行。
             mutable std::mutex mMutex;
-
+            
             // 用 type_index 避免 entt hash 截断和理论碰撞。
             std::unordered_map<std::type_index, std::vector<std::weak_ptr<XJMaterial>>> mMaterials;
-
             // 纹理缓存本来就是 weak_ptr，保留弱引用，但访问必须加锁。
             std::unordered_map<XJAssetHandle, std::weak_ptr<XJTexture>> mTextureCache;
+
             std::shared_ptr<XJTexture> GetOrLoadTexture(XJAssetHandle handle, const std::shared_ptr<XJTexture>& fallback);
 
             void ApplyTextureBindings(XJUnlitMaterial& material, const XJMaterialAsset& asset, const std::shared_ptr<XJTexture>& defaultTexture, const std::shared_ptr<XJSampler>& defaultSampler);

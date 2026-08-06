@@ -4,6 +4,8 @@
 #include "ECS/XJComponent.h"
 #include "Edit/Mathinclude.h"
 
+#include <algorithm>
+
 namespace XJ
 {
     // 摄像机模式
@@ -28,18 +30,18 @@ namespace XJ
             float XJGetNear() const { return mNear; }//获取近裁剪面
             float XJGetFar() const { return mFar; }//获取远裁剪面
 
-            void XJSetFov(float fov) { this->mFov = fov; }
-            void XJSetAspectRatio(float aspectRatio) { this->mAspectRatio = aspectRatio; }
-            void XJSetNear(float nearVal) { this->mNear = nearVal; }
-            void XJSetFar(float farVal) { this->mFar = farVal; }
+            void XJSetFov(float fov) { mFov = glm::clamp(fov, 1.0f, 179.0f); }
+            void XJSetAspectRatio(float aspectRatio) { mAspectRatio = aspectRatio > 0.0f ? aspectRatio : 1.0f; }
+            void XJSetNear(float nearVal) { mNear = std::max(nearVal, 0.001f); }
+            void XJSetFar(float farVal) { mFar = std::max(farVal, mNear + 0.001f); }
 
             // 轨道模式专用接口
             const glm::vec3& XJGetPosition() const { return mPosition; }//获取摄像机位置
             float XJGetRadius() const { return mRadius; }//获取半径
             const glm::vec3& XJGetTarget() const { return mTarget; }///   轨道模式专用数据
    
-            void XJSetPosition(const glm::vec3& position) {  this->mPosition = position; }//设置摄像机位置
-            void XJSetRadius(float radius) { this->mRadius = radius; }//设置半径
+            void XJSetPosition(const glm::vec3& position) { mPosition = position; }//设置摄像机位置
+            void XJSetRadius(float radius) { mRadius = std::max(radius, 0.1f); }//设置半径
             void XJSetTarget(const glm::vec3& target) { mTarget = target; }///   轨道模式专用数据
 
             //切换摄像机

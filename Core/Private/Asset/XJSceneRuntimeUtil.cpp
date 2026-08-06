@@ -11,7 +11,7 @@ namespace XJ
     {
         static constexpr uint64_t PreviewCameraUUID = 0x30000001ull;
 
-        auto& reg = scene.XJGetEcsRegistry();
+        const auto& reg = scene.XJGetEcsRegistry();
         auto view = reg.view<XJCameraComponent>();
 
         //任意启用的 camera

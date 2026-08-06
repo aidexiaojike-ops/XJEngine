@@ -1,6 +1,7 @@
 #include "XJApplication.h"
 #include "Edit/SpdlogDebug.h"
 #include "ECS/XJScene.h"  // 新增：提供XJScene完整定义
+#include <thread>
 
 namespace XJ
 {
@@ -13,6 +14,7 @@ namespace XJ
         mSpdlogDebug = std::make_unique<SpdlogDebug>();//创建日志对象
         spdlog::info("应用程序启动");
 
+        sAppContext.renderThreadId = std::this_thread::get_id();
         
         ParseArgs(argc, argv);
         OnConfiguration(&mAppSettings);
@@ -49,6 +51,7 @@ namespace XJ
         sAppContext.renderContext = nullptr;
         sAppContext.app = nullptr;
         sAppContext.renderFrameSlot = 0;
+        sAppContext.renderThreadId = {};
     }
 
     void XJApplication::MainLoop()

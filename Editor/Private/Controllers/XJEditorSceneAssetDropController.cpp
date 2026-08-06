@@ -94,10 +94,11 @@ namespace XJ
         float closestT = maxDistance;
         bool hit = false;
 
-        auto& registry = scene.XJGetEcsRegistry();
+
+        const auto& registry = scene.XJGetEcsRegistry();
         auto view = registry.view<XJTransformComponent, XJMeshAssetRefComponent>();
 
-        view.each([&](auto entity, XJTransformComponent& transform, XJMeshAssetRefComponent& meshRef)
+        view.each([&](auto entity, const XJTransformComponent& transform, const XJMeshAssetRefComponent& meshRef)
         {
             float radius = std::max(transform.scale.x, std::max(transform.scale.y, transform.scale.z));
             radius = std::max(radius, 0.5f);

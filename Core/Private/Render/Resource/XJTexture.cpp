@@ -8,6 +8,8 @@
 #include <spdlog/spdlog.h>
 #include "Asset/Importer/XJTextureImporter.h"
 
+#include <thread>
+
 namespace XJ
 {
     XJTexture::XJTexture(uint32_t width, uint32_t height, RGBAColor *pixels) : mWidth(width), mHeight(height) 
@@ -28,8 +30,26 @@ namespace XJ
 
     void XJTexture::CreateImage(size_t size, void *data) 
     {
-         // 获取渲染上下文和设备
-        XJ::XJRenderContext *kRenderCxt = XJApplication::XJGetAppContext()->renderContext;
+        XJAppContext* appContext = XJApplication::XJGetAppContext();
+        if (!appContext)
+        {
+            spdlog::error("XJTexture::CreateImage failed: app context is null");
+            return;
+        }
+
+        // 当前实现使用 XJVulkanDevice 默认 command pool/queue 上传纹理。
+        // Vulkan command pool 和 queue 需要外部同步，所以 GPU 纹理创建必须在渲染线程执行。
+        if (appContext->renderThreadId != std::thread::id{} &&
+            appContext->renderThreadId != std::this_thread::get_id())
+        {
+            spdlog::error("XJTexture::CreateImage failed: texture GPU upload must run on render thread.");
+            return;
+        }
+
+        // 线程约束：当前实现使用 XJVulkanDevice 的默认 command pool/queue 上传纹理。
+        // Vulkan command pool 和 queue 需要外部同步，所以运行时纹理创建必须在渲染线程执行。
+        // 真正的多线程资源加载应改成：工作线程只解析文件，GPU image/buffer 创建投递到渲染线程执行。
+        XJ::XJRenderContext *kRenderCxt = appContext->renderContext;
         if (!kRenderCxt)
         {
             spdlog::error("XJTexture::CreateImage failed: render context is null");

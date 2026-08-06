@@ -219,7 +219,7 @@ namespace XJ
 
         if(!kScene){return;}//如果场景不存在，直接返回
 
-        entt::registry &kReg =  kScene->XJGetEcsRegistry();//拿到注射器
+        const entt::registry& kReg = kScene->XJGetEcsRegistry();//拿到注射器
         auto kView = kReg.view<XJTransformComponent, XJBaseMaterialComponent>();//获取视图，包含有变换组件、网格组件和基础材质组件的实体
 
         if (kView.end() == kView.begin()) 
