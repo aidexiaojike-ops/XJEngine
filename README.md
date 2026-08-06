@@ -28,7 +28,7 @@ XJEngine is a lightweight modern game engine built with Vulkan and ECS architect
 | **Runtime Material Generation** | Programmatic material creation with random colors, textures, and UV transforms at runtime |
 | **Procedural Textures** | Generate textures from pixel data (single color or multi-pixel arrays) without external files |
 | **Dynamic Instancing** | Support for large-scale entity rendering with dynamic uniform buffers |
-| **Camera Controller / 摄像机控制** | Shared camera module with orbit/free modes, editor camera manager, ECS camera system |
+| **Camera Controller / 摄像机控制** | Shared camera module with orbit/free modes, math utilities (`XJCameraMath`), editor camera manager, ECS camera system |
 | **Asset System** | Two-layer Asset/Resource architecture, glTF 2.0 importer, asset registry scanner, bootstrap, scene instantiator, mesh/texture/material loaders |
 | **ImGui Editor UI** | In-engine editor with ImGui, docking, multi-viewport, drag-drop, panels (Hierarchy, Inspector, Content Browser, Console, Scene/Game Preview) |
 | **Multisampling Anti-aliasing** | MSAA support for improved visual quality |
@@ -303,7 +303,8 @@ XJEngine/
 │   │   │   └── System/             # 具体系统
 │   │   │       └── XJCameraSystem.h
 │   │   ├── Camera/          # 摄像机模块（独立于 ECS）
-│   │   │   └── XJCameraController.h
+│   │   │   ├── XJCameraController.h
+│   │   │   └── XJCameraMath.h
 │   │   └── Render/         # 渲染相关
 │   │       ├── XJSampler.h
 │   │       ├── XJRenderTarget.h
