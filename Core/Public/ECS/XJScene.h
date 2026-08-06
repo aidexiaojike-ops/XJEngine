@@ -5,6 +5,7 @@
 #include "ECS/XJUUID.h"
 // #include <entt/entt.hpp> 
 #include <entt/entity/registry.hpp> 
+#include <unordered_set>
 /**
  * @file XJScene.h
  * @brief 场景类，管理场景中所有的实体与节点，基于 EnTT 的 ECS 注册表。
@@ -30,6 +31,12 @@ namespace XJ
             std::unordered_map<entt::entity, std::shared_ptr<XJEntity>> mEntities;
             std::shared_ptr<XJNode> mRootNode;  ///< 场景根节点，用于构建场景层级树
 
+            // view.each 遍历期间不要直接 destroy registry；先排队，遍历结束后 Flush。
+            std::vector<entt::entity> mPendingDestroyEntities;
+            std::unordered_set<entt::entity> mPendingDestroySet;
+
+            void DestroyEntityImmediate(const XJEntity* entity);
+
             friend class XJEntity;///< 允许 XJEntity 访问场景内部成员
             
         public:
@@ -51,6 +58,8 @@ namespace XJ
             XJEntity* CreateEntityWithUUIDAndTransform(const XJUUID& id, const std::string& name);//添加一个带有transform组件的实体
             
             void DestroyEntity(const XJEntity *entity);//销毁指定的实体。
+            void QueueDestroyEntity(const XJEntity *entity);//遍历 ECS view 时使用的延迟销毁接口。
+            void FlushDestroyQueue();//在安全点批量执行延迟销毁。
             void DestroyAllEntity();//销毁场景中所有的实体。
 
             const std::unordered_map<entt::entity, std::shared_ptr<XJEntity>>& GetEntities() const;

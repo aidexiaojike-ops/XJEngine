@@ -1,10 +1,33 @@
 #include "ECS/XJNode.h"
 
 
+namespace
+{
+    bool IsAncestorOf(const XJ::XJNode* possibleAncestor, const XJ::XJNode* node)
+    {
+        const XJ::XJNode* current = node;
+        while (current)
+        {
+            if (current == possibleAncestor)
+                return true;
+
+            current = current->XJGetParent();
+        }
+
+        return false;
+    }
+}
+
 namespace XJ
 {
     XJNode::XJNode(/* args */) = default;
-    XJNode::~XJNode() = default;
+    XJNode::~XJNode()
+    {
+        if (mParent)
+            mParent->XJRemoveChild(this);
+
+        XJClearChildren();
+    }
    
     const std::vector<XJNode *>& XJNode::XJGetChildren() const
     {
@@ -22,6 +45,13 @@ namespace XJ
 
     void XJNode::XJAddChild(XJNode *node)//先移除子节点后添加
     {
+        if (!node || node == this)
+            return;
+
+        // 防止把祖先挂到子节点下面形成环，DestroyEntity 递归会爆栈。
+        if (IsAncestorOf(node, this))
+            return;
+
         if(node->HasParent())
         {
             node->XJGetParent()->XJRemoveChild(node);
@@ -32,7 +62,7 @@ namespace XJ
 
     void XJNode::XJRemoveChild(XJNode *node)//移除子节点
     {
-        if(!HasChildren())
+        if(!node || !HasChildren())
         {
             return;
         }
@@ -42,7 +72,8 @@ namespace XJ
             if(node == *it)
             {
                 mChildren.erase(it);
-                node->mParent = nullptr;
+                if (node->mParent == this)
+                    node->mParent = nullptr;
                 break;
             }
         }
@@ -54,7 +85,8 @@ namespace XJ
         {
             if(child)
             {
-                child->mParent = nullptr;
+                if (child->mParent == this)
+                    child->mParent = nullptr;
             }
         }
 

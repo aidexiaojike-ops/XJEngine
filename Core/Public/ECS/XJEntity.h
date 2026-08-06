@@ -4,6 +4,9 @@
 #include "ECS/XJNode.h"
 #include "ECS/XJScene.h"
 
+#include <stdexcept>
+#include <utility>
+
 namespace XJ
 {
     class XJEntity : public XJNode
@@ -46,7 +49,11 @@ namespace XJ
             template<typename T, typename... Args>//添加组件
             T& AddComponent(Args &&...args)
             {
-                T &component = mScene->mEcsRegistry.emplace<T>(mEcsEntity, std::forward<Args>(args)...);
+                if (!IsValid())
+                    throw std::runtime_error("AddComponent failed: entity is invalid");
+
+                // 重复添加组件时替换旧组件，避免 EnTT emplace 触发断言。
+                T &component = mScene->mEcsRegistry.emplace_or_replace<T>(mEcsEntity, std::forward<Args>(args)...);
                 component.SetOwner(this);//设置组件的所有者为当前实体
                 return component;
             }
@@ -54,40 +61,46 @@ namespace XJ
             template<typename T>
             bool HasComponent() const//是否包含组件
             {
-                return mScene->mEcsRegistry.any_of<T>(mEcsEntity);
+                return IsValid() && mScene->mEcsRegistry.any_of<T>(mEcsEntity);
             }
 
             template<typename... T>
             bool HasAnyComponent() //其中一个包含
             {
-                return mScene->mEcsRegistry.any_of<T...>(mEcsEntity);
+                return IsValid() && mScene->mEcsRegistry.any_of<T...>(mEcsEntity);
             }
 
             template<typename... T>
             bool HasAllComponent()//全部包含
             {
-                return mScene->mEcsRegistry.all_of<T...>(mEcsEntity);
+                return IsValid() && mScene->mEcsRegistry.all_of<T...>(mEcsEntity);
             }
 
         
             template<typename T>
             T& GetComponent() //获取组件
             {
-                assert(HasComponent<T>() && "Entity does not have component!");
+                if (!HasComponent<T>())
+                    throw std::runtime_error("GetComponent failed: entity does not have component");
+
                 return mScene->mEcsRegistry.get<T>(mEcsEntity);
             }
 
             template<typename T>
             const T& GetComponent() const //获取组件
             {
-                assert(HasComponent<T>()&& "Entity does not have component!");
+                if (!HasComponent<T>())
+                    throw std::runtime_error("GetComponent failed: entity does not have component");
+
                 return mScene->mEcsRegistry.get<T>(mEcsEntity);
             }
 
             template<typename T>
             void RemoveComponent()//移除组件
             {
-                assert(HasComponent<T>() && "Entity does not have component!");
+                if (!HasComponent<T>())
+                    return;
+
                 mScene->mEcsRegistry.remove<T>(mEcsEntity);
             }
 

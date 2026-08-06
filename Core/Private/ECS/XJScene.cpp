@@ -106,8 +106,40 @@ namespace XJ
         return entity;
     }
 
-     // DestroyEntity：销毁指定的实体并清除其相关资源
+     // DestroyEntity：立即销毁指定实体。不要在 registry.view().each() 内调用。
     void XJScene::DestroyEntity(const XJEntity* entity)
+    {
+        DestroyEntityImmediate(entity);
+    }
+
+    void XJScene::QueueDestroyEntity(const XJEntity* entity)
+    {
+        if (!entity)
+            return;
+
+        const entt::entity ecsEntity = entity->GetEcsEntity();
+        if (!mEcsRegistry.valid(ecsEntity))
+            return;
+
+        if (mPendingDestroySet.insert(ecsEntity).second)
+            mPendingDestroyEntities.push_back(ecsEntity);
+    }
+
+    void XJScene::FlushDestroyQueue()
+    {
+        std::vector<entt::entity> pending = std::move(mPendingDestroyEntities);
+        mPendingDestroyEntities.clear();
+        mPendingDestroySet.clear();
+
+        for (entt::entity ecsEntity : pending)
+        {
+            XJEntity* entity = XJGetEntities(ecsEntity);
+            if (entity)
+                DestroyEntityImmediate(entity);
+        }
+    }
+
+    void XJScene::DestroyEntityImmediate(const XJEntity* entity)
     {
         if (!entity)
             return;
@@ -129,7 +161,7 @@ namespace XJ
         for (XJNode* child : children)
         {
             if (XJEntity* childEntity = dynamic_cast<XJEntity*>(child))
-                DestroyEntity(childEntity);
+                DestroyEntityImmediate(childEntity);
         }
     
         XJNode* parent = entityToDestroy->XJGetParent();
@@ -138,13 +170,17 @@ namespace XJ
     
         if (mEcsRegistry.valid(entityToDestroy->GetEcsEntity()))
             mEcsRegistry.destroy(entityToDestroy->GetEcsEntity());
-    
+
+        mPendingDestroySet.erase(entityToDestroy->GetEcsEntity());
         mEntities.erase(it);
     }
 
      
     void XJScene::DestroyAllEntity() // DestroyAllEntity：销毁场景中的所有实体
     {
+
+        mPendingDestroyEntities.clear();
+        mPendingDestroySet.clear();
 
         if(mRootNode)
             mRootNode->XJClearChildren();
