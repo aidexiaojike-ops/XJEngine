@@ -6,6 +6,7 @@
 #include "ECS/Component/XJTransformComponent.h"
 #include "Render/XJRenderer.h"
 #include <array>
+#include <cstddef>
 
 namespace XJ
 {
@@ -24,10 +25,19 @@ namespace XJ
         glm::mat4 viewMat{1.0f};
     };
 
+    // 与 Shader/Descriptor.vert 的 `layout(set=0, binding=0, std140) uniform GlobalUbo` 一致。
+    static_assert(sizeof(GlobalUbo) == 128,            "GlobalUbo: sizeof 必须为 128（std140：2 * mat4）");
+    static_assert(offsetof(GlobalUbo, projMat) == 0,   "GlobalUbo.projMat 偏移必须为 0");
+    static_assert(offsetof(GlobalUbo, viewMat) == 64,  "GlobalUbo.viewMat 偏移必须为 64");
+
     struct InstanceUbo
     {
         glm::mat4 modelMat{1.0f};
     };
+
+    // 与 Shader/Descriptor.vert 的 `layout(set=0, binding=1, std140) uniform InstanceUbo` 一致。
+    static_assert(sizeof(InstanceUbo) == 64,                "InstanceUbo: sizeof 必须为 64（std140：1 * mat4）");
+    static_assert(offsetof(InstanceUbo, modelMat) == 0,     "InstanceUbo.modelMat 偏移必须为 0");
 
     class XJBaseMaterialSystem : public XJMaterialSystem
     {

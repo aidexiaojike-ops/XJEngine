@@ -10,38 +10,37 @@ namespace XJ
     std::vector<XJMaterialRenderItem> XJUnlitMaterialRenderItemBuilder::Build(XJScene& scene)
     {
         std::vector<XJMaterialRenderItem> items;
+        Build(scene, items);
+        return items;
+    }
+    
+    void XJUnlitMaterialRenderItemBuilder::Build(XJScene& scene, std::vector<XJMaterialRenderItem>& outItems)
+    {
+        outItems.clear();
 
         const auto& registry = scene.XJGetEcsRegistry();
         auto view = registry.view<XJTransformComponent, XJUnlitMaterialComponent>();
 
-        view.each([&items](const auto& entity, const XJTransformComponent& transComp, const XJUnlitMaterialComponent& matComp)
+        view.each([&outItems](const auto& entity, const XJTransformComponent& transComp, const XJUnlitMaterialComponent& matComp)
         {
             (void)entity;
 
-            auto meshMaterials = matComp.XJGetMeshMaterials();
-
-            for (const auto& entry : meshMaterials)
+            for (const auto& slot : matComp.XJGetSlots())
             {
-                XJUnlitMaterial* material = entry.first;
-                if (!material || material->XJGetIndex() < 0)
+                if (!slot.Mesh || !slot.Material)
                     continue;
-
-                for (const auto& meshIndex : entry.second)
-                {
-                    std::shared_ptr<XJMesh> mesh = matComp.XJGetMeshShared(meshIndex);
-                    if (!mesh)
-                        continue;
-
-                    XJMaterialRenderItem item{};
-                    item.Material = material;
-                    item.Mesh = mesh;
-                    item.ModelMatrix = transComp.GetModelMatrix();
-
-                    items.push_back(item);
-                }
+            
+                XJUnlitMaterial* material = slot.Material.get();
+                if (material->XJGetIndex() < 0)
+                    continue;
+            
+                XJMaterialRenderItem item{};
+                item.Material = material;
+                item.Mesh = slot.Mesh;
+                item.ModelMatrix = transComp.GetModelMatrix();
+            
+                outItems.push_back(item);
             }
         });
-
-        return items;
     }
 }

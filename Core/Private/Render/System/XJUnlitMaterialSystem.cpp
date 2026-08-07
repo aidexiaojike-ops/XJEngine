@@ -12,9 +12,7 @@
 #include "Render/Resource/XJMesh.h"
 #include "Render/XJRenderTarget.h"
 
-#include <unordered_map>
-#include <unordered_set>
-#include <vector>
+#include <glm/gtc/matrix_inverse.hpp>
 #include "Edit\FileUtil.h"
 
 namespace XJ
@@ -48,11 +46,85 @@ namespace XJ
         }
        
     }
+    void XJUnlitMaterialSystem::MarkMaterialParamsDirtyForAllFrameSlots(XJMaterialPipelineRuntime& runtime, uint32_t materialIndex)
+    {
+        std::vector<bool>& flags = mParamUploadedByRuntime[&runtime];
+        const uint32_t flagCount = runtime.LastDescriptorSetCount*RENDERER_NUM_BUFFER;
+
+        if (flags.size() < flagCount)
+            flags.resize(flagCount, false);
+        
+        if(materialIndex >= runtime.LastDescriptorSetCount)
+        {
+            spdlog::error("MarkMaterialParamsDirtyForAllFrameSlots: materialIndex {} exceeds runtime.LastDescriptorSetCount {}",
+                materialIndex, runtime.LastDescriptorSetCount);
+            return;
+        }
+
+        for (uint32_t frameSlot = 0; frameSlot < RENDERER_NUM_BUFFER; ++frameSlot)
+            flags[frameSlot * runtime.LastDescriptorSetCount + materialIndex] = false;
+    }
+
+    void XJUnlitMaterialSystem::MarkMaterialResourcesDirtyForAllFrameSlots(XJMaterialPipelineRuntime& runtime, uint32_t materialIndex)
+    {
+        std::vector<bool>& flags = mResourceUploadedByRuntime[&runtime];
+        const uint32_t flagCount = runtime.LastDescriptorSetCount * RENDERER_NUM_BUFFER;
+
+        if (flags.size() < flagCount)
+            flags.resize(flagCount, false);
+
+        if (materialIndex >= runtime.LastDescriptorSetCount)
+            return;
+
+        for (uint32_t frameSlot = 0; frameSlot < RENDERER_NUM_BUFFER; ++frameSlot)
+            flags[frameSlot * runtime.LastDescriptorSetCount + materialIndex] = false;
+    }
+
+    bool XJUnlitMaterialSystem::HasPendingMaterialParamUpdates(XJMaterialPipelineRuntime& runtime, uint32_t materialIndex) const//
+    {
+        auto it = mParamUploadedByRuntime.find(&runtime);
+        if (it == mParamUploadedByRuntime.end())
+            return false;
+
+        if (materialIndex >= runtime.LastDescriptorSetCount)
+            return false;
+
+        const std::vector<bool>& flags = it->second;
+        for (uint32_t frameSlot = 0; frameSlot < RENDERER_NUM_BUFFER; ++frameSlot)
+        {
+            const uint32_t descriptorIndex = frameSlot * runtime.LastDescriptorSetCount + materialIndex;
+            if (descriptorIndex < flags.size() && !flags[descriptorIndex])
+                return true;
+        }
+
+        return false;
+    }
+
+    bool XJUnlitMaterialSystem::HasPendingMaterialResourceUpdates(XJMaterialPipelineRuntime& runtime, uint32_t materialIndex) const
+    {
+        auto it = mResourceUploadedByRuntime.find(&runtime);
+        if (it == mResourceUploadedByRuntime.end())
+            return false;
+
+        if (materialIndex >= runtime.LastDescriptorSetCount)
+            return false;
+
+        const std::vector<bool>& flags = it->second;
+        for (uint32_t frameSlot = 0; frameSlot < RENDERER_NUM_BUFFER; ++frameSlot)
+        {
+            const uint32_t descriptorIndex = frameSlot * runtime.LastDescriptorSetCount + materialIndex;
+            if (descriptorIndex < flags.size() && !flags[descriptorIndex])
+                return true;
+        }
+
+        return false;
+    }
+
     void XJUnlitMaterialSystem::OnRender(XJVulkanCommandBuffer cmdBuffer, XJRenderTarget* renderTarget) 
     {
-        XJScene *kScene = XJGetScene();
+        XJScene *scene = XJGetScene();
 
-        if(!kScene){return;}//如果场景不存在，直接返回
+        if(!scene){return;}//如果场景不存在，直接返回
 
         XJMaterialPipelineRuntime* defaultRuntime = GetDefaultMaterialRuntime();
         if (!defaultRuntime  || !defaultRuntime->IsValid())
@@ -61,15 +133,15 @@ namespace XJ
             return;
         }
 
-        std::vector<XJMaterialRenderItem> renderItems = XJUnlitMaterialRenderItemBuilder::Build(*kScene);
-        if (renderItems.empty())
+        XJUnlitMaterialRenderItemBuilder::Build(*scene, mRenderItems);
+        if (mRenderItems.empty())
             return;// 视图确实为空
       
          //bind pipeline
         //runtime->Pipeline->BindPipeline(cmdBuffer);//绑定管线
         //vkCmdBindDescriptorSets(cmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, mPipelineLayout->XJGetPipelineLayout(), 0, 1,  mDescriptorSets.data(), 0, nullptr);
-        XJ::XJVulkanFrameBuffer *kFrameBuffer = renderTarget->XJGetCurrentFrameBuffer();
-        if (!kFrameBuffer) 
+        XJVulkanFrameBuffer* frameBuffer = renderTarget ? renderTarget->XJGetCurrentFrameBuffer() : nullptr;
+        if (!frameBuffer) 
         {
             spdlog::error("FrameBuffer is null, skipping render");
             return;
@@ -78,25 +150,27 @@ namespace XJ
         VkViewport kViewport{};
         kViewport.x = 0.0f;
         kViewport.y = 0.0f;
-        kViewport.width = static_cast<float>(kFrameBuffer->XJGetWidth());
-        kViewport.height = static_cast<float>(kFrameBuffer->XJGetHeight());
+        kViewport.width = static_cast<float>(frameBuffer->XJGetWidth());
+        kViewport.height = static_cast<float>(frameBuffer->XJGetHeight());
         kViewport.minDepth = 0.0f;
         kViewport.maxDepth = 1.0f;
         vkCmdSetViewport(cmdBuffer, 0, 1, &kViewport);
         //设置裁剪矩形
         VkRect2D scissor{};
         scissor.offset = {0, 0};
-        scissor.extent = {kFrameBuffer->XJGetWidth(), kFrameBuffer->XJGetHeight()};
+        scissor.extent = {frameBuffer->XJGetWidth(), frameBuffer->XJGetHeight()};
         vkCmdSetScissor(cmdBuffer, 0, 1, &scissor);
         //更新设备  模型 窗口 时间
         XJMaterialRuntimeUploadContext uploadContext = BuildUploadContext(renderTarget);
+        const uint32_t frameSlot = uploadContext.FrameSlot % RENDERER_NUM_BUFFER;
 
-        uint32_t kMaterialCount = XJMaterialFactory::GetInstance()->GetMaterialSize<XJUnlitMaterial>();//材质数量
-        std::unordered_set<XJMaterialPipelineRuntime*> forceUpdateRuntimes;
+        mForceUpdateRuntimes.clear();
+        mUpdatedFrameRuntimes.clear();
+        mRequiredDescriptorCountByRuntime.clear();
 
-        std::unordered_map<XJMaterialPipelineRuntime*, uint32_t> requiredDescriptorCountByRuntime;
-        //预扫描
-        for (const XJMaterialRenderItem& item : renderItems)
+        // 只统计当前 scene 本帧实际要画的材质。仍然用 material index 做 descriptor 下标，
+    // 因此 requiredCount 必须是 max(materialIndex)+1，而不是材质个数。
+        for (const XJMaterialRenderItem& item : mRenderItems)
         {
             XJMaterial* material = item.Material;
             if (!material || material->XJGetIndex() < 0)
@@ -107,19 +181,19 @@ namespace XJ
                 continue;
         
             const uint32_t requiredCount = material->GetIndex() + 1;
-            uint32_t& currentRequiredCount = requiredDescriptorCountByRuntime[runtime];
+            uint32_t& currentRequiredCount = mRequiredDescriptorCountByRuntime[runtime];
         
             if (currentRequiredCount < requiredCount)
                 currentRequiredCount = requiredCount;
         }
 
-        if (requiredDescriptorCountByRuntime.find(defaultRuntime) == requiredDescriptorCountByRuntime.end())
-            requiredDescriptorCountByRuntime[defaultRuntime] = kMaterialCount;
+        if (mRequiredDescriptorCountByRuntime.find(defaultRuntime) == mRequiredDescriptorCountByRuntime.end())
+            mRequiredDescriptorCountByRuntime[defaultRuntime] = NUM_MATERIAL_BATCH;
 
-        for (auto& [runtime, requiredCount] : requiredDescriptorCountByRuntime)
+        for (auto& [runtime, requiredCount] : mRequiredDescriptorCountByRuntime)
         {
-            if (requiredCount < kMaterialCount)
-                requiredCount = kMaterialCount;
+            if (requiredCount < NUM_MATERIAL_BATCH)
+                requiredCount = NUM_MATERIAL_BATCH;
         
             if (requiredCount > runtime->LastDescriptorSetCount)
             {
@@ -137,36 +211,28 @@ namespace XJ
                     return;
                 }
             
-                forceUpdateRuntimes.insert(runtime);
+                // descriptor pool 重建后所有 material/frame slot 都需要重新写 descriptor。
+                mForceUpdateRuntimes.insert(runtime);
+                mParamUploadedByRuntime[runtime].assign(requiredCount * RENDERER_NUM_BUFFER, false);
+                mResourceUploadedByRuntime[runtime].assign(requiredCount * RENDERER_NUM_BUFFER, false);
+            }
+             else
+            {
+                const uint32_t flagCount = runtime->LastDescriptorSetCount * RENDERER_NUM_BUFFER;
+                mParamUploadedByRuntime[runtime].resize(flagCount, false);
+                mResourceUploadedByRuntime[runtime].resize(flagCount, false);
             }
         }
 
         XJMaterialPipelineRuntime* boundRuntime = nullptr;
-        std::unordered_set<XJMaterialPipelineRuntime*> updatedFrameRuntimes;
-        //材质是否更新
-        std::unordered_map<XJMaterialPipelineRuntime*, std::vector<bool>> updateFlagsByRuntime;
-        const uint32_t frameSlot = uploadContext.FrameSlot % RENDERER_NUM_BUFFER;
 
-        for (const XJMaterialRenderItem& item : renderItems)
+        for (const XJMaterialRenderItem& item : mRenderItems)
         {
             XJMaterial* material = item.Material;
-            if (!material || material->XJGetIndex() < 0)
-            {
-                spdlog::error("TODO: Default material of error material ?");
+            if (!material || material->XJGetIndex() < 0 || !item.Mesh)
                 continue;
-            }
-                        
-            if (!item.Mesh)
-            {
-                continue;
-            }
-
             
-        
-            const uint32_t materialIndex = material->GetIndex();
-        
             XJMaterialPipelineRuntime* runtime = ResolveMaterialRuntime(material);
-        
             if (!runtime || !runtime->IsValid())
             {
                 spdlog::warn(
@@ -175,7 +241,7 @@ namespace XJ
                 continue;
             }
         
-            if (updatedFrameRuntimes.insert(runtime).second)
+            if (mUpdatedFrameRuntimes.insert(runtime).second)
                 XJMaterialRuntimeUploader::UpdateFrameUboDescSet(uploadContext, *runtime);
         
             if (boundRuntime != runtime)
@@ -183,9 +249,10 @@ namespace XJ
                 runtime->Pipeline->BindPipeline(cmdBuffer);
                 boundRuntime = runtime;
             }
+        
+            const uint32_t materialIndex = material->GetIndex();
             const uint32_t descriptorIndex = frameSlot * runtime->LastDescriptorSetCount + materialIndex;
-
-            // 每个 frame slot 使用独立的材质 descriptor set，避免更新 pending command buffer 正在使用的 set。
+        
             if (materialIndex >= runtime->LastDescriptorSetCount ||
                 descriptorIndex >= runtime->MaterialParamDescSets.size() ||
                 descriptorIndex >= runtime->MaterialResourceDescSets.size())
@@ -195,47 +262,63 @@ namespace XJ
                     material->GetIndex());
                 continue;
             }
+
+            
         
-            auto& runtimeUpdateFlags = updateFlagsByRuntime[runtime];
-            const uint32_t runtimeUpdateFlagCount = runtime->LastDescriptorSetCount * RENDERER_NUM_BUFFER;
-            if (runtimeUpdateFlags.size() < runtimeUpdateFlagCount)
-                runtimeUpdateFlags.resize(runtimeUpdateFlagCount, false);
-        
-            const bool forceUpdateRuntime =
-                forceUpdateRuntimes.find(runtime) != forceUpdateRuntimes.end();
-        
+            const bool forceUpdateRuntime = mForceUpdateRuntimes.find(runtime) != mForceUpdateRuntimes.end();
+
+            if (material->ShouldFlushParams())
+                MarkMaterialParamsDirtyForAllFrameSlots(*runtime, materialIndex);
+
+            if (material->ShouldFlushResoure())
+                MarkMaterialResourcesDirtyForAllFrameSlots(*runtime, materialIndex);
+
+            std::vector<bool>& paramFlags = mParamUploadedByRuntime[runtime];
+            std::vector<bool>& resourceFlags = mResourceUploadedByRuntime[runtime];
+
             VkDescriptorSet paramsDescSet = runtime->MaterialParamDescSets[descriptorIndex];
             VkDescriptorSet resourceDescSet = runtime->MaterialResourceDescSets[descriptorIndex];
-        
-            if (!runtimeUpdateFlags[descriptorIndex] || forceUpdateRuntime)
+
+            if (forceUpdateRuntime || descriptorIndex >= paramFlags.size() || !paramFlags[descriptorIndex])
             {
-                XJMaterialRuntimeUploader::UpdateMaterialParamsDescSet(
-                    uploadContext.Device,
-                    *runtime,
-                    paramsDescSet,
-                    descriptorIndex,
-                    material);
-                
-                material->FinishFlushParams();
-                
-                XJMaterialRuntimeUploader::UpdateMaterialResourceDescSet(
-                    uploadContext.Device,
-                    *runtime,
-                    resourceDescSet,
-                    material);
-                
-                material->FinishFlushResoure();
-                
-                runtimeUpdateFlags[descriptorIndex] = true;
+                if (XJMaterialRuntimeUploader::UpdateMaterialParamsDescSet(
+                        uploadContext.Device,
+                        *runtime,
+                        paramsDescSet,
+                        descriptorIndex,
+                        material))
+                {
+                    if (descriptorIndex < paramFlags.size())
+                        paramFlags[descriptorIndex] = true;
+                }
+
+                if (!HasPendingMaterialParamUpdates(*runtime, materialIndex))
+                    material->FinishFlushParams();
             }
-        
+
+            if (forceUpdateRuntime || descriptorIndex >= resourceFlags.size() || !resourceFlags[descriptorIndex])
+            {
+                if (XJMaterialRuntimeUploader::UpdateMaterialResourceDescSet(
+                        uploadContext.Device,
+                        *runtime,
+                        resourceDescSet,
+                        material))
+                {
+                    if (descriptorIndex < resourceFlags.size())
+                        resourceFlags[descriptorIndex] = true;
+                }
+
+                if (!HasPendingMaterialResourceUpdates(*runtime, materialIndex))
+                    material->FinishFlushResoure();
+            }
+
             VkDescriptorSet descriptorSets[] =
             {
                 runtime->FrameUboDescSets[frameSlot],
                 paramsDescSet,
                 resourceDescSet
             };
-        
+
             vkCmdBindDescriptorSets(
                 cmdBuffer,
                 VK_PIPELINE_BIND_POINT_GRAPHICS,
@@ -245,9 +328,18 @@ namespace XJ
                 descriptorSets,
                 0,
                 nullptr);
-            
-            ModelPC pc = { item.ModelMatrix };
-            
+
+            ModelPC pc{};
+            pc.modelMat = item.ModelMatrix;
+
+            // normalMat 必须是 model 的逆转置；否则非等比缩放下法线错误。
+            // 用 mat4 上传是为了匹配 shader push constant 布局，避免 glm::mat3 的紧凑内存布局错位。
+            const glm::mat3 normalMat3 = glm::inverseTranspose(glm::mat3(item.ModelMatrix));
+            pc.normalMat[0] = glm::vec4(normalMat3[0], 0.0f);
+            pc.normalMat[1] = glm::vec4(normalMat3[1], 0.0f);
+            pc.normalMat[2] = glm::vec4(normalMat3[2], 0.0f);
+            pc.normalMat[3] = glm::vec4(0.0f, 0.0f, 0.0f, 1.0f);
+
             vkCmdPushConstants(
                 cmdBuffer,
                 runtime->PipelineLayout->XJGetPipelineLayout(),
@@ -263,6 +355,13 @@ namespace XJ
 
     void XJUnlitMaterialSystem::OnDestroy() 
     {
+        mRenderItems.clear();
+        mForceUpdateRuntimes.clear();
+        mUpdatedFrameRuntimes.clear();
+        mRequiredDescriptorCountByRuntime.clear();
+        mParamUploadedByRuntime.clear();
+        mResourceUploadedByRuntime.clear();
+        
         ShutdownMaterialRuntime();
     }
 }

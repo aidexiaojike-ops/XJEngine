@@ -5,6 +5,7 @@
 #include "Graphic/XJVulkanTextureSampler.h"
 
 #include <spdlog/spdlog.h>
+#include <exception>
 
 namespace XJ
 {
@@ -18,7 +19,15 @@ namespace XJ
             return;
         }
 
-        mTextureSampler = std::make_shared<XJVulkanTextureSampler>(device, filter, addressMode);
+        try
+        {
+            mTextureSampler = std::make_shared<XJVulkanTextureSampler>(device, filter, addressMode);
+        }
+        catch (const std::exception& e)
+        {
+            spdlog::error("XJSampler create failed: {}", e.what());
+            mTextureSampler.reset();
+        }
     }
 
     XJSampler::~XJSampler() = default;

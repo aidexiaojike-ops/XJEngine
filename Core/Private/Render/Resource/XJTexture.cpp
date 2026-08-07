@@ -16,7 +16,16 @@ namespace XJ
     {   
         // 设置纹理的格式为 VK_FORMAT_R8G8B8A8_UNORM（标准 RGBA 格式）
         mFormat = VK_FORMAT_R8G8B8A8_UNORM;//mipmap
-        size_t size = sizeof(uint8_t) * 4 * mWidth * mHeight;
+        if (mWidth == 0 || mHeight == 0 || !pixels)
+        {
+            spdlog::error(
+                "XJTexture create failed: invalid input, width={}, height={}, pixels={}",
+                mWidth,
+                mHeight,
+                static_cast<const void*>(pixels));
+            return;
+        }
+        const size_t size = sizeof(RGBAColor) * static_cast<size_t>(mWidth) * static_cast<size_t>(mHeight);
         CreateImage(size, pixels);
         
     }
@@ -28,8 +37,24 @@ namespace XJ
         mImage.reset();
     }
 
+    bool XJTexture::IsValid() const
+    {
+        return mWidth > 0 &&
+               mHeight > 0 &&
+               mImage &&
+               mImage->IsValid() &&
+               mImageView &&
+               mImageView->XJGetImageView() != VK_NULL_HANDLE;
+    }
+
     void XJTexture::CreateImage(size_t size, void *data) 
     {
+        if (size == 0 || !data)
+        {
+            spdlog::error("XJTexture::CreateImage failed: invalid pixel data.");
+            return;
+        }
+
         XJAppContext* appContext = XJApplication::XJGetAppContext();
         if (!appContext)
         {
@@ -66,8 +91,22 @@ namespace XJ
         mImage = std::make_shared<XJVulkanImage>(kDevice, VkExtent3D{ mWidth, mHeight, 1 }, 
                  mFormat, VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT, 
                  VK_SAMPLE_COUNT_1_BIT);
+                 
+        if (!mImage || !mImage->IsValid())
+        {
+            spdlog::error("XJTexture::CreateImage failed: image creation failed.");
+            mImage.reset();
+            return;
+        }
         // 创建图像视图
         mImageView = std::make_shared<XJVulkanImageView>(kDevice, mImage->XJGetImage(), mFormat, VK_IMAGE_ASPECT_COLOR_BIT);
+        if (!mImageView || mImageView->XJGetImageView() == VK_NULL_HANDLE)
+        {
+            spdlog::error("XJTexture::CreateImage failed: image view creation failed.");
+            mImageView.reset();
+            mImage.reset();
+            return;
+        }
 
         // copy data to buffer
         std::shared_ptr<XJVulkanBuffer> kStageBuffer = std::make_shared<XJVulkanBuffer>(kDevice, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, size, data, true);
@@ -76,21 +115,43 @@ namespace XJ
          // UNDEFINED -> TRANSFER_DST -> copy -> SHADER_READ_ONLY_OPTIMAL
         // 将图像的布局转换为可进行传输的状态
         VkCommandBuffer cmdBuffer = kDevice->CreateAndBeginOneDefaultCommandBuffer();
-        XJVulkanImage::TransitionLayout(
+
+        if (cmdBuffer == VK_NULL_HANDLE)
+        {
+            spdlog::error("XJTexture::CreateImage failed: command buffer is null.");
+            mImageView.reset();
+            mImage.reset();
+            return;
+        }
+        if (!XJVulkanImage::TransitionLayout(
             cmdBuffer,
             mImage->XJGetImage(),
             mImage->XJGetFormat(),
             VK_IMAGE_LAYOUT_UNDEFINED,
-            VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+            VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL))
+        {
+            spdlog::error("XJTexture::CreateImage failed: transition to transfer layout failed.");
+            kDevice->SubmitAndEndOneDefaultCommandBuffer(cmdBuffer);
+            mImageView.reset();
+            mImage.reset();
+            return;
+        }
         // 将缓冲区中的数据拷贝到 Vulkan 图像
         mImage->CopyFromBuffer(cmdBuffer, kStageBuffer.get());
           // 将图像的布局转换为着色器只读状态
-        XJVulkanImage::TransitionLayout(
+        if (!XJVulkanImage::TransitionLayout(
             cmdBuffer,
             mImage->XJGetImage(),
             mImage->XJGetFormat(),
             VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-            VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+            VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL))
+        {
+            spdlog::error("XJTexture::CreateImage failed: transition to shader-read layout failed.");
+            kDevice->SubmitAndEndOneDefaultCommandBuffer(cmdBuffer);
+            mImageView.reset();
+            mImage.reset();
+            return;
+        }
          // 提交命令缓冲区
         kDevice->SubmitAndEndOneDefaultCommandBuffer(cmdBuffer);
          // 清理缓冲区

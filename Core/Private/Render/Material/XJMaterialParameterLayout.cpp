@@ -5,6 +5,22 @@
 
 namespace XJ
 {
+    namespace
+    {
+        const XJShaderReflectedUbo* FindUboByBinding(
+            const XJShaderReflectionResult& reflection,
+            uint32_t set,
+            uint32_t binding)
+        {
+            for (const auto& ubo : reflection.Ubos)
+            {
+                if (ubo.Set == set && ubo.Binding == binding)
+                    return &ubo;
+            }
+
+            return nullptr;
+        }
+    }
 
     XJMaterialParameterLayoutBuildResult XJMaterialParameterLayout::Build(const XJShaderSchema& schema, const XJShaderReflectionResult& reflection)
     {
@@ -96,16 +112,90 @@ namespace XJ
             if (resolvedBinding.Kind != XJShaderResolvedBindingKind::UboMember)
                 continue;
 
-            if (mUboName.empty())
-            {
-                mUboName = resolvedBinding.UboName;
+            const XJShaderReflectedUbo* reflectedUbo = FindUboByBinding(
+                reflection,
+                resolvedBinding.Set,
+                resolvedBinding.Binding);
 
-                if (const XJShaderReflectedUbo* ubo = FindUbo(reflection, resolvedBinding.UboName))
-                    mUboSize = ubo->Size;
+            if (!reflectedUbo)
+                reflectedUbo = FindUbo(reflection, resolvedBinding.UboName);
+
+            if (!FindUboLayout(resolvedBinding.Set, resolvedBinding.Binding))
+            {
+                XJMaterialUboLayout uboLayout;
+                uboLayout.UboName = resolvedBinding.UboName;
+                uboLayout.Set = resolvedBinding.Set;
+                uboLayout.Binding = resolvedBinding.Binding;
+                uboLayout.Size = reflectedUbo ? reflectedUbo->Size : 0;
+                mUboLayouts.push_back(uboLayout);
+            }
+
+            if (!mHasPrimaryUbo)
+            {
+                mHasPrimaryUbo = true;
+                mUboName = resolvedBinding.UboName;
+                mUboSet = resolvedBinding.Set;
+                mUboBinding = resolvedBinding.Binding;
+                mUboSize = reflectedUbo ? reflectedUbo->Size : 0;
+            }
+            else if (mUboSet != resolvedBinding.Set || mUboBinding != resolvedBinding.Binding)
+            {
+                // 当前 runtime 仍然只有一个材质参数 block/buffer/descriptor。
+                // 这里先按 (set,binding) 记录 UBO 元信息，给未来每 UBO 一块 block 留扩展入口；
+                // 但在 runtime 真正支持多 UBO 前，必须报错并跳过该参数，避免写入同一块内存后静默丢参。
+                AddMaterialBuildError(
+                    buildResult,
+                    "Multiple material UBO bindings are not supported. Primary UBO is '" +
+                        mUboName +
+                        "' at set=" +
+                        std::to_string(mUboSet) +
+                        ", binding=" +
+                        std::to_string(mUboBinding) +
+                        ", but parameter '" +
+                        resolvedBinding.ParameterName +
+                        "' uses UBO '" +
+                        resolvedBinding.UboName +
+                        "' at set=" +
+                        std::to_string(resolvedBinding.Set) +
+                        ", binding=" +
+                        std::to_string(resolvedBinding.Binding) +
+                        ".");
+
+                continue;
             }
             else if (mUboName != resolvedBinding.UboName)
             {
-                AddMaterialBuildWarning(buildResult, "Multiple material UBOs are not fully supported yet. Parameter uses UBO: " + resolvedBinding.UboName);
+                AddMaterialBuildWarning(
+                    buildResult,
+                    "Material UBO name differs for the same binding. Primary UBO is '" +
+                        mUboName +
+                        "', parameter '" +
+                        resolvedBinding.ParameterName +
+                        "' resolved to '" +
+                        resolvedBinding.UboName +
+                        "'.");
+            }
+
+            if (mUboSize == 0)
+            {
+                AddMaterialBuildError(buildResult, "Material UBO size is zero: " + resolvedBinding.UboName);
+                continue;
+            }
+
+            if (resolvedBinding.Offset + resolvedBinding.Size > mUboSize)
+            {
+                AddMaterialBuildError(
+                    buildResult,
+                    "Material parameter exceeds primary UBO size: " +
+                        resolvedBinding.ParameterName +
+                        ", offset=" +
+                        std::to_string(resolvedBinding.Offset) +
+                        ", size=" +
+                        std::to_string(resolvedBinding.Size) +
+                        ", uboSize=" +
+                        std::to_string(mUboSize));
+
+                continue;
             }
 
 
@@ -133,11 +223,15 @@ namespace XJ
     void XJMaterialParameterLayout::Clear()
     {
         mValid = false;
+        mHasPrimaryUbo = false;
         mUboSize = 0;
         mUboName.clear();
+        mUboSet = 0;
+        mUboBinding = 0;
         mParameterBindings.clear();
         mTextureBindings.clear();
         mUboMemberBindings.clear();
+        mUboLayouts.clear();
     }
 
     const XJMaterialParameterBinding* XJMaterialParameterLayout::FindParameterBinding(const std::string& parameterName) const
@@ -189,6 +283,17 @@ namespace XJ
         {
             if (binding.UboName == uboName)
                 return &binding;
+        }
+
+        return nullptr;
+    }
+
+    const XJMaterialUboLayout* XJMaterialParameterLayout::FindUboLayout(uint32_t set, uint32_t binding) const
+    {
+        for (const auto& layout : mUboLayouts)
+        {
+            if (layout.Set == set && layout.Binding == binding)
+                return &layout;
         }
 
         return nullptr;

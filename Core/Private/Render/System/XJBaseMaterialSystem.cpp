@@ -215,11 +215,11 @@ namespace XJ
     {
         //entt::each
         // XJAppContext *kAppContext = XJApplication::XJGetAppContext();
-        XJScene *kScene = XJGetScene();
+        XJScene *scene = XJGetScene();
 
-        if(!kScene){return;}//如果场景不存在，直接返回
+        if(!scene){return;}//如果场景不存在，直接返回
 
-        const entt::registry& kReg = kScene->XJGetEcsRegistry();//拿到注射器
+        const entt::registry& kReg = scene->XJGetEcsRegistry();//拿到注射器
         auto kView = kReg.view<XJTransformComponent, XJBaseMaterialComponent>();//获取视图，包含有变换组件、网格组件和基础材质组件的实体
 
         if (kView.end() == kView.begin()) 
@@ -275,52 +275,33 @@ namespace XJ
         //setup custiom params
         kView.each([this, &cmdBuffer, &kEntityIndex, frameSlot](const auto &entity, const XJTransformComponent& transComp, const XJBaseMaterialComponent& matComp)
         {
-            auto kMeshMaterials = matComp.XJGetMeshMaterials();
-            for(const auto&entry :kMeshMaterials)//要是没有材质酒放弃渲染
+            for (const auto& slot : matComp.XJGetSlots())//要是没有材质酒放弃渲染
             {
-                XJBaseMaterial *kMaterial = entry.first;
-                if(!kMaterial) 
+                XJBaseMaterial* kMaterial = slot.Material ? slot.Material.get() : nullptr;
+                if (!kMaterial)
                 {
                     spdlog::error("TODO: Default material of error material ?");
                     continue;
                 }
-                //PushConstants pushConstants //具体某个材质
-                //{
-                //        .matrix = projMat * viewMat * transComp.GetModelMatrix(),
-                //        .colorType = kMaterial->colorType 
-                //};
-                //vkCmdPushConstants(cmdBuffer, mPipelineLayout->XJGetPipelineLayout(), VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(pushConstants), &pushConstants);
-                
-                for(const auto&kMeshIndex : entry.second)
+
+                XJMesh* kMesh = slot.Mesh ? slot.Mesh.get() : nullptr;
+    
+                if (kMesh && kEntityIndex < MAX_ENTITIES)
                 {
-                    XJMesh *kMesh = matComp.XJGetMesh(kMeshIndex);
-                    //if(kMesh)
-                    //{
-                    //    kMesh->Draw(cmdBuffer);
-                    //}
-
-                    if(kMesh && kEntityIndex < MAX_ENTITIES)
-                    {
-                        mInstanceUbo[frameSlot].modelMat = transComp.modelMatrix;//设置实例UBO的模型矩阵
-
-                        //计算动态UBO偏移
-                        uint32_t kOffset = kEntityIndex * mDynamicAlignment;
-                        // 当前帧槽位写入自己的实例缓冲，避免覆盖 GPU 正在读取的其他帧数据。
-                        mInstanceBuffers[frameSlot]->WriteDataOffset(&mInstanceUbo[frameSlot], kOffset, sizeof(InstanceUbo));//UBO写入数据偏移
-
-                        //使用动态偏移绑定描述符集并绘制网格
-                        uint32_t kDynamicOffset = kOffset; // 计算动态偏移
-                        VkDescriptorSet descriptorSet = mDescriptorSets[frameSlot];
-                        vkCmdBindDescriptorSets(cmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, mPipelineLayout->XJGetPipelineLayout(), 0, 1,  &descriptorSet, 1, &kDynamicOffset);
-                        kMesh->Draw(cmdBuffer);
-                        kEntityIndex++; // 增加实体索引
-                    }
+                    mInstanceUbo[frameSlot].modelMat = transComp.modelMatrix;//设置实例UBO的模型矩阵
+                    //计算动态UBO偏移
+                    uint32_t kOffset = kEntityIndex * mDynamicAlignment;
+                    // 当前帧槽位写入自己的实例缓冲，避免覆盖 GPU 正在读取的其他帧数据。
+                    mInstanceBuffers[frameSlot]->WriteDataOffset(&mInstanceUbo[frameSlot], kOffset, sizeof(InstanceUbo));//UBO写入数据偏移
+                    //使用动态偏移绑定描述符集并绘制网格
+                    uint32_t kDynamicOffset = kOffset; // 计算动态偏移
+                    VkDescriptorSet descriptorSet = mDescriptorSets[frameSlot];
+                    vkCmdBindDescriptorSets(cmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, mPipelineLayout->XJGetPipelineLayout(), 0, 1,  &descriptorSet, 1, &kDynamicOffset);
+                    kMesh->Draw(cmdBuffer);
+                    kEntityIndex++; // 增加实体索引
                 }
-
               
             }
-            
-           
            
         });
 

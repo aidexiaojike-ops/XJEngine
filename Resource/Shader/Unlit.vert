@@ -22,7 +22,7 @@ layout(set = 0, binding = 0, std140) uniform FrameUbo
 layout(push_constant) uniform PushConstants
 {
     mat4 modelMat;
-    mat3 normalMat;
+    mat4 normalMat;
 } PC;
 
 out layout(location = 1) vec2 v_Texcoord;

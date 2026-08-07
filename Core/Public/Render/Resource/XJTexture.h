@@ -26,8 +26,8 @@ namespace XJ
     {
         private:
             void CreateImage(size_t size, void *data);//图片数据大小 和所有数据
-            uint32_t mWidth;
-            uint32_t mHeight;
+            uint32_t mWidth = 0;
+            uint32_t mHeight = 0;
             /* data */
             std::shared_ptr<XJVulkanImage> mImage;
             std::shared_ptr<XJVulkanImageView> mImageView;
@@ -39,14 +39,15 @@ namespace XJ
             XJTexture(uint32_t width, uint32_t height, RGBAColor *pixels);//图片的长宽高 和像素信息
             ~XJTexture();
 
+            bool IsValid() const;
+
             uint32_t XJGetWidth() const { return mWidth; }
             uint32_t XJGetHeight() const{return mHeight;}
 
             XJVulkanImage *XJGetImage() const {return mImage.get();}
             XJVulkanImageView *XJGetImageView() const {return mImageView.get();}
         
-
-            VkFormat mFormat;
+            VkFormat mFormat = VK_FORMAT_UNDEFINED;
             
     };
 }

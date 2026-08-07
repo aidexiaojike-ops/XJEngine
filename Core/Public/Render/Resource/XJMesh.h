@@ -3,32 +3,36 @@
 
 #include "Graphic/XJVulkanBuffer.h"
 #include "Graphic/XJVulkanVertex.h"
-#include  <memory>
-#include  <cstdint>
-#include  <string>
+
+#include <cstdint>
+#include <memory>
 #include <vector>
 
-
-//XJMesh 是 GPU Resource
 namespace XJ
 {
+    // XJMesh 是 GPU Resource。构造成功后至少有一个有效 vertex buffer。
     class XJMesh
     {
         public:
-            XJMesh(const std::vector<XJ::XJVulkanVertex>& vertices, const std::vector<uint32_t>& indices = {});
+            XJMesh(const std::vector<XJVulkanVertex>& vertices, const std::vector<uint32_t>& indices = {});
             ~XJMesh();
+
+            bool IsValid() const
+            {
+                return mVertexBuffer != nullptr &&
+                       mVertexBuffer->XJGetBuffer() != VK_NULL_HANDLE &&
+                       mVertexCount > 0;
+            }
 
             void Draw(VkCommandBuffer commandBuffer);
 
         private:
-            /* data */
-            std::shared_ptr<XJVulkanBuffer> mVertexBuffer;//顶点缓冲区
-            std::shared_ptr<XJVulkanBuffer> mIndexBuffer;//索引缓冲区
+            std::shared_ptr<XJVulkanBuffer> mVertexBuffer;
+            std::shared_ptr<XJVulkanBuffer> mIndexBuffer;
 
-            uint32_t mVertexCount;//顶点数量
-            uint32_t mIndexCount;//索引数量
-            std::vector<XJVulkanVertex> mVertices;//顶点数据
-            std::vector<uint32_t> mIndices;//索引数据
+            // 默认初始化，避免构造失败路径留下未定义值。
+            uint32_t mVertexCount = 0;
+            uint32_t mIndexCount = 0;
     };
 }
 

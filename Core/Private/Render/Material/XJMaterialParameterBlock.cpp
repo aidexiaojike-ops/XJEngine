@@ -2,8 +2,18 @@
 #include <algorithm>
 #include <cstring>
 
+#include <glm/gtc/type_ptr.hpp>
+
 namespace XJ
 {
+    // —— GPU std140 布局相关 ——
+    // 块内数据严格按 GLSL std140 排布：float/int/bool -> 4 字节；vec2 -> 8 字节；
+    // vec3 载荷 -> 12 字节；vec4 -> 16 字节。
+    // 以下断言确保 GLM 默认（未对齐）类型尺寸符合预期，防止 GLM 对齐配置意外改变字节布局。
+    static_assert(sizeof(glm::vec2) == 8,  "GLM vec2 尺寸异常（std140 应为 8 字节）");
+    static_assert(sizeof(glm::vec3) == 12, "GLM vec3 尺寸异常（std140 载荷应为 12 字节，勿开启对齐 gentypes）");
+    static_assert(sizeof(glm::vec4) == 16, "GLM vec4 尺寸异常（std140 应为 16 字节）");
+
     XJMaterialParameterBlock::XJMaterialParameterBlock(uint32_t size)
     {
         Resize(size);
@@ -59,16 +69,23 @@ namespace XJ
 
     bool XJMaterialParameterBlock::SetVec2(uint32_t offset, const glm::vec2& value)
     {
+        // std140：vec2 对齐 8、载荷 8 字节，sizeof 不受 GLM 对齐配置影响，可整段写入。
         return SetBytes(offset, &value, sizeof(value));
     }
 
     bool XJMaterialParameterBlock::SetVec3(uint32_t offset, const glm::vec3& value)
     {
-        return SetBytes(offset, &value, sizeof(value));
+        // std140：vec3 对齐 16、载荷仅 12 字节，末 4 字节是填充，由调用方 offset（shader 反射）保证对齐。
+        // 若 GLM 启用了 GLM_FORCE_DEFAULT_ALIGNED_GENTYPES，sizeof(glm::vec3)==16，
+        // 直接写 sizeof(value) 会把 4 字节 padding 垃圾写进紧邻的下一个成员，导致 shader 读到脏数据。
+        // 这里固定只写 12 字节载荷，使布局不依赖 GLM 的编译配置（详见 Mathinclude.h 对齐策略说明）。
+        const uint32_t std140Vec3PayloadSize = 12u;
+        return SetBytes(offset, glm::value_ptr(value), std140Vec3PayloadSize);
     }
 
     bool XJMaterialParameterBlock::SetVec4(uint32_t offset, const glm::vec4& value)
     {
+        // std140：vec4 对齐 16、载荷 16 字节，sizeof 不受 GLM 对齐配置影响，可整段写入。
         return SetBytes(offset, &value, sizeof(value));
     }
 

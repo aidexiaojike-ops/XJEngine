@@ -14,6 +14,7 @@
 #include <unordered_map>
 #include <vector>
 #include <cstdint>
+#include <cstddef>
 #include <filesystem>
 
 namespace XJ
@@ -25,6 +26,13 @@ namespace XJ
         alignas(4) float uvRotation{0.0f};//内存对齐的
         alignas(16) glm::vec4 uvTransform{1.0f,1.0f,1.0f,0.0f};//手动对其
     };
+
+    // 与 Shader/Unlit.frag 中 `MaterialUbo` 内的 `struct TextureParam`（std140）逐字节一致。
+    // 注意 vec4 之前的 8 字节填充是 std140 要求的（16 字节对齐），由 alignas(16) 保证。
+    static_assert(sizeof(TextureParam) == 32,                "TextureParam: sizeof 必须为 32（std140）");
+    static_assert(offsetof(TextureParam, enable) == 0,       "TextureParam.enable 偏移必须为 0");
+    static_assert(offsetof(TextureParam, uvRotation) == 4,   "TextureParam.uvRotation 偏移必须为 4");
+    static_assert(offsetof(TextureParam, uvTransform) == 16, "TextureParam.uvTransform 偏移必须为 16（16 字节对齐）");
 
     struct TextureView
     {
@@ -47,12 +55,24 @@ namespace XJ
         glm::mat4 matrix{1.0f}; // 4x4 矩阵，默认初始化为单位矩阵
         uint32_t colorType = 0;
     };// 推送常量结构体
+
+    // 与 Shader/BaseVertex.vert 的 `layout(push_constant)` 一致。
+    // push constant 采用 std430 布局规则：mat4（64B）后紧跟 uint32_t（偏移 64）。
+    static_assert(sizeof(PushConstants) == 68,               "PushConstants: sizeof 必须为 68（std430）");
+    static_assert(offsetof(PushConstants, matrix) == 0,      "PushConstants.matrix 偏移必须为 0");
+    static_assert(offsetof(PushConstants, colorType) == 64,  "PushConstants.colorType 偏移必须为 64");
    
     struct ModelPC
     {
-        alignas(16) glm::mat4 modelMat;
-        alignas(16) glm::mat3 normalMat;
+        alignas(16) glm::mat4 modelMat{1.0f};   // offset 0  size 64
+        alignas(16) glm::mat4 normalMat{1.0f};  // offset 64 size 64
     };
+
+    // 与 Shader/Unlit.vert 的 push constant 一致。
+    // 这里用 mat4 承载法线矩阵，避免 C++ glm::mat3 的 36 字节紧凑布局和 GLSL mat3 的列 stride 产生错位。
+    static_assert(sizeof(ModelPC) == 128,                    "ModelPC: sizeof 必须为 128（mat4 + mat4）");
+    static_assert(offsetof(ModelPC, modelMat) == 0,          "ModelPC.modelMat 偏移必须为 0");
+    static_assert(offsetof(ModelPC, normalMat) == 64,        "ModelPC.normalMat 偏移必须为 64");
 
     class XJMaterial
     {
