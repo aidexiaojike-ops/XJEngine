@@ -1,6 +1,7 @@
 #include "Asset/Serialization/XJShaderSchemaSerializer.h"
 // #include "Render/Shader/XJShaderParameter.h"
 #include "Render/Shader/XJShaderParameterValueIO.h"
+#include "Asset/Serialization/XJJsonIO.h"
 
 #include <fstream>
 #include <nlohmann/json.hpp>
@@ -12,21 +13,23 @@ namespace XJ
         XJParameterDef ReadParameterDef(const nlohmann::json& j)
         {
             XJParameterDef def;
+            if (!j.is_object())
+                return def;
         
-            def.Name = j.value("name", std::string{});
-            def.DisplayName = j.value("displayName", def.Name);
-            def.Type = XJShaderParameterTypeFromString(j.value("type", std::string{}));
-            def.Category = j.value("category", std::string{});
-            def.Editable = j.value("editable", true);
-            def.UboName = j.value("ubo", std::string{});
-            def.MemberName = j.value("member", std::string{});
-            def.SamplerName = j.value("sampler", std::string{});
+            def.Name = JsonReadStringOr(j, "name");
+            def.DisplayName = JsonReadStringOr(j, "displayName", def.Name);
+            def.Type = XJShaderParameterTypeFromString(JsonReadStringOr(j, "type"));
+            def.Category = JsonReadStringOr(j, "category");
+            def.Editable = JsonReadBoolOr(j, "editable", true);
+            def.UboName = JsonReadStringOr(j, "ubo");
+            def.MemberName = JsonReadStringOr(j, "member");
+            def.SamplerName = JsonReadStringOr(j, "sampler");
         
             if (j.contains("min") && j.contains("max"))
             {
                 def.HasRange = true;
-                def.Min = j.value("min", 0.0f);
-                def.Max = j.value("max", 1.0f);
+                def.Min = JsonReadFloatOr(j, "min", 0.0f);
+                def.Max = JsonReadFloatOr(j, "max", 1.0f);
             }
         
             if (j.contains("default"))
@@ -84,7 +87,7 @@ namespace XJ
         }
 
         auto schema = std::make_shared<XJShaderSchema>();
-        schema->Version = root.value("version", 1u);
+        schema->Version = JsonReadUInt32Or(root, "version", 1u);
 
         if(!root.contains("parameters") || !root["parameters"].is_array())
             return schema;
@@ -101,9 +104,6 @@ namespace XJ
 
     bool XJShaderSchemaSerializer::SaveToFile(const XJShaderSchema& schema, const std::filesystem::path& path)
     {
-        if(path.has_parent_path())
-            std::filesystem::create_directories(path.parent_path());
-
         nlohmann::json root;
         root["version"] = schema.Version;
         root["parameters"] = nlohmann::json::array();
@@ -111,11 +111,6 @@ namespace XJ
         for (const auto& parameter : schema.Parameters)
             root["parameters"].push_back(WriteParameterDef(parameter));
 
-        std::ofstream out(path);
-        if (!out.is_open())
-            return false;
-
-        out << root.dump(2);
-        return out.good();
+        return WriteJsonFileAtomic(path, root);
     }
 }

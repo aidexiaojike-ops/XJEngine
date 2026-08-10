@@ -11,10 +11,30 @@ namespace XJ
         const XJMaterialParameterLayout& layout,
         XJMaterialParameterBlock& outBlock)
     {
+        std::unordered_map<uint64_t, XJMaterialParameterBlock> blocks;
+        XJMaterialParameterBlockBuildResult result = BuildBlocks(material, layout, blocks);
+
+        const uint64_t primaryKey = XJMakeMaterialUboKey(layout.GetUboSet(), layout.GetUboBinding());
+        auto it = blocks.find(primaryKey);
+        if (it != blocks.end())
+            outBlock = it->second;
+        else
+        {
+            outBlock.Resize(layout.GetUboSize());
+            outBlock.Clear();
+        }
+
+        return result;
+    }
+
+    XJMaterialParameterBlockBuildResult XJMaterialParameterBlockBuilder::BuildBlocks(
+        const XJMaterialAsset& material,
+        const XJMaterialParameterLayout& layout,
+        std::unordered_map<uint64_t, XJMaterialParameterBlock>& outBlocks)
+    {
         XJMaterialParameterBlockBuildResult result;
 
-        outBlock.Resize(layout.GetUboSize());
-        outBlock.Clear();
+        outBlocks.clear();
 
         if (!layout.IsValid())
         {
@@ -23,11 +43,18 @@ namespace XJ
             return result;
         }
 
-        if (layout.GetUboSize() == 0)
+        if (layout.GetUboLayouts().empty())
         {
             AddMaterialBuildWarning(result, "Material parameter layout has no UBO data.");
             result.Valid = result.Errors.empty();
             return result;
+        }
+
+        for (const auto& uboLayout : layout.GetUboLayouts())
+        {
+            XJMaterialParameterBlock block(uboLayout.Size);
+            block.Clear();
+            outBlocks[XJMakeMaterialUboKey(uboLayout.Set, uboLayout.Binding)] = std::move(block);
         }
 
         for (const auto& binding : layout.GetParameterBindings())
@@ -39,7 +66,14 @@ namespace XJ
                 continue;
             }
 
-            if (!WriteMaterialParameterValueToBlock(outBlock, binding, *value))
+            auto blockIt = outBlocks.find(XJMakeMaterialUboKey(binding.Set, binding.Binding));
+            if (blockIt == outBlocks.end())
+            {
+                AddMaterialBuildError(result, "Material parameter UBO block not found: " + binding.ParameterName);
+                continue;
+            }
+
+            if (!WriteMaterialParameterValueToBlock(blockIt->second, binding, *value))
             {
                 AddMaterialBuildError(result, "Failed to write material parameter value: " + binding.ParameterName);
                 continue;

@@ -93,9 +93,9 @@ namespace XJ
                 return false;
             }
         
-            XJMaterialParameterBlock block;
+            std::unordered_map<uint64_t, XJMaterialParameterBlock> blocks;
             XJMaterialParameterBlockBuildResult blockResult =
-                XJMaterialParameterBlockBuilder::Build(asset, layout, block);
+                XJMaterialParameterBlockBuilder::BuildBlocks(asset, layout, blocks);
         
             if (!blockResult.Valid)
             {
@@ -108,7 +108,7 @@ namespace XJ
             }
         
             material.SetParameterLayout(layout);
-            material.SetParameterBlock(block);
+            material.SetParameterBlocks(blocks);
             material.SetTextureBindings(layout.GetTextureBindings());
             material.SetShaderPath(asset.ShaderPath);
         

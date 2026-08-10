@@ -38,29 +38,62 @@ namespace XJ
                 outLayout.MaterialResourceBindings = BuildDescriptorSetLayoutBindings(
                     shaderAsset.Reflection,
                     outLayout.MaterialResourceSet);
-                // 查找主帧 UBO：遍历所有 UBO，取第一个属于 FrameSet 的
+
                 for (const auto& ubo : shaderAsset.Reflection.Ubos)
                 {
-                    if (ubo.Set != outLayout.FrameSet)
-                        continue;
-                
-                    outLayout.PrimaryFrameUboName = ubo.Name;
-                    outLayout.PrimaryFrameUboSet = ubo.Set;
-                    outLayout.PrimaryFrameUboBinding = ubo.Binding;
-                    outLayout.PrimaryFrameUboSize = ubo.Size;
-                    break;
-                }
-                //  查找主材质 UBO：遍历所有 UBO，取第一个属于 MaterialParameterSet 的
-                for (const auto& ubo : shaderAsset.Reflection.Ubos)
-                {
-                    if(ubo.Set != outLayout.MaterialParameterSet)
+                    if (ubo.Set != outLayout.MaterialParameterSet)
                         continue;
 
-                    outLayout.PrimaryMaterialUboName = ubo.Name;
-                    outLayout.PrimaryMaterialUboSet = ubo.Set;
-                    outLayout.PrimaryMaterialUboBinding = ubo.Binding;
-                    outLayout.PrimaryMaterialUboSize = ubo.Size;
-                    break;
+                    XJMaterialUboLayout uboLayout;
+                    uboLayout.UboName = ubo.Name;
+                    uboLayout.Set = ubo.Set;
+                    uboLayout.Binding = ubo.Binding;
+                    uboLayout.Size = ubo.Size;
+                    outLayout.MaterialUboLayouts.push_back(uboLayout);
+                }
+
+                auto selectPrimaryUbo = [&shaderAsset](uint32_t set, const char* preferredName) -> const XJShaderReflectedUbo*
+                {
+                    const XJShaderReflectedUbo* firstInSet = nullptr;
+                    uint32_t candidateCount = 0;
+
+                    for (const auto& ubo : shaderAsset.Reflection.Ubos)
+                    {
+                        if (ubo.Set != set)
+                            continue;
+
+                        if (ubo.Name == preferredName)
+                            return &ubo;
+
+                        if (!firstInSet)
+                            firstInSet = &ubo;
+
+                        ++candidateCount;
+                    }
+
+                    // Single-UBO shaders remain supported. Multi-UBO shaders must use the
+                    // convention name so the primary block is not selected by reflection order.
+                    return candidateCount == 1 ? firstInSet : nullptr;
+                };
+
+                // 查找主帧 UBO：优先使用约定名，只有一个候选时才回退。
+                const XJShaderReflectedUbo* frameUbo = selectPrimaryUbo(outLayout.FrameSet, "FrameUbo");
+                if (frameUbo)
+                {
+                    outLayout.PrimaryFrameUboName = frameUbo->Name;
+                    outLayout.PrimaryFrameUboSet = frameUbo->Set;
+                    outLayout.PrimaryFrameUboBinding = frameUbo->Binding;
+                    outLayout.PrimaryFrameUboSize = frameUbo->Size;
+                }
+
+                // 查找主材质 UBO：优先使用约定名，避免多 UBO 时按反射顺序任意选择。
+                const XJShaderReflectedUbo* materialUbo = selectPrimaryUbo(outLayout.MaterialParameterSet, "MaterialUbo");
+                if (materialUbo)
+                {
+                    outLayout.PrimaryMaterialUboName = materialUbo->Name;
+                    outLayout.PrimaryMaterialUboSet = materialUbo->Set;
+                    outLayout.PrimaryMaterialUboBinding = materialUbo->Binding;
+                    outLayout.PrimaryMaterialUboSize = materialUbo->Size;
                 }
 
                 for(const auto& sampler : shaderAsset.Reflection.Samplers)

@@ -4,6 +4,7 @@
 
 #include <string>
 #include <algorithm>
+#include <vector>
 
 namespace XJ
 {
@@ -41,17 +42,32 @@ namespace XJ
         return path.stem().string();
     }
 
-    XJAssetHandle XJAssetRegistryScanner::GenerateStableHandle(const std::filesystem::path& path, XJAssetType type)
+    XJAssetHandle XJAssetRegistryScanner::GenerateStableHandle(const std::filesystem::path& path, XJAssetType type, uint32_t collisionSalt)
     {
         std::string key = path.lexically_normal().generic_string();//规范化路径，确保同一文件得到相同的 handle
         key += "#";
         key += std::to_string(static_cast<int>(type));//加入类型信息，避免不同类型同名文件冲突
+        key += "#";
+        key += std::to_string(collisionSalt);
 
-        std::hash<std::string> hasher;
-        XJAssetHandle hash = static_cast<XJAssetHandle>(hasher(key));
-        
-        if(hash == 0) hash = 1;//避免 handle 0，保留给无效句柄
-        
+        // FNV-1a 64-bit is small, deterministic, and independent of STL implementation.
+        // Do not use std::hash for persisted asset IDs: the standard does not require it
+        // to stay stable across platforms, STL versions, or engine rebuilds.
+        constexpr uint64_t kFnvOffset = 14695981039346656037ull;
+        constexpr uint64_t kFnvPrime = 1099511628211ull;
+
+        uint64_t hash = kFnvOffset;
+        for (unsigned char c : key)
+        {
+            hash ^= static_cast<uint64_t>(c);
+            hash *= kFnvPrime;
+        }
+
+        // Stable registry handles use the low range. Runtime-only handles reserve the high bit.
+        hash &= ~XJAsset::RuntimeHandleBit;
+         
+        if(hash == XJAsset::InvalidHandle) hash = 1;//避免 handle 0，保留给无效句柄
+         
         return hash;
     }
     int XJAssetRegistryScanner::ScanResourceAssets(XJAssetRegistry& registry,const std::filesystem::path& resourceRoot)
@@ -60,6 +76,8 @@ namespace XJ
 
         if(!std::filesystem::exists(resourceRoot))
             return addedCount;
+
+        std::vector<std::filesystem::path> assetPaths;
 
         for(const auto& entry : std::filesystem::recursive_directory_iterator(resourceRoot))
         {
@@ -71,14 +89,30 @@ namespace XJ
 
             if(type == XJAssetType::None)
                 continue;   
+
+            assetPaths.push_back(path.lexically_normal());
+        }
+
+        std::sort(assetPaths.begin(), assetPaths.end(),
+            [](const std::filesystem::path& a, const std::filesystem::path& b)
+            {
+                return a.generic_string() < b.generic_string();
+            });
+
+        for(const auto& path : assetPaths)
+        {
+            const auto type = GetAssetTypeFromExtension(path);
+
             if(registry.ContainsSourcePath(path))
                 continue;
 
-            XJAssetHandle handle = GenerateStableHandle(path, type);
+            uint32_t collisionSalt = 0;
+            XJAssetHandle handle = GenerateStableHandle(path, type, collisionSalt);
 
             while (registry.Contains(handle))
             {
-                ++handle;
+                ++collisionSalt;
+                handle = GenerateStableHandle(path, type, collisionSalt);
             }
 
             XJAssetMeta meta;

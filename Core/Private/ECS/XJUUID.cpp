@@ -1,4 +1,5 @@
 #include "ECS/XJUUID.h"
+#include "ECS/XJReservedUUID.h"
 
 #include <chrono>
 #include <functional>
@@ -33,7 +34,14 @@ namespace XJ
                 1,
                 std::numeric_limits<uint64_t>::max());
 
-            return distribution(engine);
+            uint64_t uuid = 0;
+            do
+            {
+                uuid = distribution(engine);
+            }
+            while (XJIsReservedUUID(uuid));
+
+            return uuid;
         }
     }
 

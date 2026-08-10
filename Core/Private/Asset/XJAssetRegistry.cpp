@@ -1,4 +1,5 @@
 #include "Asset/XJAssetRegistry.h"
+#include "Asset/Serialization/XJJsonIO.h"
 #include <fstream>
 #include <nlohmann/json.hpp>   
 
@@ -54,11 +55,8 @@ namespace XJ
     bool XJAssetRegistry::Save(const std::filesystem::path& path) const
     {
         const auto metas = XJGetAllMetas();
-        if (path.has_parent_path())
-            std::filesystem::create_directories(path.parent_path());
-
         nlohmann::json j;
-        for(const auto& [h,m] : mMetas) j[std::to_string(h)] = 
+        for(const auto& [h,m] : metas) j[std::to_string(h)] = 
         {
             {"handle", m.Handle},
             {"type", static_cast<int>(m.Type)},
@@ -66,9 +64,7 @@ namespace XJ
             {"source", m.SourcePath.string()},
             {"imported", m.ImportedPath.string()}
         };
-        std::ofstream out(path);
-        out << j.dump(2);
-        return out.good();
+        return WriteJsonFileAtomic(path, j);
     }
     bool XJAssetRegistry::Load(const std::filesystem::path& path)
     {
@@ -91,6 +87,7 @@ namespace XJ
             return false;
         }
         std::unordered_map<XJAssetHandle, XJAssetMeta> loadedMetas;
+        XJAssetHandle maxRuntimeHandle = 0;
 
         for (const auto& [key, value] : j.items())
         {
@@ -134,6 +131,9 @@ namespace XJ
                     continue;
                 }
 
+                if (XJAsset::IsRuntimeHandle(meta.Handle) && meta.Handle > maxRuntimeHandle)
+                    maxRuntimeHandle = meta.Handle;
+
                 auto [it, inserted] = loadedMetas.emplace(meta.Handle, std::move(meta));
                 if (!inserted)
                 {
@@ -159,12 +159,14 @@ namespace XJ
                     e.what());
             }
         }
-        mMetas = std::move(loadedMetas);
-
         {
             std::scoped_lock lock(mMutex);
             mMetas = std::move(loadedMetas);
         }
+
+        // Registry files should normally contain stable handles only. This keeps the runtime
+        // generator safe if older data accidentally persisted temporary runtime handles.
+        XJAsset::ReserveGeneratedHandlesUpTo(maxRuntimeHandle);
 
         return true;
     }

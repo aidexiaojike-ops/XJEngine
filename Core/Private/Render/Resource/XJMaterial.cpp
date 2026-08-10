@@ -6,6 +6,18 @@
 
 namespace XJ
 {
+    namespace
+    {
+        XJMaterialParameterBlock* FindBlockForBinding(
+            std::unordered_map<uint64_t, XJMaterialParameterBlock>& blocks,
+            XJMaterialParameterBlock& primaryBlock,
+            uint32_t set,
+            uint32_t binding)
+        {
+            auto it = blocks.find(XJMakeMaterialUboKey(set, binding));
+            return it != blocks.end() ? &it->second : &primaryBlock;
+        }
+    }
 
 
     bool XJMaterial::SetParameterValue(const std::string& parameterName, const XJMaterialParameterValue& value)
@@ -17,16 +29,25 @@ namespace XJ
             return false;
         }
 
-        if(!WriteMaterialParameterValueToBlock(mParameterBlock, *binding, value))
+        XJMaterialParameterBlock* block = FindBlockForBinding(
+            mParameterBlocks,
+            mParameterBlock,
+            binding->Set,
+            binding->Binding);
+
+        if(!WriteMaterialParameterValueToBlock(*block, *binding, value))
         {
             spdlog::warn(
                 "SetParameterValue failed: write block failed: {}, offset={}, size={}, blockSize={}",
                 parameterName,
                 binding->Offset,
                 binding->Size,
-                mParameterBlock.GetSize());
+                block->GetSize());
             return false;
         }
+
+        if (binding->Set == mParameterLayout.GetUboSet() && binding->Binding == mParameterLayout.GetUboBinding())
+            mParameterBlock = *block;
         
         MarkParameterDirty();
         return true;
@@ -50,7 +71,13 @@ namespace XJ
         binding.Offset = memberBinding->Offset;
         binding.Size = memberBinding->Size;
 
-        if (!WriteMaterialParameterValueToBlock(mParameterBlock, binding, value))
+        XJMaterialParameterBlock* block = FindBlockForBinding(
+            mParameterBlocks,
+            mParameterBlock,
+            binding.Set,
+            binding.Binding);
+
+        if (!WriteMaterialParameterValueToBlock(*block, binding, value))
         {
             spdlog::warn(
                 "SetUboMemberValue failed: write block failed: {}.{}, offset={}, size={}, blockSize={}",
@@ -58,17 +85,20 @@ namespace XJ
                 memberName,
                 binding.Offset,
                 binding.Size,
-                mParameterBlock.GetSize());
+                block->GetSize());
             return false;
         }
+
+        if (binding.Set == mParameterLayout.GetUboSet() && binding.Binding == mParameterLayout.GetUboBinding())
+            mParameterBlock = *block;
 
         spdlog::debug(
             "SetUboMemberValue ok: {}.{}, offset={}, size={}, blockSize={}",
             uboName,
-            memberName,
-            binding.Offset,
-            binding.Size,
-            mParameterBlock.GetSize());
+                memberName,
+                binding.Offset,
+                binding.Size,
+                block->GetSize());
 
         if (std::holds_alternative<glm::vec4>(value))
         {
@@ -98,8 +128,14 @@ namespace XJ
         }
 
 
+        XJMaterialParameterBlock* block = FindBlockForBinding(
+            mParameterBlocks,
+            mParameterBlock,
+            memberBinding->Set,
+            memberBinding->Binding);
+
         const uint32_t writeSize = (memberBinding->Size != 0 && memberBinding->Size < size) ? memberBinding->Size : size;
-        if (!mParameterBlock.SetBytes(memberBinding->Offset, data, writeSize))
+        if (!block->SetBytes(memberBinding->Offset, data, writeSize))
         {
             spdlog::warn(
                 "SetUboMemberBytes failed: write block failed: {}.{}, offset={}, size={}, blockSize={}",
@@ -107,12 +143,27 @@ namespace XJ
                 memberName,
                 memberBinding->Offset,
                 writeSize,
-                mParameterBlock.GetSize());
+                block->GetSize());
             return false;
         }
+
+        if (memberBinding->Set == mParameterLayout.GetUboSet() && memberBinding->Binding == mParameterLayout.GetUboBinding())
+            mParameterBlock = *block;
         
         MarkParameterDirty();
         return true;
+    }
+
+    void XJMaterial::SetParameterBlocks(const std::unordered_map<uint64_t, XJMaterialParameterBlock>& blocks)
+    {
+        mParameterBlocks = blocks;
+
+        const uint64_t primaryKey = XJMakeMaterialUboKey(mParameterLayout.GetUboSet(), mParameterLayout.GetUboBinding());
+        auto it = mParameterBlocks.find(primaryKey);
+        if (it != mParameterBlocks.end())
+            mParameterBlock = it->second;
+
+        MarkParameterDirty();
     }
 
 

@@ -17,7 +17,14 @@ namespace XJ
             const tinygltf::Model& XJGetModel() const { return mModel; }
             const tinygltf::Scene& XJGetDefaultScene() const
             {  
+                static const tinygltf::Scene emptyScene{};
+                if (mModel.scenes.empty())
+                    return emptyScene;
+
                 int idx = mModel.defaultScene >= 0 ? mModel.defaultScene : 0;
+                if (idx < 0 || idx >= static_cast<int>(mModel.scenes.size()))
+                    idx = 0;
+
                 return mModel.scenes[idx];
             };
 

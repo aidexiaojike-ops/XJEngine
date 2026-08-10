@@ -19,9 +19,6 @@ namespace XJ
         mSubmitedSemaphores.resize(RENDERER_NUM_BUFFER);
         // mAcquireFences.resize(RENDERER_NUM_BUFFER);     // 新增：图像获取围栏
         mSubmitFences.resize(RENDERER_NUM_BUFFER);      // 修改：队列提交围栏
-        XJ::PipelineRasterizationState rasterState;
-        //rasterState.cullMode = VK_CULL_MODE_NONE;  // 禁用剔除
-        //mPipeline->SetRasterizationState(rasterState);
         // 创建信号量
         VkSemaphoreCreateInfo semaphoreInfo{};
         semaphoreInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;

@@ -198,8 +198,10 @@ namespace XJ
                     dst.Samplers.push_back(sampler);
             }
 
-            dst.Valid = dst.Valid || src.Valid;
-            
+            // 不在 merge 阶段用 OR 计算整体有效性。
+            // 图形 shader program 必须由 ReflectShaderProgram 确认每个必需阶段都反射成功，
+            // 否则会用不完整的 descriptor/UBO 信息继续构建 Vulkan layout。
+             
         }
 
 
@@ -269,13 +271,37 @@ namespace XJ
     XJShaderReflectionResult XJShaderReflector::ReflectShaderProgram(const std::filesystem::path& vertexPath, const std::filesystem::path& fragmentPath)
     {
         XJShaderReflectionResult result;
+        bool allStagesValid = true;
 
         if (!vertexPath.empty())
-            MergeReflectionResult(result, ReflectFromSpirvFile(vertexPath, XJShaderStage::Vertex));
+        {
+            XJShaderReflectionResult vertexResult = ReflectFromSpirvFile(vertexPath, XJShaderStage::Vertex);
+            if (!vertexResult.Valid)
+                allStagesValid = false;
+
+            MergeReflectionResult(result, vertexResult);
+        }
+        else
+        {
+            result.Errors.push_back("Shader reflection failed: vertex SPIR-V path is empty.");
+            allStagesValid = false;
+        }
 
         if (!fragmentPath.empty())
-            MergeReflectionResult(result, ReflectFromSpirvFile(fragmentPath, XJShaderStage::Fragment));
+        {
+            XJShaderReflectionResult fragmentResult = ReflectFromSpirvFile(fragmentPath, XJShaderStage::Fragment);
+            if (!fragmentResult.Valid)
+                allStagesValid = false;
 
+            MergeReflectionResult(result, fragmentResult);
+        }
+        else
+        {
+            result.Errors.push_back("Shader reflection failed: fragment SPIR-V path is empty.");
+            allStagesValid = false;
+        }
+
+        result.Valid = allStagesValid && result.Errors.empty();
         return result;
     }
 }

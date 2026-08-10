@@ -11,6 +11,7 @@ namespace XJ
     //构造函数：初始化场景，创建根节点
     XJScene::XJScene()
     {
+        mLifetimeToken = std::make_shared<uint8_t>(0);
         mRootNode = std::make_shared<XJNode>();
         mRootNode->XJSetName("RootNode");
     }
@@ -19,6 +20,7 @@ namespace XJ
     {
         DestroyAllEntity();
         mRootNode.reset();
+        mLifetimeToken.reset();
     }
     // CreateEntity：根据名称创建一个实体
     // 如果没有提供名称，将使用默认名称 "Entity"
@@ -30,7 +32,7 @@ namespace XJ
 
     XJEntity* XJScene::FindEntityByUUID(const XJUUID &id) const
     {
-        if(!id)
+        if(id.mUUID == 0)
             return nullptr; // 如果 UUID 无效，直接返回空指针
 
         for (const auto& [enttEntity, entity] : mEntities)
@@ -38,7 +40,7 @@ namespace XJ
             if (!entity)
                 continue;
 
-            if (entity && entity->XJGetUUID() == id)
+            if (entity->XJGetUUID() == id)
                 return entity.get();
         }
         return nullptr; // 如果没有找到对应的实体，返回空指针
@@ -133,7 +135,7 @@ namespace XJ
 
         for (entt::entity ecsEntity : pending)
         {
-            XJEntity* entity = XJGetEntities(ecsEntity);
+            XJEntity* entity = GetEntity(ecsEntity);
             if (entity)
                 DestroyEntityImmediate(entity);
         }
@@ -192,7 +194,7 @@ namespace XJ
     }
 
     // GetEntity：根据实体 ID 获取对应的实体对象
-    XJEntity *XJScene::XJGetEntities(entt::entity enttEntity) const
+    XJEntity *XJScene::GetEntity(entt::entity enttEntity) const
     {
         auto it = mEntities.find(enttEntity);
         if (it == mEntities.end())

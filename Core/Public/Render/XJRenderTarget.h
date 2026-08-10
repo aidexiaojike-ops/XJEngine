@@ -41,7 +41,7 @@ namespace XJ
             bool bShouldUpdate = false; // 标志是否需要更新帧缓冲（例如窗口大小改变时） 
              /* data */
 
-            std::vector<std::shared_ptr<XJVulkanImage>> mColorImages;//颜色附件图像列表
+            // std::vector<std::shared_ptr<XJVulkanImage>> mColorImages;//颜色附件图像列表
             std::vector<std::shared_ptr<XJ::XJVulkanDepthImage>> mDepthImages;//深度附件图像列表
 
 

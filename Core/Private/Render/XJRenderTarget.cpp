@@ -371,30 +371,45 @@ namespace XJ
             
         
             // 3. 创建解析附件（如果有）
-            if (!resolveAttachmentIndices.empty()) 
+            if (!resolveAttachmentIndices.empty())
             {
-                int resolveIdx = resolveAttachmentIndices[0]; // 假设只有一个解析附件
+                int resolveIdx = resolveAttachmentIndices[0]; // 当前 framebuffer API 只支持一个 resolve image
                 const Attachment& resolveAttach = kAttachments[resolveIdx];
-
-                // 解析附件使用交换链图像
-                if (i < kSwapchainImages.size()) 
+            
+                if (bSwapchainTarget)
                 {
+                    // 交换链目标：MSAA resolve 最终写入当前 swapchain image。
+                    if (i >= kSwapchainImages.size())
+                    {
+                        spdlog::error("Swapchain image count is smaller than render target buffer count.");
+                        mFrameBuffers = std::move(oldFrameBuffers);
+                        mDepthImages = std::move(oldDepthImages);
+                        return;
+                    }
+                
                     resolveImage = std::make_shared<XJVulkanImage>(
                         kDevice,
                         kSwapchainImages[i],
                         VkExtent3D{mExtent.width, mExtent.height, 1},
                         resolveAttach.format,
                         resolveAttach.usage,
-                        resolveAttach.samples
-                    );
-                    if (!resolveImage->IsValid()) 
-                    {
-                        spdlog::warn("解析图像创建失败，将继续使用颜色附件");
-                        resolveImage = nullptr; // 设为nullptr，帧缓冲会跳过解析附件
-                    }
-                    spdlog::debug("解析附件创建成功，使用交换链图像");
-                } else {
-                    spdlog::error("交换链图像不足");
+                        resolveAttach.samples);
+                }
+                else
+                {
+                    // 离屏目标不能使用 swapchain image。resolve attachment 必须是自己的单采样图像，
+                    // 否则预览/离屏 framebuffer 会错误绑定窗口后备图像。
+                    resolveImage = std::make_shared<XJVulkanImage>(
+                        kDevice,
+                        VkExtent3D{mExtent.width, mExtent.height, 1},
+                        resolveAttach.format,
+                        resolveAttach.usage,
+                        resolveAttach.samples);
+                }
+            
+                if (!resolveImage || !resolveImage->IsValid())
+                {
+                    spdlog::error("Resolve attachment image creation failed: index={}", resolveIdx);
                     mFrameBuffers = std::move(oldFrameBuffers);
                     mDepthImages = std::move(oldDepthImages);
                     return;
@@ -437,40 +452,43 @@ namespace XJ
     }
     bool XJRenderTarget::BeginRenderTarget(VkCommandBuffer commandBuffer)
     {
+        if (!commandBuffer)
+        {
+            spdlog::error("BeginRenderTarget failed: command buffer is null.");
+            return false;
+        }
+
         if (!mRenderPass)
         {
             spdlog::error("BeginRenderTarget failed: render pass is null.");
             return false;
         }
 
-        if (mFrameBuffers.empty()) {
-            spdlog::warn("紧急重建帧缓冲");
-            ReCreate();
-            if (mFrameBuffers.empty()) {
-                spdlog::error("无法创建帧缓冲，跳过渲染");
-                return false;
-            }
-        }
-        assert(!bBeginRenderTarget && "RenderPass must be set before beginning render target.");//确保在开始渲染目标之前设置了RenderPass
-
-         // 检查帧缓冲区是否为空
-        if (mFrameBuffers.empty()) 
+        if (bBeginRenderTarget)
         {
-            spdlog::error("No framebuffers available in render target. FrameBuffer count: {}, Extent: {}x{}", 
-                         mBufferCount, mExtent.width, mExtent.height);
-            bBeginRenderTarget = false;
+            spdlog::error("BeginRenderTarget failed: render target is already begun.");
             return false;
         }
-        //spdlog::debug("开始渲染目标：帧缓冲区数量={}, 当前索引={}, 交换链目标={}",
-        //          mFrameBuffers.size(), mCurrentBufferIndex, bSwapchainTarget);
 
-        UpdateIfNeeded();//如果需要更新帧缓冲（例如窗口大小改变时），重新创建帧缓冲
-       
-        //if(XJEntity::HasComponent<XJCameraComponent>(mCamera))
-        XJEntity* camera = XJGetCamera();
-        if(XJEntity::HasComponent<XJCameraComponent>(camera) && mExtent.width > 0 && mExtent.height > 0)
+        if (bShouldUpdate)
         {
-            camera->GetComponent<XJCameraComponent>().XJSetAspectRatio(mExtent.width * 1.0f / mExtent.height);//更新摄像机的投影矩阵
+            // 不在命令录制路径里 ReCreate。ReCreate 内部会 vkDeviceWaitIdle，
+            // 如果 BeginRenderTarget 隐式触发，会造成帧内整管线停顿。
+            spdlog::warn("BeginRenderTarget skipped: render target needs update. Call UpdateIfNeeded at frame boundary.");
+            return false;
+        }
+
+        if (mFrameBuffers.empty())
+        {
+            spdlog::error("BeginRenderTarget failed: no framebuffers available.");
+            return false;
+        }
+
+        XJEntity* camera = XJGetCamera();
+        if (XJEntity::HasComponent<XJCameraComponent>(camera) && mExtent.width > 0 && mExtent.height > 0)
+        {
+            camera->GetComponent<XJCameraComponent>().XJSetAspectRatio(
+                mExtent.width * 1.0f / mExtent.height);
         }
 
         if(bSwapchainTarget)
@@ -530,30 +548,44 @@ namespace XJ
     //同步缓冲区计数
     void XJRenderTarget::SetExtent(const VkExtent2D extent)
     {
-        XJRenderContext* kRenderContext = XJApplication::XJGetAppContext()->renderContext;
+        if (extent.width == 0 || extent.height == 0)
+        {
+            spdlog::warn("SetExtent ignored: invalid extent {}x{}", extent.width, extent.height);
+            return;
+        }
+
+        XJRenderContext* renderContext = XJApplication::XJGetAppContext()->renderContext;
+
         if (bSwapchainTarget)
         {
-            if (!kRenderContext || !kRenderContext->XJGetSwapchain())
+            if (!renderContext || !renderContext->XJGetSwapchain())
             {
                 spdlog::error("SetExtent failed: render context or swapchain is null.");
                 return;
-            }       
+            }
 
-            XJVulkanSwapchain* kSwapchain = kRenderContext->XJGetSwapchain();
-            mBufferCount = static_cast<uint32_t>(kSwapchain->XJGetSwapchainImages().size());
+            XJVulkanSwapchain* swapchain = renderContext->XJGetSwapchain();
+            mBufferCount = static_cast<uint32_t>(swapchain->XJGetSwapchainImages().size());
         }
 
-        if(bSwapchainTarget)
-        {
-            XJVulkanSwapchain* kSwapchain = kRenderContext->XJGetSwapchain();
-            mBufferCount = kSwapchain->XJGetSwapchainImages().size();
-        }
+        if (mExtent.width == extent.width && mExtent.height == extent.height)
+            return;
+
         mExtent = extent;
         bShouldUpdate = true;
         
     }
     void XJRenderTarget::SetBufferCount(uint32_t bufferCount)
     {
+        if (bufferCount == 0)
+        {
+            spdlog::warn("SetBufferCount ignored: bufferCount is zero.");
+            return;
+        }
+
+        if (mBufferCount == bufferCount)
+            return;
+
         mBufferCount = bufferCount;
         bShouldUpdate = true;
     }
@@ -597,28 +629,40 @@ namespace XJ
     }
     void XJRenderTarget::SetColorClearValue(uint32_t attachmentIndex, VkClearColorValue colorClearValue)
     {
-        std::vector<Attachment> renderPassAttachments = mRenderPass->XJGetAttachments();
-        if(attachmentIndex <= renderPassAttachments.size() - 1)
+        if (!mRenderPass)
         {
-            if(!IsDepthStencilFormat(renderPassAttachments[attachmentIndex].format) && renderPassAttachments[attachmentIndex].loadOp == VK_ATTACHMENT_LOAD_OP_CLEAR)
-            {
-                mClearValues[attachmentIndex].color = colorClearValue;
-            }
-            
+            spdlog::error("SetColorClearValue failed: render pass is null.");
+            return;
+        }
+
+        std::vector<Attachment> renderPassAttachments = mRenderPass->XJGetAttachments();
+        if (attachmentIndex >= renderPassAttachments.size() || attachmentIndex >= mClearValues.size())
+            return;
+
+        if (!IsDepthStencilFormat(renderPassAttachments[attachmentIndex].format) &&
+            renderPassAttachments[attachmentIndex].loadOp == VK_ATTACHMENT_LOAD_OP_CLEAR)
+        {
+            mClearValues[attachmentIndex].color = colorClearValue;
         }
         
     }
 
     void XJRenderTarget::SetDepthClearValue(uint32_t attachmentIndex, VkClearDepthStencilValue depthClearValue)
     {
-        std::vector<Attachment> renderPassAttachments = mRenderPass->XJGetAttachments();
-        if(attachmentIndex <= renderPassAttachments.size() - 1)
+        if (!mRenderPass)
         {
-            if(IsDepthStencilFormat(renderPassAttachments[attachmentIndex].format) && renderPassAttachments[attachmentIndex].loadOp == VK_ATTACHMENT_LOAD_OP_CLEAR)
-            {
-                mClearValues[attachmentIndex].depthStencil = depthClearValue;
-            }
-            
+            spdlog::error("SetDepthClearValue failed: render pass is null.");
+            return;
+        }
+    
+        std::vector<Attachment> renderPassAttachments = mRenderPass->XJGetAttachments();
+        if (attachmentIndex >= renderPassAttachments.size() || attachmentIndex >= mClearValues.size())
+            return;
+    
+        if (IsDepthStencilFormat(renderPassAttachments[attachmentIndex].format) &&
+            renderPassAttachments[attachmentIndex].loadOp == VK_ATTACHMENT_LOAD_OP_CLEAR)
+        {
+            mClearValues[attachmentIndex].depthStencil = depthClearValue;
         }
         
     }

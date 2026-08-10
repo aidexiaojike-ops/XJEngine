@@ -13,6 +13,7 @@
 #include "Render/XJRenderer.h"
 #include "Render/Resource/XJTextureFactory.h"
 #include "Render/Resource/XJMaterialFactory.h"
+#include "ECS/XJReservedUUID.h"
 
 #include "Asset/Importer/XJTextureImporter.h"
 #include "Asset/XJAssetRegistry.h"
@@ -564,7 +565,7 @@ private:
     static constexpr XJ::XJAssetHandle kDefaultSceneHandle = 0x10000001ull;
     static constexpr XJ::XJAssetHandle kMonkeyMeshHandle = 0x20000001ull;
     static constexpr XJ::XJAssetHandle kTJCubeMeshHandle = 0x20000002ull;
-    static constexpr uint64_t kPreviewCameraEntityId = 0x30000001ull;
+    static constexpr uint64_t kPreviewCameraEntityId = XJ::XJ_PREVIEW_CAMERA_UUID;
     static constexpr uint64_t kGameCameraEntityId = 0x30000002ull;
     static constexpr uint64_t kMonkeyEntityId = 0x30000003ull;
 

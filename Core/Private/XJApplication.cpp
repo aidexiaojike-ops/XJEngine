@@ -1,6 +1,9 @@
 #include "XJApplication.h"
 #include "Edit/SpdlogDebug.h"
 #include "ECS/XJScene.h"  // 新增：提供XJScene完整定义
+
+#include <Windows.h>
+#include <filesystem>
 #include <thread>
 
 namespace XJ
@@ -10,6 +13,8 @@ namespace XJ
 
     void XJApplication::Start(int argc, char** argv)
     {
+        ConfigureWorkingDirectory();
+
         // 在这里可以添加应用程序启动时的初始化代码
         mSpdlogDebug = std::make_unique<SpdlogDebug>();//创建日志对象
         spdlog::info("应用程序启动");
@@ -28,7 +33,7 @@ namespace XJ
 
         sAppContext.app = this;
         OnInit();//调用初始化函数
-        LoadScene();;//加载场景
+        LoadScene();//加载场景
 
         mStartTimePoint = std::chrono::steady_clock::now();//记录程序开始时间点
     }
@@ -56,13 +61,6 @@ namespace XJ
 
     void XJApplication::MainLoop()
     {
-        // 确保工作目录是 exe 所在目录（IDE/cmake 启动也能找到 Resource）
-        char exePath[MAX_PATH];
-        GetModuleFileNameA(nullptr, exePath, MAX_PATH);
-        std::filesystem::path exeDir = std::filesystem::path(exePath).parent_path();
-        std::filesystem::current_path(exeDir);
-
-
         mLastTimePoint = std::chrono::steady_clock::now();//记录上次更新时间点
         // 在这里可以添加应用程序的主循环代码
         spdlog::info("进入主循环");
@@ -87,6 +85,39 @@ namespace XJ
         }
         spdlog::info("退出主循环");
     } 
+
+    void XJApplication::ConfigureWorkingDirectory()
+    {
+        char exePath[MAX_PATH] = {};
+        const DWORD length = GetModuleFileNameA(nullptr, exePath, MAX_PATH);
+
+        if (length == 0 || length >= MAX_PATH)
+        {
+            spdlog::error("Failed to resolve executable path; current working directory is unchanged.");
+            return;
+        }
+
+        const std::filesystem::path exeDir = std::filesystem::path(exePath).parent_path();
+        if (exeDir.empty())
+        {
+            spdlog::error("Failed to resolve executable directory; current working directory is unchanged.");
+            return;
+        }
+
+        std::error_code ec;
+        std::filesystem::current_path(exeDir, ec);
+        if (ec)
+        {
+            spdlog::error(
+                "Failed to set working directory to '{}': {}",
+                exeDir.string(),
+                ec.message());
+            return;
+        }
+
+        spdlog::debug("Working directory set to '{}'", exeDir.string());
+    }
+
     void XJApplication::ParseArgs(int argc, char** argv)
     {
          // 此处可以实现对命令行参数的解析，例如设置应用的一些特性

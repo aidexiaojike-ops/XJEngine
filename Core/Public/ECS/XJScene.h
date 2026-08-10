@@ -5,6 +5,7 @@
 #include "ECS/XJUUID.h"
 // #include <entt/entt.hpp> 
 #include <entt/entity/registry.hpp> 
+#include <memory>
 #include <unordered_set>
 /**
  * @file XJScene.h
@@ -30,6 +31,7 @@ namespace XJ
 
             std::unordered_map<entt::entity, std::shared_ptr<XJEntity>> mEntities;
             std::shared_ptr<XJNode> mRootNode;  ///< 场景根节点，用于构建场景层级树
+            std::shared_ptr<void> mLifetimeToken;
 
             // view.each 遍历期间不要直接 destroy registry；先排队，遍历结束后 Flush。
             std::vector<entt::entity> mPendingDestroyEntities;
@@ -43,8 +45,9 @@ namespace XJ
             // 只允许外部读取 registry，不能直接 create/destroy。
             // 实体生命周期必须走 XJScene::CreateEntity / DestroyEntity，保证 mEcsRegistry、mEntities、Node 层级同步。
             const entt::registry& XJGetEcsRegistry() const { return mEcsRegistry; }//获取注册表
+            std::weak_ptr<void> GetLifetimeToken() const { return mLifetimeToken; }
 
-            XJEntity *XJGetEntities(entt::entity enttEntity) const;
+            XJEntity *GetEntity(entt::entity enttEntity) const;
             XJEntity* FindEntityByUUID(const XJUUID &id) const; //通过UUID查找实体 
 
             XJNode *XJGetRootNode() const {return mRootNode.get();}//获取场景根节点

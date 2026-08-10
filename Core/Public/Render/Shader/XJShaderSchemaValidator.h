@@ -17,6 +17,12 @@ namespace XJ
             static XJShaderValidationResult ValidateFromSourceFiles(const XJShaderSchema& schema, const std::filesystem::path& vertexPath, const std::filesystem::path& fragmentPath);//从源文件验证
 
             static XJShaderValidationResult ValidateFromReflection(const XJShaderSchema& schema, const XJShaderReflectionResult& reflection);
+
+            static XJShaderValidationResult Validate(
+                const XJShaderSchema& schema,
+                const XJShaderReflectionResult& reflection,
+                const std::filesystem::path& vertexPath,
+                const std::filesystem::path& fragmentPath);
     };
 }
 

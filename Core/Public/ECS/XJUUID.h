@@ -28,7 +28,7 @@ namespace std
     {
         std::size_t operator()(const XJ::XJUUID &uuid) const
         {
-            if(!uuid)
+            if(uuid.mUUID == 0)
             {
                 return 0;
             }

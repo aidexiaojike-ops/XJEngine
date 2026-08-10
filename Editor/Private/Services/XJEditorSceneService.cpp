@@ -282,7 +282,7 @@ namespace XJ
             if (meshRef.Mesh.Handle != assetHandle)
                 continue;
 
-            XJEntity* xjEntity = scene.XJGetEntities(entity);
+            XJEntity* xjEntity = scene.GetEntity(entity);
             if (!xjEntity)
                 continue;
 
@@ -299,7 +299,7 @@ namespace XJ
                 if (material.Handle != assetHandle)
                     continue;
 
-                XJEntity* xjEntity = scene.XJGetEntities(entity);
+                XJEntity* xjEntity = scene.GetEntity(entity);
                 if (xjEntity)
                     result.push_back(static_cast<XJEditorEntityId>(xjEntity->XJGetUUID()));
 
@@ -315,7 +315,7 @@ namespace XJ
             if (sceneRef.SourceScene.Handle != assetHandle)
                 continue;
 
-            XJEntity* xjEntity = scene.XJGetEntities(entity);
+            XJEntity* xjEntity = scene.GetEntity(entity);
             if (!xjEntity)
                 continue;
 

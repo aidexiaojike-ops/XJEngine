@@ -28,7 +28,7 @@ namespace XJ
     XJVulkanDevice *XJMaterialSystem::XJGetDevice() const
     {
         XJAppContext *kAppContext = XJApplication::XJGetAppContext();
-        if(kAppContext)
+        if(kAppContext && kAppContext->renderContext)
         {
             return kAppContext->renderContext->XJGetDevice();
         }
@@ -45,6 +45,9 @@ namespace XJ
         if(XJEntity::HasComponent<XJCameraComponent>(kCamera))
         {
             auto &kCameraComp = kCamera->GetComponent<XJCameraComponent>();
+            if (!kCameraComp.XJGetEnabled())
+                return projMat;
+
             projMat = kCameraComp.XJGetProjectionMatrix();
         }
         return projMat;
@@ -60,6 +63,9 @@ namespace XJ
         if(XJEntity::HasComponent<XJCameraComponent>(kCamera))
         {
             auto &kCameraComp = kCamera->GetComponent<XJCameraComponent>();
+            if (!kCameraComp.XJGetEnabled())
+                return viewMat;
+
             viewMat = kCameraComp.XJGetViewMatrix();
         }
         return viewMat;

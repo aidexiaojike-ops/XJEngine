@@ -21,6 +21,9 @@ namespace XJ
             const glm::mat4& XJGetProjectionMatrix();//获取投影矩阵
             const glm::mat4& XJGetViewMatrix();//获取视图矩阵
 
+            bool XJGetEnabled() const { return mEnabled; }
+            void XJSetEnabled(bool enabled) { mEnabled = enabled; }
+
             void XJSetProjectionMatrix(const glm::mat4& proj) { projMat = proj; }//设置投影矩阵
             void XJSetViewMatrix(const glm::mat4& view);//设置视图矩阵
 
@@ -57,6 +60,7 @@ namespace XJ
             float mAspectRatio{1.0f};//宽高比
             float mNear{0.1f};//近裁剪面
             float mFar{100.0f};//远裁剪面
+            bool mEnabled{true};
             glm::vec3 mTarget{0.0f, 0.0f, 0.0f};//摄像机目标点 // 轨道模式专用数据
             glm::vec3 mPosition{0.0f, 1.0f, 0.0f};//摄像机位置
 

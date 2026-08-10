@@ -14,6 +14,9 @@ namespace XJ
     }
     XJRenderContext::~XJRenderContext()
     {
+        if (mDevice && mDevice->IsValid())
+            mDevice->WaitIdle();
+
         mSwapchain.reset();
         mDevice.reset();
         mPhysicalDevices.reset();

@@ -26,18 +26,19 @@ namespace XJ
                 {
                     return;
                 }
-                // 同一个 mesh 只保留一个 slot。再次添加时覆盖 material，避免重复绘制。
-                for (auto& slot : mSlots)
-                {
-                    if (slot.Mesh == mesh)
-                    {
-                        slot.Material = std::move(material);
-                        return;
-                    }
-                }
-
+                // 允许同一个 mesh 拥有多个材质 slot。glTF mesh 可能由多个 primitive 组成，
+                // 场景资产中的 materials[n] 需要稳定映射到运行时 slot[n]，不能按 mesh 去重。
                 mSlots.push_back({std::move(mesh), std::move(material)});
             };
+
+            bool SetSlotMaterial(uint32_t index, std::shared_ptr<T> material)
+            {
+                if (index >= mSlots.size())
+                    return false;
+
+                mSlots[index].Material = std::move(material);
+                return true;
+            }
 
             bool RemoveMesh(const std::shared_ptr<XJMesh>& mesh)
             {

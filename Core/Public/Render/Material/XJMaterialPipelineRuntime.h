@@ -37,8 +37,8 @@ namespace XJ
 
         std::vector<VkDescriptorSet> MaterialParamDescSets;
         std::vector<VkDescriptorSet> MaterialResourceDescSets;
-        std::vector<std::shared_ptr<XJVulkanBuffer>> MaterialBuffers;
-        std::vector<uint32_t> MaterialBufferSizes;
+        std::vector<std::shared_ptr<XJVulkanBuffer>> MaterialUboBuffers;
+        std::vector<uint32_t> MaterialUboBufferSizes;
 
 
         bool IsValid() const
@@ -66,8 +66,8 @@ namespace XJ
         {
             MaterialParamDescSets.clear();
             MaterialResourceDescSets.clear();
-            MaterialBuffers.clear();
-            MaterialBufferSizes.clear();
+            MaterialUboBuffers.clear();
+            MaterialUboBufferSizes.clear();
             MaterialDescriptorPool.reset();
             LastDescriptorSetCount = 0;
         }

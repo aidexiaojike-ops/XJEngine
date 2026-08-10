@@ -1,5 +1,5 @@
-#ifndef XJ_RENDERER_CPP
-#define XJ_RENDERER_CPP
+#ifndef XJ_RENDERER_H
+#define XJ_RENDERER_H
 
 #include "Render/XJRenderContext.h"
 

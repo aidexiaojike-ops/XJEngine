@@ -7,6 +7,8 @@
 
 #include "Asset/XJMaterialAsset.h"
 
+#include <unordered_map>
+
 namespace XJ
 {
     struct XJMaterialParameterBlockBuildResult
@@ -25,6 +27,10 @@ namespace XJ
     {
         public:
             static XJMaterialParameterBlockBuildResult Build(const XJMaterialAsset& material, const XJMaterialParameterLayout& layout, XJMaterialParameterBlock& outBlock);
+            static XJMaterialParameterBlockBuildResult BuildBlocks(
+                const XJMaterialAsset& material,
+                const XJMaterialParameterLayout& layout,
+                std::unordered_map<uint64_t, XJMaterialParameterBlock>& outBlocks);
     };
 }
 

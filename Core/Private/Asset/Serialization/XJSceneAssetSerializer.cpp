@@ -6,6 +6,8 @@
 #include "ECS/Component/XJTransformComponent.h"
 #include "ECS/XJEntity.h"
 #include "ECS/XJScene.h"
+#include "Asset/Serialization/XJJsonIO.h"
+#include "ECS/XJReservedUUID.h"
 
 #include <fstream>
 #include <nlohmann/json.hpp>
@@ -20,46 +22,7 @@ namespace XJ
 
     static uint64_t ReadUInt64(const nlohmann::json& j, const char* key, uint64_t fallback = 0)
     {
-        if (!j.contains(key))
-            return fallback;
-
-        const auto& value = j[key];
-        if (value.is_number_unsigned())
-            return value.get<uint64_t>();
-
-        if (value.is_number_integer())
-            return static_cast<uint64_t>(value.get<int64_t>());
-
-        if (value.is_string())
-        {
-            const std::string text = value.get<std::string>();
-            if (text.empty())
-                return fallback;
-
-            int base = 10;
-            std::string number = text;
-
-            if (number.rfind("0x", 0) == 0 || number.rfind("0X", 0) == 0)
-            {
-                base = 16;
-                number = number.substr(2);
-            }
-            else if (number.find_first_of("abcdefABCDEF") != std::string::npos)
-            {
-                base = 16;
-            }
-
-            try
-            {
-                return std::stoull(number, nullptr, base);
-            }
-            catch (...)
-            {
-                return fallback;
-            }
-        }
-
-        return fallback;
+        return JsonReadUInt64Or(j, key, fallback);
     }
 
     static XJUUID ReadUUID(const nlohmann::json& j, const char* key)
@@ -74,10 +37,7 @@ namespace XJ
 
     static glm::vec3 DeserializeVec3(const nlohmann::json& j, const glm::vec3& fallback)
     {
-        if (!j.is_array() || j.size() < 3)
-            return fallback;
-
-        return glm::vec3(j[0].get<float>(), j[1].get<float>(), j[2].get<float>());
+        return JsonReadVec3Or(j, fallback);
     }
 
     static nlohmann::json SerializeTransform(const XJSceneTransformData& t)
@@ -168,9 +128,17 @@ namespace XJ
     {
         XJSceneTransformData t;
         t.UUID = ReadUUID(j, "uuid");
-        t.Position = DeserializeVec3(j.value("pos", nlohmann::json::array()), t.Position);
-        t.Rotation = DeserializeVec3(j.value("rot", nlohmann::json::array()), t.Rotation);
-        t.Scale = DeserializeVec3(j.value("scale", nlohmann::json::array()), t.Scale);
+        if (j.is_object())
+        {
+            if (j.contains("pos"))
+                t.Position = DeserializeVec3(j["pos"], t.Position);
+
+            if (j.contains("rot"))
+                t.Rotation = DeserializeVec3(j["rot"], t.Rotation);
+
+            if (j.contains("scale"))
+                t.Scale = DeserializeVec3(j["scale"], t.Scale);
+        }
         return t;
     }
 
@@ -178,12 +146,15 @@ namespace XJ
     {
         XJSceneMeshRendererData mr;
         mr.UUID = ReadUUID(j, "uuid");
-        mr.Mesh = XJAssetRef::FromUri(j.value("mesh", std::string{}), XJAssetType::Mesh);
+        mr.Mesh = XJAssetRef::FromUri(JsonReadStringOr(j, "mesh"), XJAssetType::Mesh);
 
         if (j.contains("materials") && j["materials"].is_array())
         {
             for (const auto& mat : j["materials"])
-                mr.Materials.push_back(XJAssetRef::FromUri(mat.get<std::string>(), XJAssetType::Material));
+            {
+                if (mat.is_string())
+                    mr.Materials.push_back(XJAssetRef::FromUri(mat.get<std::string>(), XJAssetType::Material));
+            }
         }
 
         return mr;
@@ -193,11 +164,11 @@ namespace XJ
     {
         XJSceneCameraData c;
         c.UUID = ReadUUID(j, "uuid");
-        c.Enabled = j.value("enabled", true);
-        c.Fov = j.value("fov", c.Fov);
-        c.NearClip = j.value("near", c.NearClip);
-        c.FarClip = j.value("far", c.FarClip);
-        c.Primary = j.value("primary", false);
+        c.Enabled = JsonReadBoolOr(j, "enabled", true);
+        c.Fov = JsonReadFloatOr(j, "fov", c.Fov);
+        c.NearClip = JsonReadFloatOr(j, "near", c.NearClip);
+        c.FarClip = JsonReadFloatOr(j, "far", c.FarClip);
+        c.Primary = JsonReadBoolOr(j, "primary", false);
         return c;
     }
 
@@ -205,10 +176,11 @@ namespace XJ
     {
         XJSceneLightData l;
         l.UUID = ReadUUID(j, "uuid");
-        l.Enabled = j.value("enabled", true);
-        l.Type = j.value("lightType", j.value("type", l.Type));
-        l.Color = DeserializeVec3(j.value("color", nlohmann::json::array()), l.Color);
-        l.Intensity = j.value("intensity", l.Intensity);
+        l.Enabled = JsonReadBoolOr(j, "enabled", true);
+        l.Type = JsonReadIntOr(j, "lightType", JsonReadIntOr(j, "type", l.Type));
+        if (j.is_object() && j.contains("color"))
+            l.Color = DeserializeVec3(j["color"], l.Color);
+        l.Intensity = JsonReadFloatOr(j, "intensity", l.Intensity);
         return l;
     }
 
@@ -216,8 +188,8 @@ namespace XJ
     {
         XJSceneEntityData e;
         e.UUID = ReadUUID(j, "uuid");
-        e.Type = j.value("type", std::string{"Entity"});
-        e.Name = j.value("name", std::string{});
+        e.Type = JsonReadStringOr(j, "type", std::string{"Entity"});
+        e.Name = JsonReadStringOr(j, "name");
 
         if (j.contains("parent") && !j["parent"].is_null())
             e.Parent = XJUUID(ReadUInt64(j, "parent", 0));
@@ -226,10 +198,9 @@ namespace XJ
         {
             for (const auto& child : j["children"])
             {
-                if (child.is_string())
-                    e.Children.push_back(XJUUID(ReadUInt64(nlohmann::json{{"value", child}}, "value", 0)));
-                else
-                    e.Children.push_back(XJUUID(child.get<uint64_t>()));
+                uint64_t childId = 0;
+                if (JsonReadUInt64(child, childId))
+                    e.Children.push_back(XJUUID(childId));
             }
         }
 
@@ -267,9 +238,6 @@ namespace XJ
 
     bool XJSceneAssetSerializer::SaveToFile(const XJSceneAsset& sceneAsset, const std::filesystem::path& path)
     {
-        if (path.has_parent_path())
-            std::filesystem::create_directories(path.parent_path());
-
         nlohmann::json root;
         root["version"] = 2;
         root["asset"] = {
@@ -282,12 +250,7 @@ namespace XJ
         for (const auto& e : sceneAsset.Entities)
             root["objects"].push_back(SerializeEntity(e));
 
-        std::ofstream out(path);
-        if (!out)
-            return false;
-
-        out << root.dump(2);
-        return out.good();
+        return WriteJsonFileAtomic(path, root);
     }
 
     std::shared_ptr<XJSceneAsset> XJSceneAssetSerializer::LoadFromFile(const std::filesystem::path& path)
@@ -306,14 +269,14 @@ namespace XJ
             return nullptr;
         }
     
-        if (j.value("version", 0) != 2)
+        if (JsonReadIntOr(j, "version", 0) != 2)
             return nullptr;
     
         auto asset = std::make_shared<XJSceneAsset>();
         if (j.contains("asset"))
         {
             asset->mHandle = ReadUInt64(j["asset"], "handle", 0);
-            asset->mName = j["asset"].value("name", std::string{});
+            asset->mName = JsonReadStringOr(j["asset"], "name");
         }
     
         if (!j.contains("objects") || !j["objects"].is_array())
@@ -321,7 +284,7 @@ namespace XJ
     
         for (const auto& objectJson : j["objects"])
         {
-            if (objectJson.value("type", std::string{}) != "Entity")
+            if (!objectJson.is_object() || JsonReadStringOr(objectJson, "type") != "Entity")
                 continue;
         
             asset->Entities.push_back(DeserializeEntity(objectJson));
@@ -343,7 +306,7 @@ namespace XJ
             const XJEntity& entity = *entityPtr;
         
             // 不保存 editor preview camera。
-            if (entity.XJGetUUID() == XJUUID(static_cast<uint64_t>(0x30000001ull)))
+            if (entity.XJGetUUID() == XJUUID(XJ_PREVIEW_CAMERA_UUID))
                 continue;
         
             XJSceneEntityData data = BuildEntityData(entity);
@@ -395,7 +358,7 @@ namespace XJ
             auto& c = entity.GetComponent<XJCameraComponent>();
             data.HasCamera = true;
             data.Camera.UUID = c.XJGetUUID();
-            data.Camera.Enabled = true;
+            data.Camera.Enabled = c.XJGetEnabled();
             data.Camera.Fov = c.XJGetFov();
             data.Camera.NearClip = c.XJGetNear();
             data.Camera.FarClip = c.XJGetFar();

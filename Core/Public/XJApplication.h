@@ -63,6 +63,7 @@ namespace XJ
             std::unique_ptr<XJGlfwWindow>      mWindow;//窗口对象
             std::unique_ptr<XJScene>      mScene;//场景对象
         private:
+            void ConfigureWorkingDirectory();
             void ParseArgs(int argc, char* argv[]);//解析命令行参数
             bool LoadScene(const std::string &filePath = "");//是否加载场景，加载场景 文件夹
             void UnLoadScene();//卸载场景

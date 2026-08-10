@@ -39,6 +39,7 @@ namespace XJ
         uint32_t PrimaryMaterialUboSet = 0;
         uint32_t PrimaryMaterialUboBinding = 0;
         uint32_t PrimaryMaterialUboSize = 0;
+        std::vector<XJMaterialUboLayout> MaterialUboLayouts;
         
         std::vector<XJMaterialTextureBinding> MaterialSamplerBindings;/// 材质采样器绑定列表（对应到着色器中的每个 sampler）
 
@@ -58,7 +59,7 @@ namespace XJ
 
         bool HasPrimaryMaterialUbo() const // 是否存在有效的主材质
         {
-            return !PrimaryMaterialUboName.empty() && PrimaryMaterialUboSize > 0;
+            return !MaterialUboLayouts.empty() && !PrimaryMaterialUboName.empty() && PrimaryMaterialUboSize > 0;
         }
 
         bool HasMaterialParameterSet() const// 是否存在材质参数描述符集

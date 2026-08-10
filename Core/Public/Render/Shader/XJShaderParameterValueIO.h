@@ -2,6 +2,7 @@
 #define XJ_SHADER_PARAMETER_VALUE_IO_H
 
 #include "Render/Shader/XJShaderParameter.h"
+#include "Asset/Serialization/XJJsonIO.h"
 
 #include <cstdint>
 #include <nlohmann/json.hpp>
@@ -27,40 +28,26 @@ namespace XJ
 
             case XJShaderParameterType::Vec2:
             {
-                if (!value.is_array() || value.size() < 2)
-                    return glm::vec2(0.0f);
-
-                return glm::vec2(value[0].get<float>(), value[1].get<float>());
+                return JsonReadVec2Or(value, glm::vec2(0.0f));
             }
 
             case XJShaderParameterType::Vec3:
             case XJShaderParameterType::Color3:
             {
-                if (!value.is_array() || value.size() < 3)
-                    return glm::vec3(0.0f);
-
-                return glm::vec3(value[0].get<float>(), value[1].get<float>(), value[2].get<float>());
+                return JsonReadVec3Or(value, glm::vec3(0.0f));
             }
 
             case XJShaderParameterType::Vec4:
             case XJShaderParameterType::Color4:
             {
-                if (!value.is_array() || value.size() < 4)
-                    return invalidVec4Fallback;
-
-                return glm::vec4(value[0].get<float>(), value[1].get<float>(), value[2].get<float>(), value[3].get<float>());
+                return JsonReadVec4Or(value, invalidVec4Fallback);
             }
 
             case XJShaderParameterType::Texture2D:
             case XJShaderParameterType::TextureCube:
             {
-                if (value.is_number_unsigned())
-                    return static_cast<XJAssetHandle>(value.get<uint64_t>());
-
-                if (value.is_number_integer())
-                    return static_cast<XJAssetHandle>(value.get<int64_t>());
-
-                return static_cast<XJAssetHandle>(0);
+                uint64_t handle = 0;
+                return JsonReadUInt64(value, handle) ? static_cast<XJAssetHandle>(handle) : static_cast<XJAssetHandle>(0);
             }
 
             default:

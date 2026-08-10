@@ -3,6 +3,7 @@
 #include "Render/Shader/XJShaderSchemaValidator.h"
 #include "Render/Shader/XJShaderReflector.h"
 #include "Asset/XJAssetPathUtils.h" 
+#include "Asset/Serialization/XJJsonIO.h"
 
 #include <fstream>
 #include <nlohmann/json.hpp>
@@ -30,11 +31,11 @@ namespace XJ
         shaderAsset->mType = XJAssetType::Shader;
         shaderAsset->mName = path.stem().string();
         shaderAsset->mPath = path;
-        shaderAsset->Version = root.value("version", 1u);
+        shaderAsset->Version = JsonReadUInt32Or(root, "version", 1u);
 
-        shaderAsset->VertexPath = ResolveRelativePath(path, root.value("vertex", std::string{}));
-        shaderAsset->FragmentPath = ResolveRelativePath(path, root.value("fragment", std::string{}));
-        shaderAsset->SchemaPath = ResolveRelativePath(path, root.value("schema", std::string{}));
+        shaderAsset->VertexPath = ResolveRelativePath(path, JsonReadStringOr(root, "vertex"));
+        shaderAsset->FragmentPath = ResolveRelativePath(path, JsonReadStringOr(root, "fragment"));
+        shaderAsset->SchemaPath = ResolveRelativePath(path, JsonReadStringOr(root, "schema"));
 
         if (!shaderAsset->SchemaPath.empty())
         {
@@ -44,48 +45,23 @@ namespace XJ
         }
         shaderAsset->Reflection = XJShaderReflector::ReflectShaderProgram(shaderAsset->VertexPath, shaderAsset->FragmentPath);     
 
-        if (shaderAsset->Reflection.Valid)
-        {
-            shaderAsset->Validation = XJShaderSchemaValidator::ValidateFromReflection(shaderAsset->Schema, shaderAsset->Reflection);
-        }
-        else
-        {
-            //to do: 反射失败时，使用源文件验证
-            shaderAsset->Validation = XJShaderSchemaValidator::ValidateFromSourceFiles(shaderAsset->Schema, shaderAsset->VertexPath, shaderAsset->FragmentPath);     
-
-            XJShaderValidationMessage fallbackMessage;
-            fallbackMessage.Severity = XJShaderValidationSeverity::Warning;
-            fallbackMessage.Message = "SPIR-V reflection unavailable; using shader source validation fallback.";
-            shaderAsset->Validation.Messages.push_back(fallbackMessage);        
-
-            for (const auto& error : shaderAsset->Reflection.Errors)
-            {
-                XJShaderValidationMessage message;
-                message.Severity = XJShaderValidationSeverity::Warning;
-                message.Message = error;
-                shaderAsset->Validation.Messages.push_back(message);
-            }
-        }
+       shaderAsset->Validation = XJShaderSchemaValidator::Validate(
+                                shaderAsset->Schema,
+                                shaderAsset->Reflection,
+                                shaderAsset->VertexPath,
+                                shaderAsset->FragmentPath);
 
         return shaderAsset;
     }
 
     bool XJShaderAssetSerializer::SaveToFile(const XJShaderAsset& shaderAsset, const std::filesystem::path& path)
     {
-        if (path.has_parent_path())
-            std::filesystem::create_directories(path.parent_path());
-
         nlohmann::json root;
         root["version"] = shaderAsset.Version;
         root["vertex"] = shaderAsset.VertexPath.generic_string();
         root["fragment"] = shaderAsset.FragmentPath.generic_string();
         root["schema"] = shaderAsset.SchemaPath.generic_string();
 
-        std::ofstream out(path);
-        if (!out.is_open())
-            return false;
-
-        out << root.dump(2);
-        return out.good();
+        return WriteJsonFileAtomic(path, root);
     }
 }

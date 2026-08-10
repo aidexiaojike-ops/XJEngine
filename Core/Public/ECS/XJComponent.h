@@ -9,6 +9,8 @@ namespace XJ
     class XJComponent
     {
         public:
+            virtual ~XJComponent() = default;
+
             //归属  谁拥有
             void SetOwner(XJEntity *owner){mOwner = owner;}
             XJEntity *XJGetOwner() const {return mOwner;}

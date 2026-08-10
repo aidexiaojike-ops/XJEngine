@@ -60,6 +60,11 @@ namespace XJ
         uint32_t Size = 0;
     };
 
+    inline uint64_t XJMakeMaterialUboKey(uint32_t set, uint32_t binding)
+    {
+        return (static_cast<uint64_t>(set) << 32) | static_cast<uint64_t>(binding);
+    }
+
     struct XJMaterialParameterLayoutBuildResult//材质参数布局构建结果
     {
         bool Valid = false;

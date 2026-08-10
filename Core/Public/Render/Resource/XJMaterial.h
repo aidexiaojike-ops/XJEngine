@@ -83,6 +83,7 @@ namespace XJ
 
             XJMaterialParameterLayout mParameterLayout;
             XJMaterialParameterBlock mParameterBlock;
+            std::unordered_map<uint64_t, XJMaterialParameterBlock> mParameterBlocks;
             std::vector<XJMaterialTextureBinding> mTextureBindings;
             std::filesystem::path mShaderPath;
 
@@ -96,6 +97,15 @@ namespace XJ
 
             static void UpdateTextureParams(const TextureView *textureView, TextureParam *param)//是否开启 是否可用
             {
+                if (!param)
+                    return;
+
+                if (!textureView)
+                {
+                    *param = {};
+                    return;
+                }
+
                 param->enable = (textureView->IsValid() && textureView->bEnable) ? 1u : 0u;
                 param->uvRotation = textureView->uvRotation;
                 param->uvTransform = { textureView->uvScale.x, textureView->uvScale.y, textureView->uvTranslation.x, textureView->uvTranslation.y };
@@ -120,8 +130,11 @@ namespace XJ
             const XJMaterialParameterBlock& GetParameterBlock() const { return mParameterBlock; }
             XJMaterialParameterBlock& GetParameterBlock() { return mParameterBlock; }
             void SetParameterBlock(const XJMaterialParameterBlock& block) { mParameterBlock = block; MarkParameterDirty(); }
+            const std::unordered_map<uint64_t, XJMaterialParameterBlock>& GetParameterBlocks() const { return mParameterBlocks; }
+            std::unordered_map<uint64_t, XJMaterialParameterBlock>& GetParameterBlocks() { return mParameterBlocks; }
+            void SetParameterBlocks(const std::unordered_map<uint64_t, XJMaterialParameterBlock>& blocks);
 
-            bool HasRuntimeParameterBlock() const { return mParameterLayout.IsValid() && !mParameterBlock.Empty(); }
+            bool HasRuntimeParameterBlock() const { return mParameterLayout.IsValid() && (!mParameterBlock.Empty() || !mParameterBlocks.empty()); }
 
             //--------------------------------
             // Runtime Texture Binding

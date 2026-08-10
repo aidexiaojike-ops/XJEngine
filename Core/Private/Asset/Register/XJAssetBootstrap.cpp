@@ -75,6 +75,10 @@ namespace XJ
         }
          // 不存在则创建默认空场景并保存
         auto loaded = std::make_shared<XJSceneAsset>();
+        loaded->mHandle = mDefaultSceneHandle;
+        loaded->mType = XJAssetType::Scene;
+        loaded->mName = scenePath.stem().string();
+        loaded->mPath = scenePath;
         XJSceneAssetSerializer::SaveToFile(*loaded, scenePath);
 
         return loaded;

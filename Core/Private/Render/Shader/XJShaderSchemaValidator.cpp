@@ -14,6 +14,106 @@ namespace XJ
 
     namespace
     {
+        void AddMessage(
+            XJShaderValidationResult& result,
+            XJShaderValidationSeverity severity,
+            const std::string& parameterName,
+            const std::string& message)//添加消息
+        {
+            XJShaderValidationMessage validationMessage;
+            validationMessage.Severity = severity;
+            validationMessage.ParameterName = parameterName;
+            validationMessage.Message = message;
+            result.Messages.push_back(validationMessage);
+        }
+
+        //Texture 参数校验
+        static void ValidateTextureParameterFromReflection(
+            const XJParameterDef& parameter,
+            const XJShaderReflectionResult& reflection,
+            XJShaderValidationResult& result)
+        {
+            if (parameter.SamplerName.empty())
+            {
+                AddMessage(
+                    result,
+                    XJShaderValidationSeverity::Error,
+                    parameter.Name,
+                    "Texture parameter requires sampler field.");
+                return;
+            }
+        
+            const XJShaderReflectedSampler* sampler = FindSampler(reflection, parameter.SamplerName);
+            if (!sampler)
+            {
+                AddMessage(
+                    result,
+                    XJShaderValidationSeverity::Error,
+                    parameter.Name,
+                    "Sampler not found in SPIR-V reflection: " + parameter.SamplerName);
+            }
+        }
+        //UBO 参数校验
+        static void ValidateUboParameterFromReflection(
+            const XJParameterDef& parameter,
+            const XJShaderReflectionResult& reflection,
+            XJShaderValidationResult& result)
+        {
+            if (parameter.UboName.empty() || parameter.MemberName.empty())
+            {
+                AddMessage(
+                    result,
+                    XJShaderValidationSeverity::Error,
+                    parameter.Name,
+                    "UBO parameter requires both ubo and member fields.");
+                return;
+            }       
+
+            const XJShaderReflectedUbo* ubo = FindUbo(reflection, parameter.UboName);
+            if (!ubo)
+            {
+                AddMessage(
+                    result,
+                    XJShaderValidationSeverity::Error,
+                    parameter.Name,
+                    "UBO not found in SPIR-V reflection: " + parameter.UboName);
+                return;
+            }       
+
+            const XJShaderReflectedMember* member = FindMember(*ubo, parameter.MemberName);
+            if (!member)
+            {
+                AddMessage(
+                    result,
+                    XJShaderValidationSeverity::Error,
+                    parameter.Name,
+                    "UBO member not found in SPIR-V reflection: " +
+                        parameter.UboName + "." + parameter.MemberName);
+                return;
+            }       
+
+            const uint32_t expectedSize = ExpectedMinimumParameterSize(parameter.Type);
+            if (expectedSize != 0 && member->Size < expectedSize)
+            {
+                AddMessage(
+                    result,
+                    XJShaderValidationSeverity::Error,
+                    parameter.Name,
+                    "UBO member size is smaller than schema parameter type.");
+            }
+        }
+
+        static bool HasError(const XJShaderValidationResult& result)
+        {
+            for (const auto& message : result.Messages)
+            {
+                if (message.Severity == XJShaderValidationSeverity::Error)
+                    return true;
+            }
+        
+            return false;
+        }
+
         struct XJSourceShaderInfo
         {
             std::unordered_map<std::string, std::unordered_set<std::string>> UboMembers;
@@ -84,10 +184,10 @@ namespace XJ
 
         void ParseSamplers(const std::string& source, XJSourceShaderInfo& info)//解析采样器
         {
-            // Handles:
+            // Handles both scalar and array samplers:
             // layout(set = 2, binding = 0) uniform sampler2D textureA;
-            // uniform sampler2D textureA;
-            std::regex samplerRegex(R"(uniform\s+sampler\w+\s+([A-Za-z_][A-Za-z0-9_]*)\s*;)");//正则搜索迭代器，用于遍历一个字符串中所有匹配给定正则的子串。
+            // uniform sampler2D textures[4];
+            std::regex samplerRegex(R"(uniform\s+sampler\w+\s+([A-Za-z_][A-Za-z0-9_]*)\s*(?:\[[^\]]*\])?\s*;)");//正则搜索迭代器，用于遍历一个字符串中所有匹配给定正则的子串。
             auto begin = std::sregex_iterator(source.begin(), source.end(), samplerRegex);//起止迭代器和正则对象构造，它会在构造时立刻执行第一次搜索，指向第一个匹配。
             auto end = std::sregex_iterator();
 
@@ -126,15 +226,6 @@ namespace XJ
             const std::string cleanedSource = RemoveComments(source);
             ParseUniformBuffers(cleanedSource, info);
             ParseSamplers(cleanedSource, info);
-        }
-
-        void AddMessage(XJShaderValidationResult& result, XJShaderValidationSeverity severity, const std::string& parameterName, const std::string& message)//添加消息
-        {
-            XJShaderValidationMessage validationMessage;
-            validationMessage.Severity = severity;
-            validationMessage.ParameterName = parameterName;
-            validationMessage.Message = message;
-            result.Messages.push_back(validationMessage);
         }
 
     }
@@ -205,20 +296,78 @@ namespace XJ
         return result;
     }
 
-    XJShaderValidationResult XJShaderSchemaValidator::ValidateFromReflection(const XJShaderSchema& schema, const XJShaderReflectionResult& reflection)
+    XJShaderValidationResult XJShaderSchemaValidator::ValidateFromReflection(
+        const XJShaderSchema& schema,
+        const XJShaderReflectionResult& reflection)
     {
         XJShaderValidationResult result;
 
-        const XJShaderSchemaBindingResolveResult resolveResult =
-            ResolveShaderSchemaBindings(schema, reflection);
+        if (!reflection.Valid)
+        {
+            AddMessage(
+                result,
+                XJShaderValidationSeverity::Error,
+                "",
+                "SPIR-V reflection is invalid.");
 
-        for (const auto& error : resolveResult.Errors)
-            AddMessage(result, XJShaderValidationSeverity::Error, {}, error);
+            for (const auto& error : reflection.Errors)
+            {
+                AddMessage(
+                    result,
+                    XJShaderValidationSeverity::Error,
+                    "",
+                    error);
+            }
 
-        for (const auto& warning : resolveResult.Warnings)
-            AddMessage(result, XJShaderValidationSeverity::Warning, {}, warning);
+            return result;
+        }
+
+        for (const auto& parameter : schema.Parameters)
+        {
+            if (!parameter.Editable)
+                continue;
+
+            if (parameter.Type == XJShaderParameterType::Texture2D ||
+                parameter.Type == XJShaderParameterType::TextureCube)
+            {
+                ValidateTextureParameterFromReflection(parameter, reflection, result);
+            }
+            else
+            {
+                ValidateUboParameterFromReflection(parameter, reflection, result);
+            }
+        }
 
         return result;
+    }
+
+    XJShaderValidationResult XJShaderSchemaValidator::Validate(
+        const XJShaderSchema& schema,
+        const XJShaderReflectionResult& reflection,
+        const std::filesystem::path& vertexPath,
+        const std::filesystem::path& fragmentPath)
+    {
+        if(reflection.Valid)
+            return ValidateFromReflection(schema, reflection);
+        //else
+        //    return ValidateFromSourceFiles(schema, vertexPath, fragmentPath);
+
+        XJShaderValidationResult result = ValidateFromSourceFiles(schema, vertexPath, fragmentPath);
+
+        AddMessage(result,
+                    XJShaderValidationSeverity::Warning,
+                    "",
+                    "SPIR-V reflection is invalid; source validation is fallback only.");
         
+        for (const auto& error : reflection.Errors)
+        {
+            AddMessage(
+                result,
+                XJShaderValidationSeverity::Warning,
+                "",
+                error);
+        }
+
+        return result;
     }
 }

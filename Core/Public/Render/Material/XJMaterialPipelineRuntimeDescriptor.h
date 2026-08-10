@@ -17,11 +17,6 @@ namespace XJ
                 XJMaterialPipelineRuntime& runtime,
                 uint32_t materialCount);
 
-            static bool EnsureMaterialBuffer(//验证材质
-                XJVulkanDevice* device,
-                XJMaterialPipelineRuntime& runtime,
-                uint32_t materialIndex,
-                uint32_t requiredSize);
     };
 }
 

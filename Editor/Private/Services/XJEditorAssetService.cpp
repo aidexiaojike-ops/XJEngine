@@ -124,9 +124,14 @@ namespace XJ
 
         XJAssetHandle BuildUniqueAssetHandle(const XJAssetRegistry& assetRegistry, const std::filesystem::path& path, XJAssetType type)
         {
-            XJAssetHandle handle = XJAssetRegistryScanner::GenerateStableHandle(path, type);
+            uint32_t collisionSalt = 0;
+            XJAssetHandle handle = XJAssetRegistryScanner::GenerateStableHandle(path, type, collisionSalt);
+
             while (assetRegistry.Contains(handle))
-                ++handle;
+            {
+                ++collisionSalt;
+                handle = XJAssetRegistryScanner::GenerateStableHandle(path, type, collisionSalt);
+            }
 
             return handle;
         }

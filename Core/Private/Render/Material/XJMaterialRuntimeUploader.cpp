@@ -66,15 +66,6 @@ namespace XJ
             return false;
         }
 
-        XJMaterialParameterBlock& block = material->GetParameterBlock();
-        if (block.Empty())
-        {
-            spdlog::warn(
-                "Skip material params update: material {} has empty parameter block.",
-                material->GetIndex());
-            return false;
-        }
-
         const TextureView* texture = material->GetTextureView(UNLIT_MAT_BASE_COLOR);
         if (texture)
         {
@@ -83,16 +74,19 @@ namespace XJ
             material->SetPrimaryUboMemberBytes("textureParam", &texParam, sizeof(texParam));
         }
 
-        if (!XJMaterialPipelineRuntimeDescriptor::EnsureMaterialBuffer(
-                device,
-                runtime,
-                materialBufferIndex,
-                block.GetSize()))
+        if (!runtime.ShaderLayout.HasPrimaryMaterialUbo())
         {
+            spdlog::warn("Skip material params update: shader runtime layout has no material UBOs.");
             return false;
         }
 
-        if (materialBufferIndex >= runtime.MaterialBuffers.size())
+        const auto& uboLayouts = runtime.ShaderLayout.MaterialUboLayouts;
+        if (uboLayouts.empty())
+            return false;
+
+        const uint32_t uboCount = static_cast<uint32_t>(uboLayouts.size());
+        const uint32_t firstBufferIndex = materialBufferIndex * uboCount;
+        if (firstBufferIndex + uboCount > runtime.MaterialUboBuffers.size())
         {
             spdlog::warn(
                 "Skip material params update: material {} buffer index {} out of bounds.",
@@ -101,34 +95,76 @@ namespace XJ
             return false;
         }
 
-        XJVulkanBuffer* materialBuffer = runtime.MaterialBuffers[materialBufferIndex].get();
-        if (!materialBuffer)
-            return false;
+        std::vector<VkDescriptorBufferInfo> bufferInfos;
+        std::vector<VkWriteDescriptorSet> bufferWrites;
+        bufferInfos.reserve(uboLayouts.size());
+        bufferWrites.reserve(uboLayouts.size());
 
-        materialBuffer->WriteData(block.GetDataPtr());
+        const auto& blocks = material->GetParameterBlocks();
 
-        if (!runtime.ShaderLayout.HasPrimaryMaterialUbo())
+        for (uint32_t uboIndex = 0; uboIndex < uboCount; ++uboIndex)
         {
-            spdlog::warn("Skip material params update: shader runtime layout has no primary material UBO.");
-            return false;
+            const XJMaterialUboLayout& uboLayout = uboLayouts[uboIndex];
+            const uint64_t uboKey = XJMakeMaterialUboKey(uboLayout.Set, uboLayout.Binding);
+
+            const XJMaterialParameterBlock* block = nullptr;
+            auto blockIt = blocks.find(uboKey);
+            if (blockIt != blocks.end())
+                block = &blockIt->second;
+            else if (uboLayout.Set == runtime.ShaderLayout.PrimaryMaterialUboSet &&
+                     uboLayout.Binding == runtime.ShaderLayout.PrimaryMaterialUboBinding)
+                block = &material->GetParameterBlock();
+
+            if (!block || block->Empty())
+            {
+                spdlog::warn(
+                    "Skip material UBO write: material={}, ubo='{}', binding={} has empty block.",
+                    material->GetIndex(),
+                    uboLayout.UboName,
+                    uboLayout.Binding);
+                continue;
+            }
+
+            const uint32_t bufferIndex = firstBufferIndex + uboIndex;
+            if (!runtime.MaterialUboBuffers[bufferIndex] ||
+                runtime.MaterialUboBufferSizes[bufferIndex] != block->GetSize())
+            {
+                runtime.MaterialUboBuffers[bufferIndex] =
+                    std::make_shared<XJVulkanBuffer>(
+                        device,
+                        VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+                        block->GetSize(),
+                        nullptr,
+                        true);
+                runtime.MaterialUboBufferSizes[bufferIndex] = block->GetSize();
+            }
+
+            XJVulkanBuffer* materialBuffer = runtime.MaterialUboBuffers[bufferIndex].get();
+            if (!materialBuffer)
+                continue;
+
+            materialBuffer->WriteData(block->GetDataPtr());
+
+            bufferInfos.push_back(
+                DescriptorSetWriter::BuildBufferInfo(
+                    materialBuffer->XJGetBuffer(),
+                    0,
+                    block->GetSize()));
+
+            bufferWrites.push_back(
+                DescriptorSetWriter::WriteBuffer(
+                    descSet,
+                    uboLayout.Binding,
+                    VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+                    &bufferInfos.back()));
         }
 
-        VkDescriptorBufferInfo bufferInfo =
-            DescriptorSetWriter::BuildBufferInfo(
-                materialBuffer->XJGetBuffer(),
-                0,
-                block.GetSize());
-
-        VkWriteDescriptorSet bufferWrite =
-            DescriptorSetWriter::WriteBuffer(
-                descSet,
-                runtime.ShaderLayout.PrimaryMaterialUboBinding,
-                VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-                &bufferInfo);
+        if (bufferWrites.empty())
+            return false;
 
         DescriptorSetWriter::UpdateDescriptorSets(
             device->XJGetDevice(),
-            { bufferWrite });
+            bufferWrites);
 
         return true;
     }
@@ -161,10 +197,14 @@ namespace XJ
             if (!textureView || !textureView->texture || !textureView->sampler)
                 return false;
 
+            auto imageView = textureView->texture->XJGetImageView();
+            if (!imageView || imageView->XJGetImageView() == VK_NULL_HANDLE)
+                return false;
+
             imageInfos.push_back(
                 DescriptorSetWriter::BuildImageInfo(
                     textureView->sampler->XJGetSampler(),
-                    textureView->texture->XJGetImageView()->XJGetImageView()));
+                    imageView->XJGetImageView()));
 
             bindings.push_back(binding);
             return true;

@@ -13,9 +13,13 @@ namespace XJ
         if (referencedPath.is_absolute())
             return referencedPath.lexically_normal();
 
-        if (std::filesystem::exists(referencedPath))
+        const std::string generic = referencedPath.generic_string();
+        if (generic.rfind("Resource/", 0) == 0 || generic.rfind("Resource\\", 0) == 0)
             return referencedPath.lexically_normal();
 
+        // Asset-local references are resolved relative to the owner file. Do not probe
+        // referencedPath against the current working directory; CWD can differ between
+        // editor launches and would make the same asset resolve to different files.
         std::filesystem::path resolved = ownerFile.parent_path() / referencedPath;
         return resolved.lexically_normal();
     }
