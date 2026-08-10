@@ -85,7 +85,8 @@ File -> Importer -> Asset (CPU) -> Factory -> Resource (GPU) -> Renderer
 - **资产扫描**：`XJAssetRegistryScanner` 自动扫描 Resource 目录，按扩展名注册资产
 - **场景系统**：`.xjscene` -> `XJSceneAssetSerializer` -> `XJSceneInstantiator` -> ECS 实体
 - **场景切换**：支持多个 `.xjscene` 文件，通过 ECS 生命周期创建/销毁实体
-- **注册表**：`XJAssetRegistry` 用于持久化资产句柄与元数据
+- **注册表**：`XJAssetRegistry` 用于持久化资产句柄与元数据；运行时生成的句柄使用高位命名空间，与稳定的注册表句柄隔离，避免冲突
+- **原子 JSON IO**：`XJJsonIO` 统一提供 JSON 读取辅助（float/vec2/vec3/vec4/uint64）与原子文件写入（临时文件 + rename），供所有资产序列化器使用
 - **引导程序**：`XJAssetBootstrap` 管理默认资产注册和场景创建
 - **运行时工具**：`XJSceneRuntimeUtil` 提供主摄像机查找等运行时辅助功能
 
@@ -106,7 +107,8 @@ File -> Importer -> Asset (CPU) -> Factory -> Resource (GPU) -> Renderer
 
 - **材质系统**：`XJBaseMaterialSystem`、`XJUnlitMaterialSystem`、`XJMaterialRenderSystemBase`、`XJMaterialParameterBlock`/`Builder`/`Writer`
 - **摄像机系统**：`XJCameraController`（Core/Camera）、`XJCameraMath`（数学工具）、`XJCameraSystem`（ECS 适配）
-- **资产系统**：`XJModelImporter`、`XJTextureImporter`、`XJAssetRegistry`、`XJAssetRegistryScanner`、`XJAssetBootstrap`、`XJSceneRuntimeUtil`、`XJMeshAssetLoader`
+- **资产系统**：`XJModelImporter`、`XJTextureImporter`、`XJAssetRegistry`、`XJAssetRegistryScanner`、`XJAssetBootstrap`、`XJSceneRuntimeUtil`、`XJMeshAssetLoader`、`XJJsonIO`
+- **ECS 基础**：`XJEntity` 通过场景生命周期 token 校验避免悬垂访问；`XJReservedUUID` 定义引擎/编辑器保留 UUID 区间，用户 UUID 生成自动避开
 - **编辑器系统**：`XJEditorSceneController`、`XJEditorCameraManager`、`XJEditorSceneService`、`XJUIContext`、`XJEditorRenderer`、`XJEditorUILayer`、编辑器面板
 - **Vulkan 平台层**：`XJSwapchainAcquireResult`/`XJSwapchainPresentResult` 区分成功、重建和设备丢失状态；`XJVulkanInstance` 自动选择最高支持到 Vulkan 1.3 的 API 版本；`XJVulkanSurface`、`XJGlfwWindow`、`XJVulkanTextureSampler` 增加句柄校验、生命周期顺序和 RAII 释放
 
@@ -143,7 +145,7 @@ XJEngine/
 │   ├── Public/Asset/        # Asset 层（CPU）
 │   │   ├── Importer/        # 模型/纹理/材质导入器
 │   │   ├── Loader/          # 资产加载器
-│   │   ├── Serialization/   # 场景/材质/Shader 序列化
+│   │   ├── Serialization/   # 场景/材质/Shader 序列化（XJJsonIO 原子写入）
 │   │   ├── Instantiation/   # 场景实例化器
 │   │   └── Register/        # 资产引导注册/扫描
 │   ├── Public/Render/       # 渲染接口

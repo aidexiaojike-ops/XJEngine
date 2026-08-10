@@ -135,7 +135,8 @@ Swapchain
 - **Sampler Lifetime**: `XJSampler` delegates Vulkan sampler ownership to `XJVulkanTextureSampler` for RAII cleanup and validity checks
 
 #### **ECS Implementation**
-- **Entity Management**: Lightweight entity handles with automatic lifetime tracking
+- **Entity Management**: Lightweight entity handles with automatic lifetime tracking and scene lifetime-token validation (`XJEntity::GetSceneChecked`) to guard against dangling scene access
+- **Reserved UUID Range**: Engine/editor-owned UUIDs live in a reserved range (`XJReservedUUID`), and user UUID generation skips it to avoid collisions
 - **Component Storage**: Dense array storage for optimal cache performance
 - **System Scheduling**: Flexible system registration and execution order
 - **XJMaterialSystem Base Class**: Dedicated base class for material systems with helper methods for device, scene, and camera matrix access
@@ -159,8 +160,9 @@ Swapchain
 
 #### **Asset System**
 - **Two-Layer Architecture**: Assets (CPU-side pure data) separate from Render Resources (GPU-side Vulkan objects)
-- **Asset Registry**: Handle-based asset database (`XJAssetRegistry`) with JSON persistence
+- **Asset Registry**: Handle-based asset database (`XJAssetRegistry`) with JSON persistence; runtime-generated handles use a high-bit namespace separate from stable registry handles
 - **Asset Registry Scanner**: `XJAssetRegistryScanner` auto-scans Resource directories by extension to register assets
+- **Atomic JSON IO**: `XJJsonIO` centralizes JSON read helpers (float/vec2/vec3/vec4/uint64) and atomic file writes (temp file + rename) across all asset serializers
 - **Scene Assets**: Disk-side scene data (`XJSceneAsset`) with entities, transforms, meshes, cameras, lights
 - **Scene Switching**: Create/destroy entities via ECS lifecycle, support for multiple `.xjscene` files
 - **Scene Instantiator**: `XJSceneInstantiator` converts scene assets into live ECS entities with hierarchy
@@ -294,6 +296,7 @@ XJEngine/
 │   │   │   ├── XJEntity.h          # 实体类
 │   │   │   ├── XJComponent.h       # 组件基类
 │   │   │   ├── XJSystem.h          # 系统基类
+│   │   │   ├── XJReservedUUID.h    # 引擎/编辑器保留 UUID 区间
 │   │   │   ├── Component/          # 具体组件
 │   │   │   │   ├── XJCameraComponent.h
 │   │   │   │   ├── XJTransformComponent.h
@@ -345,6 +348,7 @@ XJEngine/
 │   │       ├── Loader/      # 资产加载器
 │   │       │   └── XJMeshAssetLoader.h
 │   │       ├── Serialization/ # 场景/材质/Shader 序列化
+│   │       │   ├── XJJsonIO.h                 # JSON 读写工具与原子写入
 │   │       │   ├── XJSceneAssetSerializer.h
 │   │       │   ├── XJMaterialAssetSerializer.h
 │   │       │   └── XJShaderAssetSerializer.h / XJShaderSchemaSerializer.h
