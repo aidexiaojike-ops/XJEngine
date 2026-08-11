@@ -38,14 +38,16 @@ namespace XJ
 
         private:
             void ApplyCameraBindings(); 
+            XJEntity* ResolveEntity(XJEditorEntityId id) const;
             //窗口
+            XJScene* mScene = nullptr;
             XJScenePreview* mScenePreview = nullptr;
             XJGamePreview* mGamePreview = nullptr;
             XJRenderTarget* mRenderTarget = nullptr;
             XJEditorCameraController* mCameraController = nullptr;  
             //摄像机ecs
-            XJEntity* mPreviewCameraEntity = nullptr;
-            XJEntity* mGameCameraEntity = nullptr;
+            XJEditorEntityId mPreviewCameraId = XJ_INVALID_EDITOR_ENTITY_ID;
+            XJEditorEntityId mGameCameraId = XJ_INVALID_EDITOR_ENTITY_ID;
     };
 
 

@@ -19,6 +19,7 @@
 #include "Asset/Serialization/XJMaterialAssetSerializer.h"
 #include "Asset/Serialization/XJShaderAssetSerializer.h"
 #include "Render/Shader/XJShaderParameter.h"
+#include "Render/Material/XJUnlitMaterialBindingUtils.h"
 
 #include <algorithm>
 #include <unordered_set>
@@ -79,14 +80,14 @@ namespace XJ
                                 materialAsset->mName = meta->Name;
                                 materialAsset->mPath = meta->SourcePath;
                             
-                                return XJMaterialFactory::GetInstance()->CreateFromAsset(*materialAsset, defaultTexture, defaultSampler);
+                                return XJMaterialFactory::GetInstance()->GetOrCreateFromAsset(*materialAsset, defaultTexture, defaultSampler);
                             }
                         }
                     }
                 }
             }
 
-            return XJMaterialFactory::GetInstance()->CreateDefaultMaterial(defaultTexture, defaultSampler);
+            return XJMaterialFactory::GetInstance()->GetOrCreateDefaultMaterial(defaultTexture, defaultSampler);
         }
 
         bool RebuildUnlitMeshRenderData(XJEntity& entity, XJAssetHandle meshAsset, XJAssetRegistry& assetRegistry, XJSceneInstantiateContext& instantiateContext, const std::shared_ptr<XJTexture>& defaultTexture, const std::shared_ptr<XJSampler>& defaultSampler)//设置默认材质
@@ -102,17 +103,40 @@ namespace XJ
             if (!gpuMesh)
                 return false;
                 
-            auto material = CreateMaterialForSlot(entity, 0, assetRegistry, defaultTexture, defaultSampler);
-            if (!material)    
-                return false;
+            uint32_t slotCount = 1;
+            if (entity.HasComponent<XJMaterialAssetRefComponent>())
+            {
+                const auto& materialRef = entity.GetComponent<XJMaterialAssetRefComponent>();
 
+                // 当前 XJMesh 还没有暴露 submesh/primitive 数量，所以按资产保存的
+                // material slot 数恢复运行时 slot。没有材质引用时至少保留默认 slot 0。
+                if(!materialRef.Materials.empty())
+                    slotCount = std::max(slotCount, static_cast<uint32_t>(materialRef.Materials.size()));
+            }
+            std::vector<std::shared_ptr<XJUnlitMaterial>> materials;
+            materials.reserve(slotCount);
+
+            for(uint32_t slotIndex = 0; slotIndex < slotCount; ++slotIndex)
+            {
+                auto material = CreateMaterialForSlot(entity, slotIndex, assetRegistry, defaultTexture, defaultSampler);
+                if (!material)
+                    return false;
+
+                materials.push_back(material);
+            }
+    
             if (entity.HasComponent<XJUnlitMaterialComponent>())
                 entity.RemoveComponent<XJUnlitMaterialComponent>();
 
 
             auto& renderComponent = entity.AddComponent<XJUnlitMaterialComponent>();
-            spdlog::info("RebuildUnlitMeshRenderData material index={}", material->GetIndex());
-            renderComponent.AddMesh(gpuMesh, material);
+
+            for (uint32_t slotIndex = 0; slotIndex < slotCount; ++slotIndex)
+            {
+                // 同一个合并后的 gpuMesh 暂时重复挂到每个材质 slot。
+                // 等 mesh loader 暴露 primitive/submesh 后，这里应改为 slot -> submesh。
+                renderComponent.AddMesh(gpuMesh, materials[slotIndex]);
+            }
 
             return true;
         }
@@ -243,6 +267,49 @@ namespace XJ
             
                 slot.Parameters.push_back(parameter);
             }
+        }
+
+        bool ApplyRuntimeMaterialTextureParameter(
+            XJUnlitMaterial& runtimeMaterial,
+            const std::string& parameterName,
+            XJAssetHandle textureHandle,
+            const std::shared_ptr<XJTexture>& defaultTexture,
+            const std::shared_ptr<XJSampler>& defaultSampler)
+        {
+            if (!defaultTexture || !defaultSampler)
+                return false;
+
+            for (const auto& binding : runtimeMaterial.GetTextureBindings())
+            {
+                if (binding.ParameterName != parameterName)
+                    continue;
+
+                std::shared_ptr<XJTexture> texture = defaultTexture;
+                bool enableTexture = false;
+
+                if (textureHandle != 0)
+                {
+                    texture = XJMaterialFactory::GetInstance()->GetOrLoadTexture(textureHandle, defaultTexture);
+                    enableTexture = texture != nullptr && texture != defaultTexture;
+                }
+
+                // Shader schema uses sampler-name bindings, while the current Unlit path
+                // still also reads the legacy slot id. Update both so old and reflected
+                // descriptor paths stay in sync.
+                if (!binding.SamplerName.empty())
+                {
+                    runtimeMaterial.SetSamplerTextureView(binding.SamplerName, texture, defaultSampler);
+                    runtimeMaterial.UpdateSamplerTextureViewEnable(binding.SamplerName, enableTexture);
+                }
+
+                const uint32_t slot = ResolveUnlitTextureSlot(binding);
+                runtimeMaterial.SetTextureView(slot, texture, defaultSampler);
+                runtimeMaterial.UpdateTextureViewEnable(slot, enableTexture);
+
+                return true;
+            }
+
+            return false;
         }
         
     
@@ -751,7 +818,13 @@ namespace XJ
     bool XJEditorSceneService::SetMaterialParameter( XJScene& scene, XJEditorEntityId entityId, uint32_t slotIndex, XJAssetHandle materialAsset, const std::string& parameterName, const XJEditorMaterialParameterValue& value,
                             XJAssetRegistry& assetRegistry, XJSceneInstantiateContext& instantiateContext, const std::shared_ptr<XJTexture>& defaultTexture, const std::shared_ptr<XJSampler>& defaultSampler)
     {
+        (void)instantiateContext;
+ 
         if(materialAsset == 0 || parameterName.empty())
+            return false;
+
+        XJEntity* entity = FindEntityById(scene, entityId);
+        if(!entity || !entity->IsValid())
             return false;
 
         auto meta = assetRegistry.GetMeta(materialAsset);
@@ -770,16 +843,50 @@ namespace XJ
         if (!XJMaterialAssetSerializer::SaveToFile(*material, meta->SourcePath))
             return false;
 
-        return SetMeshRendererMaterial(scene, entityId, slotIndex, materialAsset, assetRegistry, instantiateContext, defaultTexture, defaultSampler);
+        if(entity->HasComponent<XJUnlitMaterialComponent>())
+        {
+            auto& renderComponent = entity->GetComponent<XJUnlitMaterialComponent>();
+            XJUnlitMaterial* runtimeMaterial = renderComponent.XJGetMaterial(slotIndex);
+
+            // Update the live material slot directly. Rebuilding the mesh renderer
+            // here would create a fresh GPU material for every slider tick.
+            if(runtimeMaterial)
+            {
+                const XJMaterialParameterValue runtimeValue = ToRuntimeMaterialParameterValue(value);
+
+                if (std::holds_alternative<XJAssetHandle>(runtimeValue))
+                {
+                    ApplyRuntimeMaterialTextureParameter(
+                        *runtimeMaterial,
+                        parameterName,
+                        std::get<XJAssetHandle>(runtimeValue),
+                        defaultTexture,
+                        defaultSampler);
+                }
+                else
+                {
+                    runtimeMaterial->SetParameterValue(parameterName, runtimeValue);
+                }
+            }
+        }
+
+        return true;
     }
     
     bool XJEditorSceneService::ResetMaterialParameter(XJScene& scene, XJEditorEntityId entityId, uint32_t slotIndex, XJAssetHandle materialAsset, const std::string& parameterName,
                             XJAssetRegistry& assetRegistry, XJSceneInstantiateContext& instantiateContext, const std::shared_ptr<XJTexture>& defaultTexture, const std::shared_ptr<XJSampler>& defaultSampler)
     {   
+        (void)instantiateContext;
+        
+
         if(materialAsset == 0 || parameterName.empty())
         {
             return false;
         }
+
+        XJEntity* entity = FindEntityById(scene, entityId);
+        if(!entity || !entity->IsValid())
+            return false;
 
         auto meta = assetRegistry.GetMeta(materialAsset);
         if(!meta || meta->Type != XJAssetType::Material)
@@ -805,7 +912,33 @@ namespace XJ
         if(!XJMaterialAssetSerializer::SaveToFile(*material, meta->SourcePath))
             return false;
 
-        return SetMeshRendererMaterial(scene, entityId, slotIndex, materialAsset, assetRegistry, instantiateContext, defaultTexture, defaultSampler);
+        if(entity->HasComponent<XJUnlitMaterialComponent>())
+        {
+            auto& renderComponent = entity->GetComponent<XJUnlitMaterialComponent>();
+            XJUnlitMaterial* runtimeMaterial = renderComponent.XJGetMaterial(slotIndex);
+
+            if(runtimeMaterial)
+            {
+                if(const XJParameterDef* def = shaderAsset ? shaderAsset->Schema.FindParameter(parameterName) : nullptr)
+                {
+                    if (std::holds_alternative<XJAssetHandle>(def->DefaultValue))
+                    {
+                        ApplyRuntimeMaterialTextureParameter(
+                            *runtimeMaterial,
+                            parameterName,
+                            std::get<XJAssetHandle>(def->DefaultValue),
+                            defaultTexture,
+                            defaultSampler);
+                    }
+                    else
+                    {
+                        runtimeMaterial->SetParameterValue(parameterName, def->DefaultValue);
+                    }
+                }
+            }
+        }
+
+        return true;
 
     }
 }

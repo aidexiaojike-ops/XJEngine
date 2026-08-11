@@ -58,7 +58,7 @@ namespace XJ
         if (gpuMesh)
         {
             auto& comp = entity->AddComponent<XJUnlitMaterialComponent>();
-            auto material = XJMaterialFactory::GetInstance()->CreateDefaultMaterial(
+            auto material = XJMaterialFactory::GetInstance()->GetOrCreateDefaultMaterial(
                 defaultTexture,
                 defaultSampler);
 

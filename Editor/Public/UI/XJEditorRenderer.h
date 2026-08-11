@@ -35,8 +35,11 @@ namespace XJ
 
             VkDescriptorPool mDescriptorPool = VK_NULL_HANDLE;
             VkDevice         mDevice         = VK_NULL_HANDLE;
+            bool             mInitialized    = false;
             /* data */
         public:
+            ~XJEditorRenderer();
+
             bool Init(const XJEditorRendererInitInfo& info);
             void RenderDrawData(VkCommandBuffer cmd, ImDrawData* drawData);
             void Shutdown();

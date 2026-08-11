@@ -14,11 +14,32 @@
 #include <cctype>
 #include <utility>
 
+#include <spdlog/spdlog.h>
+
 namespace XJ
 {
 
     namespace
     {
+        void RemoveMissingSourceAssets(XJAssetRegistry& assetRegistry)
+        {
+            const auto metas = assetRegistry.XJGetAllMetas();
+
+            for (const auto& [handle, meta] : metas)
+            {
+                if (meta.SourcePath.empty())
+                    continue;
+
+                std::error_code ec;
+                if (std::filesystem::exists(meta.SourcePath, ec))
+                    continue;
+
+                ec.clear();
+                assetRegistry.RemoveAsset(handle);
+                spdlog::warn("Removed stale asset registry entry {} because source path is missing: {}", handle, meta.SourcePath.string());
+            }
+        }
+
         XJEditorAssetValidationSeverity ToEditorSeverity(XJShaderValidationSeverity severity)//转换为编辑器严重性
         {
             switch (severity)
@@ -167,6 +188,18 @@ namespace XJ
 
             return {};
         }
+        bool RenameFileNoThrow(const std::filesystem::path& from, const std::filesystem::path& to)
+        {
+            std::error_code ec;
+            std::filesystem::rename(from, to, ec);
+            if (ec)
+            {
+                spdlog::error("Failed to rename asset file '{}' -> '{}': {}", from.string(), to.string(), ec.message());
+                return false;
+            }
+
+            return true;
+        }
 
     }
 
@@ -209,40 +242,59 @@ namespace XJ
         if (!metaOpt)
             return false;
 
-        XJAssetMeta meta = metaOpt.value();
+        const XJAssetMeta oldMeta = metaOpt.value();
+
         const std::string cleanName = TrimAssetName(newName);
         if (cleanName.empty() || ContainsInvalidFileNameCharacter(cleanName))
             return false;
 
-        std::filesystem::path oldPath = meta.SourcePath;
+        std::filesystem::path oldPath = oldMeta.SourcePath;
         if (oldPath.empty())
             return false;
+
+        oldPath = oldPath.lexically_normal();
 
         std::filesystem::path newPath = oldPath.parent_path() / (cleanName + oldPath.extension().string());
         newPath = newPath.lexically_normal();
 
-        if (oldPath.lexically_normal().generic_string() == newPath.generic_string())
+        if (oldPath.generic_string() == newPath.generic_string())
             return false;
 
         if (assetRegistry.ContainsSourcePath(newPath) || std::filesystem::exists(newPath))
             return false;
 
-        std::error_code ec;
-        std::filesystem::rename(oldPath, newPath, ec);
-        if (ec)
+        XJAssetMeta newMeta = oldMeta;
+        newMeta.Name = cleanName;
+        newMeta.SourcePath = newPath.generic_string();
+
+        // Some engine-created assets use the source file as the imported file.
+        // Keep ImportedPath in sync only for that exact case; otherwise imported data stays where it is.
+        if (!oldMeta.ImportedPath.empty() &&
+            oldMeta.ImportedPath.lexically_normal().generic_string() == oldPath.generic_string())
+        {
+            newMeta.ImportedPath = newPath.generic_string();
+        }
+
+        // From here on, disk and registry must move together. If any later step fails,
+        // roll the file and in-memory registry back so RefreshRegistry cannot create a
+        // second handle for the renamed file.
+        if (!RenameFileNoThrow(oldPath, newPath))
             return false;
 
-        const std::filesystem::path oldImportedPath = meta.ImportedPath;
-        meta.Name = cleanName;
-        meta.SourcePath = newPath.generic_string();
-
-        if (!oldImportedPath.empty() && oldImportedPath.lexically_normal().generic_string() == oldPath.lexically_normal().generic_string())
-            meta.ImportedPath = newPath.generic_string();
-
-        if (!assetRegistry.RegisterAsset(meta))
+        if (!assetRegistry.RegisterAsset(newMeta))
+        {
+            RenameFileNoThrow(newPath, oldPath);
+            assetRegistry.RegisterAsset(oldMeta);
             return false;
+        }
 
-        assetRegistry.Save(registryPath);
+        if (!assetRegistry.Save(registryPath))
+        {
+            RenameFileNoThrow(newPath, oldPath);
+            assetRegistry.RegisterAsset(oldMeta);
+            return false;
+        }
+
         return true;
     }
 
@@ -297,11 +349,55 @@ namespace XJ
 
     bool XJEditorAssetService::DeleteAsset(XJAssetRegistry& assetRegistry, XJAssetHandle handle, const std::filesystem::path& registryPath)
     {
+        auto meta = assetRegistry.GetMeta(handle);
+        if (!meta)
+            return false;
+
+        std::error_code ec;
+
+        auto removeFileIfPresent = [&](const std::filesystem::path& path)
+        {
+            if (path.empty())
+                return true;
+
+            if (!std::filesystem::exists(path, ec))
+            {
+                ec.clear();
+                return true;
+            }
+
+            if (!std::filesystem::is_regular_file(path, ec))
+            {
+                ec.clear();
+                spdlog::warn("Skip deleting non-file asset path: {}", path.string());
+                return true;
+            }
+
+            if (!std::filesystem::remove(path, ec))
+            {
+                spdlog::error("Failed to delete asset file '{}': {}", path.string(), ec.message());
+                ec.clear();
+                return false;
+            }
+
+            return true;
+        };
+
+        // Delete files before removing registry entry. If file deletion fails,
+        // keep the registry intact so RefreshRegistry cannot silently resurrect state.
+        if (!removeFileIfPresent(meta->SourcePath))
+            return false;
+
+        if (meta->ImportedPath != meta->SourcePath)
+        {
+            if (!removeFileIfPresent(meta->ImportedPath))
+                return false;
+        }
+
         if (!assetRegistry.RemoveAsset(handle))
             return false;
 
-        assetRegistry.Save(registryPath);
-        return true;
+        return assetRegistry.Save(registryPath);
     }
 
     bool XJEditorAssetService::ImportExternalFile(XJAssetRegistry& assetRegistry, const std::filesystem::path& sourcePath, const std::filesystem::path& destinationDirectory)
@@ -346,6 +442,7 @@ namespace XJ
 
     bool XJEditorAssetService::RefreshRegistry(XJAssetRegistry& assetRegistry, const std::filesystem::path& rootPath, const std::filesystem::path& registryPath)
     {
+        RemoveMissingSourceAssets(assetRegistry);
         XJAssetRegistryScanner::ScanResourceAssets(assetRegistry, rootPath);
         return assetRegistry.Save(registryPath);
     }

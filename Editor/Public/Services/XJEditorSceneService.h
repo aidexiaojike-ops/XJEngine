@@ -26,7 +26,7 @@ namespace XJ
             using ShouldExposeEntityCallback = std::function<bool(XJEditorEntityId id)>;//是否隐藏实体
 
             static XJEntity* FindEntityById(XJScene& scene, XJEditorEntityId id);//ID找到ecs
-            static std::vector<XJEditorEntityId> FindEntitiesUsingAsset(XJScene& scene, XJAssetHandle assetHandle);
+            static std::vector<XJEditorEntityId> FindEntitiesUsingAsset(XJScene& scene, XJAssetHandle assetHandle);//删除前做引用检查
             static XJAssetHandle GetMeshAssetFromEntity(XJScene& scene, XJEditorEntityId entityId);
             static void DeleteEntities(XJScene& scene, const std::vector<XJEditorEntityId>& entityIds);//ID是删除
 

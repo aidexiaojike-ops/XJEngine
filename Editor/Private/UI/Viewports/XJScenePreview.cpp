@@ -1,78 +1,64 @@
 #include "UI/Viewports/XJScenePreview.h"
-// #include "imgui_impl_vulkan.h"
-#include "Render/XJRenderTarget.h"
+
 #include "ECS/XJEntity.h"
-#include "Graphic/XJVulkanRenderPass.h"   
-#include "Graphic/XJVulkanDevice.h"      
 #include "ECS/Component/XJCameraComponent.h"
 #include "ECS/Component/XJTransformComponent.h"
 #include <glm/gtc/matrix_inverse.hpp> 
 
 #include "UI/XJEditorAssetDragPayload.h"
 #include "UI/XJEditorDragPayload.h"
+#include <cmath>
+
 
 namespace XJ
 {
+    bool XJScenePreview::Init(XJRenderContext* renderContext)
+    {
+        return mSurface.Init(renderContext, mSettings.mWidth, mSettings.mHeight, true);
+    }
+
+    void XJScenePreview::Shutdown()
+    {
+        mSurface.Shutdown();
+    }
+
+    void XJScenePreview::PrepareBeforeRender()
+    {
+        mSurface.PrepareBeforeRender();
+    }
+
+    void XJScenePreview::PostRender()
+    {
+        mSurface.PostRender();
+    }
+
     bool XJScenePreview::Render(VkCommandBuffer cmd)
     {
-        //// ★ 先设摄像机
-        if (mPreviewCamera)
-            mRenderTarget->XJSetCamera(mPreviewCamera);
-        if (!BeginViewportRender(cmd))   // BeginRenderTarget
+        mSurface.SetCamera(mPreviewCamera);
+
+        if (!mSurface.BeginRender(cmd))
             return false;
 
-
-        mRenderTarget->RenderMaterialSystem(cmd);
-        EndViewportRender(cmd);          // EndRenderTarget + RecreateDescriptor
+        mSurface.RenderMaterialSystem(cmd);
+        mSurface.EndRender(cmd);
         return true;
     }
 
-    void XJScenePreview::CreateRenderPass(XJVulkanPhysicalDevices* physicalDevices)
+    ImTextureID XJScenePreview::GetViewportTextureID() const
     {
-        VkFormat colorFormat = mDevice->XJGetSettings().surfaceFormat;
-        VkFormat depthFormat = mDevice->XJGetSettings().depthFormat;
-
-        Attachment colorAttachment{};
-        colorAttachment.format = colorFormat;
-        colorAttachment.samples = VK_SAMPLE_COUNT_1_BIT;
-        colorAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
-        colorAttachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
-        colorAttachment.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-        colorAttachment.finalLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-        colorAttachment.usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
-        
-        Attachment depthAttachment{};
-        depthAttachment.format = depthFormat;
-        depthAttachment.samples = VK_SAMPLE_COUNT_1_BIT;
-        depthAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
-        depthAttachment.storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-        depthAttachment.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-        depthAttachment.finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
-        depthAttachment.usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
-
-        std::vector<Attachment> attachments =
-        {
-            colorAttachment,
-            depthAttachment
-        };
-
-        std::vector<RenderSubPass> subpasses =
-        {
-            {
-                .colorAttachments = { 0 }, //颜色附件索引
-                .depthStencilAttachments = { 1 },//深度附件索引
-                .resolveAttachments = {},   // 解析附件由渲染通道自动添加
-                .sampleCount = VK_SAMPLE_COUNT_1_BIT//采样数
-            }
-        };
-
-        mRenderPass = std::make_shared<XJVulkanRenderPass>(
-            mDevice,
-            physicalDevices,
-            attachments,
-            subpasses
-        );
+        return mSurface.GetTextureID();
     }
+
+    bool XJScenePreview::IsViewportTextureReady() const
+    {
+        return mSurface.IsTextureReady();
+    }
+
+    void XJScenePreview::OnViewportResized(uint32_t width, uint32_t height)
+    {
+        mSurface.Resize(width, height);
+    }
+
     bool XJScenePreview::CalculateDropPositionFromViewportRay(const ImVec2& imageMin, const ImVec2& imageSize, glm::vec3& outOrigin, glm::vec3& outDirection) const
     {
         if (!mPreviewCamera || !mPreviewCamera->HasComponent<XJCameraComponent>() 
@@ -84,24 +70,27 @@ namespace XJ
         ImVec2 relativeMousePos = ImVec2(mousePos.x - imageMin.x, mousePos.y - imageMin.y);
 
         // 将鼠标位置转换为NDC坐标
-        float ndcX = (relativeMousePos.x / imageSize.x) * 2.0f - 1.0f;
+        const float ndcX = (relativeMousePos.x / imageSize.x) * 2.0f - 1.0f;
         //float ndcY = 1.0f - (relativeMousePos.y / imageSize.y) * 2.0f; // Y轴需要翻转
-        float ndcY = (relativeMousePos.y / imageSize.y) * 2.0f - 1.0f; // Y轴需要翻转
+        const float ndcY = (relativeMousePos.y / imageSize.y) * 2.0f - 1.0f; // Y轴需要翻转
 
         // 获取摄像机的投影矩阵和视图矩阵
         auto& cameraComp = mPreviewCamera->GetComponent<XJCameraComponent>();
         auto& transformComp = mPreviewCamera->GetComponent<XJTransformComponent>();
 
-
-        glm::mat4 projectionMatrix = glm::inverse(cameraComp.XJGetProjectionMatrix());
-        glm::mat4 viewMatrix = glm::inverse(cameraComp.XJGetViewMatrix());
+        const glm::mat4 invProjection = glm::inverse(cameraComp.XJGetProjectionMatrix());
+        const glm::mat4 invView = glm::inverse(cameraComp.XJGetViewMatrix());
 
         // 计算从屏幕空间到世界空间的射线
-        glm::vec4 rayClip = glm::vec4(ndcX, ndcY, -1.0f, 1.0f);
-        glm::vec4 rayEye = projectionMatrix* rayClip;
-        rayEye.z = 1.0f; rayEye.w = 0.0f;
+        const glm::vec4 rayClip(ndcX, ndcY, 0.0f, 1.0f);
+        glm::vec4 rayEye = invProjection * rayClip;
 
-        glm::vec3 rayWorld = glm::normalize(glm::vec3(viewMatrix * rayEye));
+        if (std::abs(rayEye.w) > 0.000001f)
+            rayEye /= rayEye.w;
+
+        rayEye = glm::vec4(rayEye.x, rayEye.y, -1.0f, 0.0f);
+
+        const glm::vec3 rayWorld = glm::normalize(glm::vec3(invView * rayEye));
 
         // 假设我们想将物体放置在距离摄像机一定距离的位置，例如10单位
         //float distanceFromCamera = 10.0f;
@@ -138,14 +127,11 @@ namespace XJ
             {
                 Resize(static_cast<uint32_t>(avail.x), static_cast<uint32_t>(avail.y));
 
-                if(mPendingResize)
-                    mNeedDescriptorUpdate = true;
-                
-                if(!mPendingResize && mDescriptorSet != VK_NULL_HANDLE)
+                if(IsViewportTextureReady())
                 {
                     ImVec2 imageMin = ImGui::GetCursorScreenPos();//获取当前 ImGui 光标在屏幕上的位置，这个位置对应于我们即将绘制的图像的左上角
 
-                    ImGui::Image((ImTextureID)mDescriptorSet, avail);
+                    ImGui::Image(GetViewportTextureID(), avail);
                     mHovered = ImGui::IsItemHovered();
                     
                     if (ImGui::BeginDragDropTarget())

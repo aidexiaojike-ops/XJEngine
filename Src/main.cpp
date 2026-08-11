@@ -110,8 +110,7 @@ protected:
         mRenderTarget->AddMaterialSystem<XJ::XJUnlitMaterialSystem>();
 
         mRender = std::make_shared<XJ::XJRenderer>();
-         // 创建命令池缓冲区
-        mCommandBuffers = kDevice->XJGetDefaultCmdPool()->AllocateCommandBuffer(static_cast<uint32_t>(kSwapchain->XJGetSwapchainImages().size()));// 分配命令缓冲区
+        ReallocateSwapchainCommandBuffers(kDevice, kSwapchain);
         spdlog::info("分配了 {} 个命令缓冲区", mCommandBuffers.size());
         // 初始化摄像机控制器：鼠标灵敏度、平移、缩放、旋转
         mCameraController = std::make_unique<XJ::XJEditorCameraController>(0.25f, 0.05f, 0.3f, 0.25f);
@@ -151,16 +150,13 @@ protected:
         mUIContext->Init(XJGetWindow()->XJGetImplWindowPointer());
         mEditorRenderer->Init(kUIRendererInfo);
         ///拖拽资产到UI 生成json文件和UUID
-        GLFWwindow* glfwWindow = XJGetWindow()->XJGetImplWindowPointer();
-
-        glfwSetWindowUserPointer(glfwWindow, this);
-        glfwSetDropCallback(glfwWindow,[](GLFWwindow* window, int count, const char** paths)
+        XJGetWindow()->SetDropCallback([this](int count, const char** paths)
         {
-            auto* app = static_cast<XJEngineApp*>(glfwGetWindowUserPointer(window));
-            if (!app)
-                return;
-
-           app->mExternalDropController.OnExternalFilesDropped(app->mEditorUIState, window, count, paths);
+           mExternalDropController.OnExternalFilesDropped(
+                mEditorUIState,
+                XJGetWindow()->XJGetImplWindowPointer(),
+                count,
+                paths);
         });
         // 初始化场景预览和游戏预览 UI
         // 创建场景预览和游戏预览对象，并完成初始化
@@ -194,6 +190,7 @@ protected:
 
         mEditorSceneController.SetScene(scene);
         mEditorSceneController.SetAssetRegistry(&mAssetRegistry);
+        mEditorAssetController.SetScene(scene);
         mEditorAssetController.SetAssetRegistry(&mAssetRegistry);
         mEditorAssetController.SetRegistryPath("Resource/Config/AssetRegistry.json");
         mEditorAssetController.SetRootPath("Resource");
@@ -272,8 +269,11 @@ protected:
         mEditorCameraManager.ClearAllCameraReferences();
         
         mEditorSceneController.SetScene(nullptr);
+        mEditorAssetController.SetScene(nullptr);
         mEditorSceneController.SetDefaultResources(nullptr, nullptr);
         mEditorSceneController.ClearRuntimeReferences();
+
+        XJ::XJMaterialFactory::GetInstance()->ClearExpiredMaterials();
 
         mEditorUIState.Selection.SelectedEntity = XJ::XJ_INVALID_EDITOR_ENTITY_ID;
         mEditorUIState.Selection.SelectedAsset = 0;
@@ -302,6 +302,15 @@ protected:
     {
         if (ImGui::GetCurrentContext())
             ImGui::SaveIniSettingsToDisk(ImGui::GetIO().IniFilename);
+
+        XJ::XJRenderContext* renderContext = XJApplication::XJGetAppContext()->renderContext;
+        XJ::XJVulkanDevice* device = renderContext ? renderContext->XJGetDevice() : nullptr;
+        if (device)
+        {
+            // ImGui owns Vulkan backend objects and descriptor sets. Wait before
+            // destroying them because Stop() calls OnUIDestroy() before OnDestroy().
+            vkDeviceWaitIdle(device->XJGetDevice());
+        }
 
         // Preview windows are destroyed below; remove camera bindings first so later
         // scene shutdown does not write through dangling viewport pointers.
@@ -388,12 +397,8 @@ protected:
             if (ImGui::GetCurrentContext() &&
                 (ImGui::GetIO().ConfigFlags & ImGuiConfigFlags_ViewportsEnable))
             {
-                GLFWwindow* backup = glfwGetCurrentContext();
-
                 ImGui::UpdatePlatformWindows();
                 ImGui::RenderPlatformWindowsDefault();
-
-                glfwMakeContextCurrent(backup);
             }
         };
 
@@ -404,12 +409,13 @@ protected:
             return;
         }   
         XJ::XJRenderContext *kRenderContext = XJApplication::XJGetAppContext()->renderContext;
+        XJ::XJVulkanDevice* kDevice = kRenderContext->XJGetDevice();
         XJ::XJVulkanSwapchain* kSwapchain = kRenderContext->XJGetSwapchain();
 
         XJ::XJFrameAcquireResult acquireResult = mRender->XJRendererBegin(mCommandBuffers);
         if(acquireResult.resizeNeeded)
         {
-            mRenderTarget->SetExtent({kSwapchain->XJGetWidth(),kSwapchain->XJGetHeight()});
+            ResizeSwapchainRenderResources(kDevice, kSwapchain);
         }
 
         if (!acquireResult.acquired)
@@ -490,24 +496,24 @@ protected:
             }
         }
 
-        updateImGuiPlatformWindows();
-        
-      
         XJ::XJVulkanCommandPool::EndCommandBuffer(kCommandBuffer);
         // 提交命令缓冲区
         XJ::XJFramePresentResult presentResult =    mRender->XJRendererEnd(imageIndex, { kCommandBuffer });
+
+        // Secondary ImGui platform windows may acquire/present their own Vulkan
+        // swapchains. Run them after the main command buffer is submitted, not
+        // while it is still recording.
+        updateImGuiPlatformWindows();
+
         if(presentResult.resizeNeeded)
         {
-            mRenderTarget->SetExtent({kSwapchain->XJGetWidth(),kSwapchain->XJGetHeight()});
-           
+            ResizeSwapchainRenderResources(kDevice, kSwapchain);
+            
         }
     }
 
     void OnDestroy() override
     {
-         // ===== 先关闭 UI =====
-        //mEditorRenderer->Shutdown();
-        //mUIContext->Shutdown();
         mEditorCameraManager.ClearAllCameraReferences();
 
         XJ::XJRenderContext *kRenderContext = XJApplication::XJGetAppContext()->renderContext;
@@ -522,6 +528,8 @@ protected:
         mFileTexture.reset();// 文件纹理
         mDefaultSampler.reset();// 默认采样器
 
+        XJ::XJMaterialFactory::GetInstance()->ClearCaches();
+
         mCommandBuffers.clear();
         
         mRenderTarget.reset();
@@ -531,7 +539,60 @@ protected:
         mCameraController.reset();
     }
 
- 
+    bool ReallocateSwapchainCommandBuffers(XJ::XJVulkanDevice* device, XJ::XJVulkanSwapchain* swapchain)
+    {
+        if (!device || !swapchain || !device->XJGetDefaultCmdPool())
+            return false;
+
+        const uint32_t requiredCount = static_cast<uint32_t>(swapchain->XJGetSwapchainImages().size());
+        if (requiredCount == 0)
+        {
+            spdlog::error("Reallocate command buffers failed: swapchain image count is 0.");
+            return false;
+        }
+
+        if (mCommandBuffers.size() == requiredCount)
+            return true;
+
+        // These command buffers are indexed by swapchain image index. When the
+        // swapchain image count changes, keeping the old vector risks OOB access.
+        device->WaitIdle();
+        for (auto& commandBuffer : mCommandBuffers)
+            device->XJGetDefaultCmdPool()->FreeCommandBuffer(commandBuffer);
+        mCommandBuffers.clear();
+
+        mCommandBuffers = device->XJGetDefaultCmdPool()->AllocateCommandBuffer(requiredCount);
+        if (mCommandBuffers.size() != requiredCount)
+        {
+            spdlog::error(
+                "Reallocate command buffers failed: expected {}, got {}.",
+                requiredCount,
+                mCommandBuffers.size());
+            return false;
+        }
+
+        spdlog::info("Reallocated {} swapchain command buffers.", mCommandBuffers.size());
+        return true;
+    }
+
+    void ResizeSwapchainRenderResources(XJ::XJVulkanDevice* device, XJ::XJVulkanSwapchain* swapchain)
+    {
+        if (!swapchain)
+            return;
+
+        if (mRenderTarget)
+        {
+            mRenderTarget->SetExtent({swapchain->XJGetWidth(), swapchain->XJGetHeight()});
+            // SetExtent only marks the swapchain render target dirty. Recreate it
+            // here, outside command buffer recording, so BeginRenderTarget never
+            // sees a pending resize after window maximize/restore.
+            mRenderTarget->UpdateIfNeeded();
+        }
+
+        ReallocateSwapchainCommandBuffers(device, swapchain);
+    }
+
+  
    
 private:
     // 渲染准备

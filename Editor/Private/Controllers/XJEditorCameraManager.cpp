@@ -65,21 +65,27 @@ namespace XJ
 
     void XJEditorCameraManager::SetupCamerasForScene(XJScene* scene, uint64_t previewCameraEntityId)
     {
+        mScene = scene;
+
         if (!scene)
         {
             ClearAllCameraReferences();
             return;
         }
 
-        mGameCameraEntity = XJSceneRuntimeUtil::FindPrimaryCameraEntity(*scene);
-        mPreviewCameraEntity = EnsurePreviewCamera(scene, previewCameraEntityId);
+        XJEntity* gameCamera = XJSceneRuntimeUtil::FindPrimaryCameraEntity(*scene);
+        XJEntity* previewCamera = EnsurePreviewCamera(scene, previewCameraEntityId);
+
+        mGameCameraId = gameCamera ? static_cast<XJEditorEntityId>(gameCamera->XJGetUUID()) : XJ_INVALID_EDITOR_ENTITY_ID;
+        mPreviewCameraId = previewCamera ? static_cast<XJEditorEntityId>(previewCamera->XJGetUUID()) : XJ_INVALID_EDITOR_ENTITY_ID;
 
         ApplyCameraBindings();
     }
      void XJEditorCameraManager::ClearAllCameraReferences()
     {
-        mPreviewCameraEntity = nullptr;
-        mGameCameraEntity = nullptr;
+        mScene = nullptr;
+        mPreviewCameraId = XJ_INVALID_EDITOR_ENTITY_ID;
+        mGameCameraId = XJ_INVALID_EDITOR_ENTITY_ID;
 
         ApplyCameraBindings();
     }
@@ -90,15 +96,11 @@ namespace XJ
     {
         for (XJEditorEntityId id : ids)
         {
-            XJEntity* entity = XJEditorSceneService::FindEntityById(scene, id);
-            if (!entity)
-                continue;
+            if (mPreviewCameraId == id)
+                mPreviewCameraId = XJ_INVALID_EDITOR_ENTITY_ID;
 
-            if (mPreviewCameraEntity == entity)
-                mPreviewCameraEntity = nullptr;
-
-            if (mGameCameraEntity == entity)
-                mGameCameraEntity = nullptr;
+            if (mGameCameraId == id)
+                mGameCameraId = XJ_INVALID_EDITOR_ENTITY_ID;
         }
 
         ApplyCameraBindings();
@@ -106,11 +108,11 @@ namespace XJ
 
     void XJEditorCameraManager::ValidateCameraPointers()
     {
-        if (mPreviewCameraEntity && !mPreviewCameraEntity->IsValid())
-            mPreviewCameraEntity = nullptr;
+        if (mPreviewCameraId != XJ_INVALID_EDITOR_ENTITY_ID && !ResolveEntity(mPreviewCameraId))
+            mPreviewCameraId = XJ_INVALID_EDITOR_ENTITY_ID;
 
-        if (mGameCameraEntity && !mGameCameraEntity->IsValid())
-            mGameCameraEntity = nullptr;
+        if (mGameCameraId != XJ_INVALID_EDITOR_ENTITY_ID && !ResolveEntity(mGameCameraId))
+            mGameCameraId = XJ_INVALID_EDITOR_ENTITY_ID;
 
         ApplyCameraBindings();
     }
@@ -123,11 +125,12 @@ namespace XJ
         if (!mCameraController)
             return;
 
-        if (!mPreviewCameraEntity ||
-            !XJEntity::HasComponent<XJCameraComponent>(mPreviewCameraEntity))
+        XJEntity* previewCamera = ResolveEntity(mPreviewCameraId);
+        if (!previewCamera ||
+            !XJEntity::HasComponent<XJCameraComponent>(previewCamera))
             return;
 
-        mCameraController->OnMouseScroll(yOffset, mPreviewCameraEntity);
+        mCameraController->OnMouseScroll(yOffset, previewCamera);
     }
 
     void XJEditorCameraManager::UpdatePreviewCameraControl(
@@ -140,27 +143,27 @@ namespace XJ
         if (!mCameraController || !window)
             return;
 
-        if (!mPreviewCameraEntity ||
-            !XJEntity::HasComponent<XJCameraComponent>(mPreviewCameraEntity))
+        XJEntity* previewCamera = ResolveEntity(mPreviewCameraId);
+        if (!previewCamera ||
+            !XJEntity::HasComponent<XJCameraComponent>(previewCamera))
             return;
 
-        mCameraController->UpdateCameraControl(deltaTime, window, mPreviewCameraEntity);
+        mCameraController->UpdateCameraControl(deltaTime, window, previewCamera);
     }
 
     XJEntity* XJEditorCameraManager::GetPreviewCamera() const
     {
-        return mPreviewCameraEntity;
+        return ResolveEntity(mPreviewCameraId);
     }
 
     XJEntity* XJEditorCameraManager::GetGameCamera() const
     {
-        return mGameCameraEntity;
+        return ResolveEntity(mGameCameraId);
     }
     
     bool XJEditorCameraManager::IsPreviewCamera(XJEditorEntityId id) const
     {
-        return mPreviewCameraEntity &&
-               static_cast<XJEditorEntityId>(mPreviewCameraEntity->XJGetUUID()) == id;
+        return mPreviewCameraId == id;
     }
 
     bool XJEditorCameraManager::IsProtectedEditorCamera(XJEditorEntityId id) const
@@ -170,18 +173,31 @@ namespace XJ
 
     void XJEditorCameraManager::ApplyCameraBindings()
     {
+        XJEntity* previewCamera = ResolveEntity(mPreviewCameraId);
+        XJEntity* gameCamera = ResolveEntity(mGameCameraId);
+
         if (mScenePreview)
-            mScenePreview->SetCamera(mPreviewCameraEntity);
+            mScenePreview->SetCamera(previewCamera);
 
         if (mGamePreview)
-            mGamePreview->SetCamera(mGameCameraEntity);
+            mGamePreview->SetCamera(gameCamera);
 
         if (mRenderTarget)
         {
-            if (mGameCameraEntity)
-                mRenderTarget->XJSetCamera(mGameCameraEntity);
+            if (gameCamera)
+                mRenderTarget->XJSetCamera(gameCamera);
             else
                 mRenderTarget->XJClearCamera();
         }
+    }
+
+    XJEntity* XJEditorCameraManager::ResolveEntity(XJEditorEntityId id) const
+    {
+        if (!mScene || id == XJ_INVALID_EDITOR_ENTITY_ID)
+            return nullptr;
+
+        // Store camera references as UUIDs. Raw XJEntity* may be freed by
+        // XJScene::DestroyEntity, so resolve a fresh pointer only at use sites.
+        return XJEditorSceneService::FindEntityById(*mScene, id);
     }
 }

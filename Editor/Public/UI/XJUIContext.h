@@ -12,8 +12,10 @@ namespace XJ
     class XJUIContext
     {
         private:
-            /* data */
+            bool mInitialized = false;
         public:
+            ~XJUIContext();
+
             bool Init(GLFWwindow* window);
             void BeginFrame();
             void EndFrame();

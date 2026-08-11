@@ -31,6 +31,15 @@ namespace XJ
                                     const std::shared_ptr<XJTexture>& defaultTex,
                                     const std::shared_ptr<XJSampler>& defaultSampler);
 
+            std::shared_ptr<XJUnlitMaterial> GetOrCreateFromAsset(const XJMaterialAsset& asset,
+                                    const std::shared_ptr<XJTexture>& defaultTex,
+                                    const std::shared_ptr<XJSampler>& defaultSampler);
+
+            std::shared_ptr<XJTexture> GetOrLoadTexture(XJAssetHandle handle, const std::shared_ptr<XJTexture>& fallback);
+
+            void ClearExpiredMaterials();
+            void ClearCaches();
+
             static XJMaterialFactory* GetInstance()
             {
                 // 函数局部静态避免跨 TU 静态初始化顺序问题。
@@ -43,6 +52,10 @@ namespace XJ
 
 
             std::shared_ptr<XJUnlitMaterial> CreateDefaultMaterial(
+                                            const std::shared_ptr<XJTexture>& defaultTexture,
+                                            const std::shared_ptr<XJSampler>& defaultSampler);
+
+            std::shared_ptr<XJUnlitMaterial> GetOrCreateDefaultMaterial(
                                             const std::shared_ptr<XJTexture>& defaultTexture,
                                             const std::shared_ptr<XJSampler>& defaultSampler);
 
@@ -110,6 +123,7 @@ namespace XJ
 
            // 只保护工厂内部 CPU 状态：
             // - mMaterials
+            // - mMaterialAssetCache
             // - mTextureCache
             // - mAssetRegistry 指针读取/写入
             //
@@ -120,10 +134,10 @@ namespace XJ
             
             // 用 type_index 避免 entt hash 截断和理论碰撞。
             std::unordered_map<std::type_index, std::vector<std::weak_ptr<XJMaterial>>> mMaterials;
+            std::unordered_map<XJAssetHandle, std::weak_ptr<XJUnlitMaterial>> mMaterialAssetCache;
+            std::unordered_map<uint64_t, std::weak_ptr<XJUnlitMaterial>> mDefaultMaterialCache;
             // 纹理缓存本来就是 weak_ptr，保留弱引用，但访问必须加锁。
             std::unordered_map<XJAssetHandle, std::weak_ptr<XJTexture>> mTextureCache;
-
-            std::shared_ptr<XJTexture> GetOrLoadTexture(XJAssetHandle handle, const std::shared_ptr<XJTexture>& fallback);
 
             void ApplyTextureBindings(XJUnlitMaterial& material, const XJMaterialAsset& asset, const std::shared_ptr<XJTexture>& defaultTexture, const std::shared_ptr<XJSampler>& defaultSampler);
            

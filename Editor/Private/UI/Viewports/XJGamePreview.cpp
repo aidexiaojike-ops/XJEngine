@@ -1,71 +1,55 @@
 #include "UI/Viewports/XJGamePreview.h"
-// #include "imgui_impl_vulkan.h"
-#include "Render/XJRenderTarget.h"
+
 #include "ECS/XJEntity.h"
-#include "Graphic/XJVulkanRenderPass.h"   
-#include "Graphic/XJVulkanDevice.h"   
 
 namespace XJ
 {
+    bool XJGamePreview::Init(XJRenderContext* renderContext)
+    {
+        return mSurface.Init(renderContext, mSettings.mWidth, mSettings.mHeight, true);
+    }
+
+    void XJGamePreview::Shutdown()
+    {
+        mSurface.Shutdown();
+    }
+
+    void XJGamePreview::PrepareBeforeRender()
+    {
+        mSurface.PrepareBeforeRender();
+    }
+
+    void XJGamePreview::PostRender()
+    {
+        mSurface.PostRender();
+    }
+
     bool XJGamePreview::Render(VkCommandBuffer cmd)
     {
-        // ★ 先设摄像机，再 Begin（Begin 需要用它更新 aspect ratio）
-        mRenderTarget->XJSetCamera(mGameCamera);
+        mSurface.SetCamera(mGameCamera);
 
-        if (!BeginViewportRender(cmd))
+        if (!mSurface.BeginRender(cmd))
             return false;
-        if (mGameCamera)
-            mRenderTarget->RenderMaterialSystem(cmd);
 
-        EndViewportRender(cmd);
+        if (mGameCamera)
+            mSurface.RenderMaterialSystem(cmd);
+
+        mSurface.EndRender(cmd);
         return true;
     }
-    
-    void XJGamePreview::CreateRenderPass(XJVulkanPhysicalDevices* physicalDevices)
+
+    ImTextureID XJGamePreview::GetViewportTextureID() const
     {
-        VkFormat colorFormat = mDevice->XJGetSettings().surfaceFormat;
-        VkFormat depthFormat = mDevice->XJGetSettings().depthFormat;
-
-        Attachment colorAttachment{};
-        colorAttachment.format = colorFormat;
-        colorAttachment.samples = VK_SAMPLE_COUNT_1_BIT;
-        colorAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
-        colorAttachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
-        colorAttachment.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-        colorAttachment.finalLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-        colorAttachment.usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
-
-        Attachment depthAttachment{};
-        depthAttachment.format = depthFormat;
-        depthAttachment.samples = VK_SAMPLE_COUNT_1_BIT;
-        depthAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
-        depthAttachment.storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-        depthAttachment.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-        depthAttachment.finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
-        depthAttachment.usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
-
-        std::vector<Attachment> attachments =
-        {
-            colorAttachment,
-            depthAttachment
-        };
-
-        std::vector<RenderSubPass> subpasses =
-        {
-            {
-                .colorAttachments = { 0 },
-                .depthStencilAttachments = { 1 },
-                .resolveAttachments = {},
-                .sampleCount = VK_SAMPLE_COUNT_1_BIT
-            }
-        };
-
-        mRenderPass = std::make_shared<XJVulkanRenderPass>(
-            mDevice,
-            physicalDevices,
-            attachments,
-            subpasses
-        );
+        return mSurface.GetTextureID();
     }
 
+    bool XJGamePreview::IsViewportTextureReady() const
+    {
+        return mSurface.IsTextureReady();
+    }
+
+    void XJGamePreview::OnViewportResized(uint32_t width, uint32_t height)
+    {
+        mSurface.Resize(width, height);
+    }
 }

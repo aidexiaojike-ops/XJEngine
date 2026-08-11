@@ -44,13 +44,13 @@ namespace XJ
                             materialAsset->mName = meta->Name;
                             materialAsset->mPath = meta->SourcePath;
 
-                            return XJMaterialFactory::GetInstance()->CreateFromAsset(*materialAsset, ctx.DefaultTexture, ctx.DefaultSampler);
+                            return XJMaterialFactory::GetInstance()->GetOrCreateFromAsset(*materialAsset, ctx.DefaultTexture, ctx.DefaultSampler);
                         }
                     }
                 }
             }
 
-            return XJMaterialFactory::GetInstance()->CreateDefaultMaterial(ctx.DefaultTexture, ctx.DefaultSampler);
+            return XJMaterialFactory::GetInstance()->GetOrCreateDefaultMaterial(ctx.DefaultTexture, ctx.DefaultSampler);
         }
 
         bool HasHierarchyCycleFrom(

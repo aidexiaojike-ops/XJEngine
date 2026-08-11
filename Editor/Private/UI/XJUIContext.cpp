@@ -4,8 +4,15 @@
 
 namespace XJ
 {
+    XJUIContext::~XJUIContext()
+    {
+        Shutdown();
+    }
+
     bool XJUIContext::Init(GLFWwindow* window)
     {
+        Shutdown();
+
         IMGUI_CHECKVERSION();//防止链接错 ImGui 库
         ImGui::CreateContext();//创建 ImGui 上下文
 
@@ -18,16 +25,28 @@ namespace XJ
         ImGui::StyleColorsDark();//设置 ImGui 样式
         // ImGui::StyleColorsClassic();
         // ImGui::StyleColorsLight();
-        ImGui_ImplGlfw_InitForVulkan(window, true);//初始化 ImGui GLFW 后端，告诉它我们使用 Vulkan 渲染器
+        if (!ImGui_ImplGlfw_InitForVulkan(window, true))//初始化 ImGui GLFW 后端，告诉它我们使用 Vulkan 渲染器
+        {
+            ImGui::DestroyContext();
+            return false;
+        }
+
+        mInitialized = true;
         return true;
     }
     void XJUIContext::BeginFrame()
     {
+        if (!mInitialized)
+            return;
+
         ImGui_ImplGlfw_NewFrame();//告诉 ImGui GLFW 后端开始新的一帧
         ImGui::NewFrame();
     }
     void XJUIContext::EndFrame()
     {
+        if (!mInitialized)
+            return;
+
         ImGui::Render();  // 产出 DrawData，不碰 Vulkan
     }
     ImDrawData* XJUIContext::XJGetDrawData()  
@@ -36,8 +55,12 @@ namespace XJ
     }
     void XJUIContext::Shutdown()
     {
+        if (!mInitialized)
+            return;
+
         ImGui_ImplGlfw_Shutdown();
         ImGui::DestroyContext();
+        mInitialized = false;
     }
 
     

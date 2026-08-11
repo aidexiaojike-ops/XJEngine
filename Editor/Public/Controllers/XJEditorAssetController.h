@@ -7,6 +7,7 @@ namespace XJ
 {
     class XJAssetRegistry;
     struct XJEditorUIState;
+    class XJScene;
 
     class XJEditorAssetController
     {
@@ -16,11 +17,14 @@ namespace XJ
             void SetRootPath(const std::filesystem::path& path);
 
             void ProcessRequests(XJEditorUIState& uiState);
+            void SetScene(XJScene* scene);
 
         private:
             XJAssetRegistry* mAssetRegistry = nullptr;
             std::filesystem::path mRegistryPath = "Resource/Config/AssetRegistry.json";
             std::filesystem::path mRootPath = "Resource";
+
+            XJScene* mScene = nullptr;
     };
 }
 

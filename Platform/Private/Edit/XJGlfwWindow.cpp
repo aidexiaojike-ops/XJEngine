@@ -179,6 +179,17 @@ namespace XJ
                 XJEventDispatcher::XJGetInstance()->DispatchEvent(mouseScrollEvent);
             }
         });
+
+        glfwSetDropCallback(mGLFWwindow, [](GLFWwindow* window, int count, const char** paths)
+        {
+            auto* kWindow = static_cast<XJGlfwWindow*>(glfwGetWindowUserPointer(window));
+            if (kWindow && kWindow->mDropCallback)
+            {
+                // Keep GLFW's single shared user pointer owned by XJGlfwWindow.
+                // Application-level drop handling is forwarded through this callback.
+                kWindow->mDropCallback(count, paths);
+            }
+        });
     }
 
 
@@ -223,5 +234,10 @@ namespace XJ
             static_cast<uint32_t>(std::max(width, 0)),
             static_cast<uint32_t>(std::max(height, 0))
         };
+    }
+
+    void XJGlfwWindow::SetDropCallback(DropCallback callback)
+    {
+        mDropCallback = std::move(callback);
     }
 }

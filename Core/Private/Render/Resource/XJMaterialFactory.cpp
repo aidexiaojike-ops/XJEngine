@@ -9,6 +9,8 @@
 #include "Render/Resource/XJTextureFactory.h"
 
 #include <spdlog/spdlog.h>
+#include <algorithm>
+
 namespace XJ
 {
     namespace
@@ -388,5 +390,132 @@ namespace XJ
         ApplyTextureBindings(*mat, asset, defaultTexture, defaultSampler);
     
         return mat;
+    }
+
+    std::shared_ptr<XJUnlitMaterial> XJMaterialFactory::GetOrCreateDefaultMaterial(
+        const std::shared_ptr<XJTexture>& defaultTexture,
+        const std::shared_ptr<XJSampler>& defaultSampler)
+    {
+        const uint64_t textureKey = reinterpret_cast<uintptr_t>(defaultTexture.get());
+        const uint64_t samplerKey = reinterpret_cast<uintptr_t>(defaultSampler.get());
+        const uint64_t cacheKey = (textureKey << 1) ^ (samplerKey << 33) ^ samplerKey;
+
+        {
+            std::scoped_lock lock(mMutex);
+
+            auto cacheIt = mDefaultMaterialCache.find(cacheKey);
+            if (cacheIt != mDefaultMaterialCache.end())
+            {
+                if (auto material = cacheIt->second.lock())
+                    return material;
+
+                mDefaultMaterialCache.erase(cacheIt);
+            }
+        }
+
+        auto material = CreateDefaultMaterial(defaultTexture, defaultSampler);
+        if (material)
+        {
+            std::scoped_lock lock(mMutex);
+            // Default materials are shared fallback resources. They must not be
+            // edited as asset-backed materials or used for per-entity overrides.
+            mDefaultMaterialCache[cacheKey] = material;
+        }
+
+        return material;
+    }
+
+    std::shared_ptr<XJUnlitMaterial> XJMaterialFactory::GetOrCreateFromAsset(
+        const XJMaterialAsset& asset,
+        const std::shared_ptr<XJTexture>& defaultTex,
+        const std::shared_ptr<XJSampler>& defaultSampler)
+    {
+        if (asset.mHandle != 0)
+        {
+            std::scoped_lock lock(mMutex);
+
+            auto cacheIt = mMaterialAssetCache.find(asset.mHandle);
+            if (cacheIt != mMaterialAssetCache.end())
+            {
+                if (auto material = cacheIt->second.lock())
+                    return material;
+
+                mMaterialAssetCache.erase(cacheIt);
+            }
+        }
+
+        auto material = CreateFromAsset(asset, defaultTex, defaultSampler);
+        if (asset.mHandle != 0 && material)
+        {
+            std::scoped_lock lock(mMutex);
+            // Materials loaded from the same asset share runtime state. Per-entity
+            // overrides should create a copied material instead of using this cache.
+            mMaterialAssetCache[asset.mHandle] = material;
+        }
+
+        return material;
+    }
+
+    void XJMaterialFactory::ClearExpiredMaterials()
+    {
+        std::scoped_lock lock(mMutex);
+
+        for (auto& [typeIndex, materialList] : mMaterials)
+        {
+            materialList.erase(
+                std::remove_if(materialList.begin(), materialList.end(),
+                    [](const std::weak_ptr<XJMaterial>& material)
+                    {
+                        return material.expired();
+                    }),
+                materialList.end());
+        }
+
+        for (auto it = mMaterialAssetCache.begin(); it != mMaterialAssetCache.end();)
+        {
+            if (it->second.expired())
+                it = mMaterialAssetCache.erase(it);
+            else
+                ++it;
+        }
+
+        for (auto it = mDefaultMaterialCache.begin(); it != mDefaultMaterialCache.end();)
+        {
+            if (it->second.expired())
+                it = mDefaultMaterialCache.erase(it);
+            else
+                ++it;
+        }
+    }
+
+    void XJMaterialFactory::ClearCaches()
+    {
+        std::scoped_lock lock(mMutex);
+
+        for (auto& [type, materials] : mMaterials)
+        {
+            materials.erase(
+                std::remove_if(
+                    materials.begin(),
+                    materials.end(),
+                    [](const std::weak_ptr<XJMaterial>& material)
+                    {
+                        return material.expired();
+                    }),
+                materials.end());
+        }
+
+        for (auto it = mTextureCache.begin(); it != mTextureCache.end();)
+        {
+            if (it->second.expired())
+                it = mTextureCache.erase(it);
+            else
+                ++it;
+        }
+
+        mMaterialAssetCache.clear();
+        mDefaultMaterialCache.clear();
+
+        mAssetRegistry = nullptr;
     }
 }

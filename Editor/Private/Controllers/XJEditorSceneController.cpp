@@ -112,23 +112,54 @@ namespace XJ
             spdlog::error("Failed to load scene: {}", scenePath.string());
             return false;
         }
-        //重置场景数据
-        ResetSelectionForScene(uiState, sceneHandle);
-        ResetSceneRequestState(uiState);
 
+        // Snapshot current scene before InstantiateSceneAsset mutates mScene.
+        // XJSceneInstantiator::Instantiate clears the target scene internally.
+        std::shared_ptr<XJSceneAsset> previousSceneAsset =
+            XJSceneAssetSerializer::BuildFromScene(*mScene);
+
+        const std::filesystem::path previousScenePath = mCurrentScenePath;
+        const bool previousSceneDirty = mSceneDirty;
+        const XJAssetHandle previousSceneHandle =
+            mInstantiateContext.SourceScene.Handle != 0
+                ? mInstantiateContext.SourceScene.Handle
+                : (mSceneAsset ? mSceneAsset->mHandle : 0);
         // 打开新场景前先让外部清理相机、viewport 等引用。
         if (mBeforeOpenSceneCallback)
             mBeforeOpenSceneCallback();
 
-        mScene->DestroyAllEntity();
-
         if (!InstantiateSceneAsset(sceneAsset, sceneHandle))
-            return false;
+        {
+            spdlog::error("Failed to instantiate scene: {}", scenePath.string());
 
+            if (previousSceneAsset)
+            {
+                // Roll back to the scene that was visible before the failed open.
+                if (!InstantiateSceneAsset(previousSceneAsset, previousSceneHandle))
+                {
+                    spdlog::error("Failed to roll back previous scene after open failure.");
+                }
+            }
+
+            mSceneAsset = previousSceneAsset;
+            mCurrentScenePath = previousScenePath;
+            mSceneDirty = previousSceneDirty;
+
+            if (mAfterOpenSceneCallback && mScene)
+                mAfterOpenSceneCallback(*mScene);
+
+            RefreshViewModels(uiState);
+            return false;
+        }
         mSceneAsset = sceneAsset;
         mCurrentScenePath = scenePath;
         mSceneDirty = false;
 
+        //重置场景数据
+        ResetSelectionForScene(uiState, sceneHandle);
+        ResetSceneRequestState(uiState);
+
+    
         if (mAfterOpenSceneCallback)
             mAfterOpenSceneCallback(*mScene);
 
@@ -572,7 +603,9 @@ namespace XJ
     void XJEditorSceneController::NotifyAfterMutation()
     {
         MarkSceneDirty();
-        SaveCurrentScene();
+
+        // Keep editing responsive: inspector drags/text input may generate many
+        // mutations per second. Persist only through explicit save requests.
 
         if (mAfterMutationCallback)
             mAfterMutationCallback();

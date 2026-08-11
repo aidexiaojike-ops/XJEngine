@@ -4,10 +4,17 @@
 #include "Services/XJEditorAssetService.h"
 #include "UI/XJEditorUIState.h"
 
+#include "Services/XJEditorSceneService.h"
+#include <spdlog/spdlog.h>
 #include <utility>
 
 namespace XJ
 {
+    void XJEditorAssetController::SetScene(XJScene* scene)
+    {
+        mScene = scene;
+    }
+
     void XJEditorAssetController::SetAssetRegistry(XJAssetRegistry* registry)// 设置资产注册表指针
     {
         mAssetRegistry = registry;
@@ -70,13 +77,40 @@ namespace XJ
             }
         }
         // ---------- 删除资产 ----------
+        
         if (uiState.AssetRequests.RequestDeleteAsset)
         {
             auto request = uiState.AssetRequests.DeleteAsset;
             uiState.AssetRequests.RequestDeleteAsset = false;
             uiState.AssetRequests.DeleteAsset = {};
-            // 调用删除服务，如果当前选中的正是被删除的资产，则清空选中
-            if (XJEditorAssetService::DeleteAsset(*mAssetRegistry, request.Handle, mRegistryPath) &&
+        
+            bool canDelete = true;
+        
+            if (mScene)
+            {
+                std::vector<XJEditorEntityId> users =
+                    XJEditorSceneService::FindEntitiesUsingAsset(*mScene, request.Handle);
+            
+                if (!users.empty())
+                {
+                    canDelete = false;
+                
+                    spdlog::warn(
+                        "Delete asset blocked: asset={} is still referenced by {} scene entities.",
+                        request.Handle,
+                        users.size());
+                    
+                    uiState.Selection.SelectedAsset = request.Handle;
+                    uiState.Selection.SelectedEntity = XJ_INVALID_EDITOR_ENTITY_ID;
+                    uiState.Selection.HighlightedEntities.clear();
+                    
+                    for (XJEditorEntityId id : users)
+                        uiState.Selection.HighlightedEntities.insert(id);
+                }
+            }
+        
+            if (canDelete &&
+                XJEditorAssetService::DeleteAsset(*mAssetRegistry, request.Handle, mRegistryPath) &&
                 uiState.Selection.SelectedAsset == request.Handle)
             {
                 uiState.Selection.SelectedAsset = 0;

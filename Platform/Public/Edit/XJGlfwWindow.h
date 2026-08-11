@@ -10,13 +10,19 @@
 #include "Event/XJMouseEvent.h"
 #include "Edit/Mathinclude.h"
 
+#include <functional>
+
 namespace XJ
 {
     class XJGlfwWindow
     {
+        public:
+            using DropCallback = std::function<void(int count, const char** paths)>;
+
         private:
             /* data */
             GLFWwindow* mGLFWwindow = nullptr;//窗口句柄
+            DropCallback mDropCallback;
 
             GLFWmonitor *windowMonitor = nullptr;
             int windowMonitorXPos = 0;
@@ -39,6 +45,7 @@ namespace XJ
             bool ShouldClose();
 
             GLFWwindow* XJGetImplWindowPointer() const  {return mGLFWwindow;};//获取底层窗口指针，供Vulkan使用
+            void SetDropCallback(DropCallback callback);
 
             void XJGetMousePos(glm::vec2 &mousPose);//获取鼠标位置，供Vulkan使用
             bool IsMouseDown(MouseButton mouseButton = MOUSE_BUTTON_LEFT) const;//获取鼠标按键状态，供Vulkan使用

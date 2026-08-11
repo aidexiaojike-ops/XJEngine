@@ -12,7 +12,6 @@ class GLFWwindow;
 
 namespace XJ
 {
-
  
     struct AppSettings
     {
@@ -25,6 +24,7 @@ namespace XJ
     class XJApplication
     {
         public:
+            virtual ~XJApplication() = default;
             static XJAppContext* XJGetAppContext() { return &sAppContext; }
 
             std::chrono::steady_clock::time_point XJGetStartTimePoint() const { return mStartTimePoint; }

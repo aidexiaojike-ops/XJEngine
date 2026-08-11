@@ -5,8 +5,15 @@
 
 namespace XJ
 {
+    XJEditorRenderer::~XJEditorRenderer()
+    {
+        Shutdown();
+    }
+
     bool XJEditorRenderer::Init(const XJEditorRendererInitInfo& info)
     {
+        Shutdown();
+
          mDevice = info.device; 
 
         //创建描述符池
@@ -30,7 +37,11 @@ namespace XJ
         kPoolCI.maxSets = 1000;
         kPoolCI.poolSizeCount = std::size(kPoolSizes);
         kPoolCI.pPoolSizes = kPoolSizes;
-        vkCreateDescriptorPool(info.device, &kPoolCI, nullptr, &mDescriptorPool);
+        if (vkCreateDescriptorPool(info.device, &kPoolCI, nullptr, &mDescriptorPool) != VK_SUCCESS)
+        {
+            mDevice = VK_NULL_HANDLE;
+            return false;
+        }
 
         //初始化 ImGui Vulkan
         ImGui_ImplVulkan_InitInfo kInitInfo{};
@@ -58,6 +69,7 @@ namespace XJ
         kInitInfo.CheckVkResultFn = nullptr;
 
         ImGui_ImplVulkan_Init(&kInitInfo);
+        mInitialized = true;
 
 
         //上传字体纹理   把所有用的的文字上传到GPU
@@ -97,16 +109,25 @@ namespace XJ
     }
     void XJEditorRenderer::RenderDrawData(VkCommandBuffer cmd, ImDrawData* drawData)
     {
-        if(drawData) ImGui_ImplVulkan_RenderDrawData(drawData, cmd);
+        if(mInitialized && drawData) ImGui_ImplVulkan_RenderDrawData(drawData, cmd);
     }
     void XJEditorRenderer::Shutdown()
     {
-        ImGui_ImplVulkan_Shutdown();
+        if (!mInitialized && mDescriptorPool == VK_NULL_HANDLE)
+            return;
+
+        if (mInitialized)
+        {
+            ImGui_ImplVulkan_Shutdown();
+            mInitialized = false;
+        }
+
         if(mDescriptorPool != VK_NULL_HANDLE)
         {
             vkDestroyDescriptorPool(mDevice, mDescriptorPool, nullptr);
             mDescriptorPool = VK_NULL_HANDLE;
         }
+        mDevice = VK_NULL_HANDLE;
         
     }
 }

@@ -224,47 +224,35 @@ namespace XJ
             }
         }
 
-        XJMaterialPipelineRuntime* boundRuntime = nullptr;
+        std::unordered_map<XJMaterialPipelineRuntime*, std::unordered_set<uint32_t>> preparedMaterialIndicesByRuntime;
 
         for (const XJMaterialRenderItem& item : mRenderItems)
         {
             XJMaterial* material = item.Material;
             if (!material || material->XJGetIndex() < 0 || !item.Mesh)
                 continue;
-            
+
             XJMaterialPipelineRuntime* runtime = ResolveMaterialRuntime(material);
             if (!runtime || !runtime->IsValid())
-            {
-                spdlog::warn(
-                    "Skip material {}: failed to resolve valid pipeline runtime.",
-                    material->GetIndex());
                 continue;
-            }
-        
+
             if (mUpdatedFrameRuntimes.insert(runtime).second)
                 XJMaterialRuntimeUploader::UpdateFrameUboDescSet(uploadContext, *runtime);
-        
-            if (boundRuntime != runtime)
-            {
-                runtime->Pipeline->BindPipeline(cmdBuffer);
-                boundRuntime = runtime;
-            }
-        
+
             const uint32_t materialIndex = material->GetIndex();
             const uint32_t descriptorIndex = frameSlot * runtime->LastDescriptorSetCount + materialIndex;
-        
+
             if (materialIndex >= runtime->LastDescriptorSetCount ||
                 descriptorIndex >= runtime->MaterialParamDescSets.size() ||
                 descriptorIndex >= runtime->MaterialResourceDescSets.size())
             {
-                spdlog::warn(
-                    "Skip material {}: descriptor set index is out of bounds.",
-                    material->GetIndex());
                 continue;
             }
 
-            
-        
+            auto& preparedMaterialIndices = preparedMaterialIndicesByRuntime[runtime];
+            if (!preparedMaterialIndices.insert(materialIndex).second)
+                continue;
+
             const bool forceUpdateRuntime = mForceUpdateRuntimes.find(runtime) != mForceUpdateRuntimes.end();
 
             if (material->ShouldFlushParams())
@@ -279,6 +267,8 @@ namespace XJ
             VkDescriptorSet paramsDescSet = runtime->MaterialParamDescSets[descriptorIndex];
             VkDescriptorSet resourceDescSet = runtime->MaterialResourceDescSets[descriptorIndex];
 
+            // Descriptor sets must be updated before any draw in this command buffer
+            // can bind them. Updating a set after it was bound invalidates recording.
             if (forceUpdateRuntime || descriptorIndex >= paramFlags.size() || !paramFlags[descriptorIndex])
             {
                 if (XJMaterialRuntimeUploader::UpdateMaterialParamsDescSet(
@@ -311,6 +301,49 @@ namespace XJ
                 if (!HasPendingMaterialResourceUpdates(*runtime, materialIndex))
                     material->FinishFlushResoure();
             }
+        }
+
+        XJMaterialPipelineRuntime* boundRuntime = nullptr;
+        mUpdatedFrameRuntimes.clear();
+        
+        for (const XJMaterialRenderItem& item : mRenderItems)
+        {
+            XJMaterial* material = item.Material;
+            if (!material || material->XJGetIndex() < 0 || !item.Mesh)
+                continue;
+            
+            XJMaterialPipelineRuntime* runtime = ResolveMaterialRuntime(material);
+            if (!runtime || !runtime->IsValid())
+            {
+                spdlog::warn(
+                    "Skip material {}: failed to resolve valid pipeline runtime.",
+                    material->GetIndex());
+                continue;
+            }
+        
+            if (boundRuntime != runtime)
+            {
+                runtime->Pipeline->BindPipeline(cmdBuffer);
+                boundRuntime = runtime;
+            }
+        
+            const uint32_t materialIndex = material->GetIndex();
+            const uint32_t descriptorIndex = frameSlot * runtime->LastDescriptorSetCount + materialIndex;
+        
+            if (materialIndex >= runtime->LastDescriptorSetCount ||
+                descriptorIndex >= runtime->MaterialParamDescSets.size() ||
+                descriptorIndex >= runtime->MaterialResourceDescSets.size())
+            {
+                spdlog::warn(
+                    "Skip material {}: descriptor set index is out of bounds.",
+                    material->GetIndex());
+                continue;
+            }
+
+            
+        
+            VkDescriptorSet paramsDescSet = runtime->MaterialParamDescSets[descriptorIndex];
+            VkDescriptorSet resourceDescSet = runtime->MaterialResourceDescSets[descriptorIndex];
 
             VkDescriptorSet descriptorSets[] =
             {

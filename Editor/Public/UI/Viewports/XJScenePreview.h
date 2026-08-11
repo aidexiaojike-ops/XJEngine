@@ -2,6 +2,7 @@
 #define XJ_SCENE_PREVIEW_H
 
 #include "UI/Viewports/XJViewport.h"
+#include "UI/Viewports/XJViewportRenderSurface.h"
 #include "UI/XJEditorDragPayload.h"
 
 #include <functional>
@@ -14,7 +15,17 @@ namespace XJ
     {
         public:
 
-            virtual bool Render(VkCommandBuffer cmd) override;
+            bool Init(XJRenderContext* renderContext);
+            void Shutdown();
+            void PrepareBeforeRender();
+            void PostRender();
+            bool Render(VkCommandBuffer cmd);
+
+            template<typename T, typename... Args>
+            void AddMaterialSystem(Args&&... args)
+            {
+                mSurface.template AddMaterialSystem<T>(std::forward<Args>(args)...);
+            }
 
             void SetCamera(XJEntity* camera)
             {
@@ -46,17 +57,16 @@ namespace XJ
             }
 
         private:
-            
-            bool mHovered = false;
-            bool mFocused = false;
-            
+            XJViewportRenderSurface mSurface;
             XJEntity* mPreviewCamera = nullptr;//用于预览的摄像机实体
 
             bool CalculateDropPositionFromViewportRay(const ImVec2& imageMin, const ImVec2& imageSize, glm::vec3& outOrigin, glm::vec3& outDirection) const;//根据鼠标在视口中的位置计算拖放物体在世界空间中的位置
             AssetDropCallback mAssetDropCallback;
 
         protected:
-            virtual void CreateRenderPass(XJVulkanPhysicalDevices* physicalDevices) override;//创建适用于场景预览的 Vulkan 渲染通道，配置颜色和深度附件，以及子通道的依赖关系
+            ImTextureID GetViewportTextureID() const override;
+            bool IsViewportTextureReady() const override;
+            void OnViewportResized(uint32_t width, uint32_t height) override;
 
     };
 }
