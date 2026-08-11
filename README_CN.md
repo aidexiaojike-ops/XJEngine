@@ -93,11 +93,13 @@ File -> Importer -> Asset (CPU) -> Factory -> Resource (GPU) -> Renderer
 - **Shader Schema 系统**：JSON 定义的着色器参数，`XJShaderSchemaValidator` 验证 + `XJShaderSchemaBindingResolver` 绑定解析 + `XJShaderDescriptorLayoutBuilder` 描述符布局构建
 - **Shader 运行时布局**：`XJMaterialShaderRuntimeLayout`/`Builder`、`XJMaterialPipelineRuntime`/`Builder`/`Cache`/`Descriptor`、`XJMaterialRuntimeUploader` — 运行时 Shader-材质绑定、管线缓存、GPU 上传
 - **材质序列化**：`XJMaterialAssetSerializer`、`XJShaderAssetSerializer`、`XJShaderSchemaSerializer`
+- **材质工厂缓存**：`XJMaterialFactory` 按资产/默认材质键缓存材质（弱引用）、复用已加载纹理，并提供 `ClearExpiredMaterials`/`ClearCaches` 配合场景生命周期管理
 - **Inspector 材质编辑**：通过 `XJEditorMaterialParameterType` 编辑 Float、Color3、Texture2D 等参数
 
 ### 编辑器架构（MVVM）
 
-- **Controllers**：`XJEditorSceneController`（场景加载/保存/切换）+ `XJEditorAssetController`（资产 CRUD）+ `XJEditorCameraManager`（视口摄像机绑定）+ `XJEditorSceneAssetDropController`（资产拖放到场景）+ `XJEditorExternalDropController`（OS文件拖入）
+- **Controllers**：`XJEditorSceneController`（场景加载/保存/切换）+ `XJEditorAssetController`（资产 CRUD）+ `XJEditorCameraManager`（基于实体 ID 的视口摄像机绑定与解析，避免悬垂指针）+ `XJEditorSceneAssetDropController`（资产拖放到场景）+ `XJEditorExternalDropController`（OS文件拖入）
+- **Viewport 渲染表面**：`XJViewport` 接口（`GetViewportTextureID`/`IsViewportTextureReady`/`OnViewportResized`）由 `XJViewportRenderSurface` 实现，负责离屏 render pass、render target、调整大小时的延迟 descriptor 释放以及 ImGui 纹理显示
 - **Services**：`XJEditorSceneService` + `XJEditorAssetService`（Controller 与 ECS 之间的桥接层）
 - **ViewModels**：`XJEditorSceneViewModel`、`XJEditorSelection`、`XJEditorComponentTypes`、`XJEditorAssetRequests`（UI 面板读取快照，写入请求）
 - **面板功能**：Inspector 支持 Transform/Camera/MeshRenderer 组件增删编辑，Hierarchy 支持右键菜单创建/删除/重命名

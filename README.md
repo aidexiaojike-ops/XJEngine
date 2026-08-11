@@ -156,6 +156,7 @@ Swapchain
 - **Shader Schema System**: JSON-defined parameters (Unlit.schema), schema validation via `XJShaderSchemaValidator`, binding resolution via `XJShaderSchemaBindingResolver`, descriptor layout via `XJShaderDescriptorLayoutBuilder`
 - **Shader Runtime Layout**: `XJMaterialShaderRuntimeLayout`/`Builder`, `XJMaterialPipelineRuntime`/`Builder`/`Cache`/`Descriptor`, `XJMaterialRuntimeUploader`, `XJUnlitMaterialBindingUtils` — runtime shader-material binding, descriptor set wiring, pipeline caching, GPU upload
 - **Material Serializers**: `XJMaterialAssetSerializer`, `XJShaderAssetSerializer`, `XJShaderSchemaSerializer`
+- **Material Factory Cache**: `XJMaterialFactory` caches materials by asset/default key (weak refs), reuses loaded textures, and provides `ClearExpiredMaterials`/`ClearCaches` for scene lifetime management
 - **Inspector Material Editing**: Parameter editing with `XJEditorMaterialParameterType` (Float, Color3, Texture2D, etc.)
 
 #### **Asset System**
@@ -185,12 +186,12 @@ Swapchain
 - **XJEditorAssetRequests**: MVVM request structs (CreateAsset, RenameAsset, DeleteAsset, ImportExternalFiles)
 - **XJEditorSceneAssetDropController**: Content Browser asset drag to Scene Preview with ray-cast entity placement
 - **XJEditorExternalDropController**: OS file drag-drop into editor window (e.g., drag .glb from Explorer)
-- **XJEditorCameraManager**: Viewport camera binding and editor camera lifecycle
+- **XJEditorCameraManager**: Viewport camera binding and editor camera lifecycle (entity-ID based, resolving through the scene to avoid dangling pointers)
 - **XJUIContext**: ImGui context management with GLFW backend, docking, and multi-viewport support
 - **XJEditorRenderer**: Vulkan-accelerated ImGui draw data rendering with descriptor pool management
 - **Multi-Viewport**: Support for floating/detached editor windows via ImGui platform windows
 - **XJEditorUILayer**: Orchestrates editor panels with drag-drop support
-- **Viewport System**: `XJViewport` base class with off-screen render target, descriptor set, and ImGui texture display
+- **Viewport System**: `XJViewport` interface (`GetViewportTextureID`/`IsViewportTextureReady`/`OnViewportResized`) backed by `XJViewportRenderSurface`, which owns the off-screen render pass, render target, deferred descriptor-set release on resize, and ImGui texture display
 - **Scene/Game Preview**: `XJScenePreview` and `XJGamePreview` panels for separate scene and game camera views
 - **UI Config**: `XJEditorUIConfig` reads/writes `EditorUI.json` for per-panel visibility and layout persistence
 
