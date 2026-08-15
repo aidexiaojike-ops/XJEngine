@@ -4,6 +4,7 @@
 #include "UI/Panels/XJHierarchyPanel.h"
 #include "UI/Panels/XJInspectorPanel.h"
 #include "UI/Panels/XJDebugConsolePanel.h"
+#include "UI/XJEditorLog.h"
 
 #include <imgui.h>
 
@@ -22,6 +23,10 @@ namespace XJ
 
     void XJEditorUILayer::Init(const std::filesystem::path& configPath)
     {
+        // spdlog 已由 XJApplication 初始化。Editor 只追加一个内存 sink，
+        // 不修改现有控制台和轮转文件 sink。
+        XJEditorLog::XJGet().AttachToSpdlog();
+
         mConfigPath = configPath;
         mConfig.Load(mConfigPath);
         // 根据配置设置初始状态
@@ -56,6 +61,19 @@ namespace XJ
         ImGui::DockSpaceOverViewport(ImGui::GetMainViewport()->ID);// 全局停靠空间
         DrawMainMenuBar();
 
+        // 文本框有自己的撤销栈，输入文字时不抢占 Ctrl+Z/Ctrl+Y。
+        if (!ImGui::GetIO().WantTextInput)
+        {
+            if (ImGui::Shortcut(ImGuiMod_Ctrl | ImGuiKey_Z))
+                mState.SceneRequests.RequestUndo = true;
+
+            if (ImGui::Shortcut(ImGuiMod_Ctrl | ImGuiKey_Y) ||
+                ImGui::Shortcut(ImGuiMod_Ctrl | ImGuiMod_Shift | ImGuiKey_Z))
+            {
+                mState.SceneRequests.RequestRedo = true;
+            }
+        }
+
         if (mContentBrowser) mContentBrowser->DrawUI();
         if (mHierarchy)      mHierarchy->DrawUI();
         if (mInspector)      mInspector->DrawUI();
@@ -79,6 +97,9 @@ namespace XJ
         mHierarchy.reset();
         mInspector.reset();
         mDebugConsole.reset();
+
+         // UI 面板销毁后不再收集日志，并避免重复创建 UI 时重复安装 sink。
+        XJEditorLog::XJGet().DetachFromSpdlog();
     }
 
 
@@ -118,6 +139,17 @@ namespace XJ
                     mState.SceneRequests.RequestSaveScene = true;
                 }
             
+                ImGui::EndMenu();
+            }
+
+            if (ImGui::BeginMenu("Edit"))
+            {
+                if (ImGui::MenuItem("Undo", "Ctrl+Z"))
+                    mState.SceneRequests.RequestUndo = true;
+
+                if (ImGui::MenuItem("Redo", "Ctrl+Y"))
+                    mState.SceneRequests.RequestRedo = true;
+
                 ImGui::EndMenu();
             }
             

@@ -5,6 +5,12 @@
 #include <vector>
 #include <deque>
 #include <mutex>
+#include <memory>
+
+namespace spdlog::sinks
+{
+    class sink;
+}
 
 namespace XJ
 {
@@ -39,12 +45,17 @@ namespace XJ
             void SetMaxLines(int maxLines);//设置日志系统中最大保留的日志条目数量，超过后会丢弃最旧的条目
             int GetMaxLines() const { return mMaxLines; }//获取当前设置的最大日志条目数量
 
+            void AttachToSpdlog();//将编辑器日志容器接入全局 spdlog
+            void DetachFromSpdlog();//编辑器 UI 销毁前移除 sink
+
         private:
             XJEditorLog() = default;
 
             std::deque<XJEditorLogEntry> mEntries;//使用双端队列存储日志条目，方便在达到最大行数时丢弃最旧的条目
             int mMaxLines = 1000;
             mutable std::mutex mMutex;//保护日志条目列表的互斥锁，确保多线程访问时的安全性
+            // 保存 sink 句柄用于防止重复安装，并在 UI 关闭时精确移除。
+            std::shared_ptr<spdlog::sinks::sink> mSpdlogSink;
     };
 }
 

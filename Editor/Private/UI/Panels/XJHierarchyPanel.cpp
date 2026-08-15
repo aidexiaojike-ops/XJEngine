@@ -94,7 +94,8 @@ namespace XJ
 
         if(isRenaming)
         {
-            ImGui::PushID(static_cast<int>(entity.Id));
+            const std::string renameId = std::to_string(entity.Id);
+            ImGui::PushID(renameId.c_str());//实体 UUID 为 64 位，字符串 ID 不会被截断
 
             if(mFocusRenameInput)
             {

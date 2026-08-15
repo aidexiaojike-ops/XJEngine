@@ -22,12 +22,16 @@
 #include "Render/Material/XJUnlitMaterialBindingUtils.h"
 
 #include <algorithm>
+#include <filesystem>
+#include <unordered_map>
 #include <unordered_set>
 
 namespace XJ
 {
     namespace
     {
+        constexpr uint32_t kMaxMaterialSlotCount = 64;
+
         bool IsValidMeshAsset(XJAssetRegistry& assetRegistry, XJAssetHandle meshAsset)//是否有模型资产
         {
             if (meshAsset == 0)
@@ -223,6 +227,53 @@ namespace XJ
                 value);
         }
 
+        struct MaterialInspectorCacheEntry
+        {
+            std::filesystem::path MaterialPath;
+            std::filesystem::file_time_type MaterialWriteTime{};
+            std::filesystem::path ShaderPath;
+            std::filesystem::file_time_type ShaderWriteTime{};
+            std::vector<XJEditorMaterialParameterView> Parameters;
+        };
+
+        // Inspector 只在编辑器主线程读取此缓存。缓存最终 UI 快照，避免每帧
+        // 重新解析材质和 Shader JSON，也不会向运行时材质暴露可变资产对象。
+        std::unordered_map<XJAssetHandle, MaterialInspectorCacheEntry> gMaterialInspectorCache;
+
+        std::optional<std::filesystem::file_time_type> GetFileWriteTime(const std::filesystem::path& path)
+        {
+            if (path.empty())
+                return std::nullopt;
+
+            std::error_code ec;
+            const auto writeTime = std::filesystem::last_write_time(path, ec);
+            if (ec)
+                return std::nullopt;
+
+            return writeTime;
+        }
+
+        bool IsMaterialInspectorCacheValid(
+            const MaterialInspectorCacheEntry& entry,
+            const std::filesystem::path& materialPath)
+        {
+            if (entry.MaterialPath != materialPath)
+                return false;
+
+            const auto materialWriteTime = GetFileWriteTime(materialPath);
+            if (!materialWriteTime || *materialWriteTime != entry.MaterialWriteTime)
+                return false;
+
+            const auto shaderWriteTime = GetFileWriteTime(entry.ShaderPath);
+            return shaderWriteTime && *shaderWriteTime == entry.ShaderWriteTime;
+        }
+
+        void InvalidateMaterialInspectorCacheEntry(XJAssetHandle materialHandle)
+        {
+            if (materialHandle != 0)
+                gMaterialInspectorCache.erase(materialHandle);
+        }
+
         void PopulateMaterialSlotParameters(XJEditorMaterialSlotView& slot, XJAssetRegistry& assetRegistry)
         {
             if (!slot.HasMaterialAsset || slot.MaterialAsset == 0)
@@ -232,20 +283,43 @@ namespace XJ
             if (!meta || meta->Type != XJAssetType::Material)
                 return;
         
-            slot.MaterialPath = meta->SourcePath;
-        
-            auto materialAsset = XJMaterialImporter::ImportMaterial(meta->SourcePath.string());
-            if (!materialAsset)
+            const std::filesystem::path materialPath = meta->SourcePath.lexically_normal();
+            slot.MaterialPath = materialPath;
+
+            auto cacheIt = gMaterialInspectorCache.find(slot.MaterialAsset);
+            if (cacheIt != gMaterialInspectorCache.end() &&
+                IsMaterialInspectorCacheValid(cacheIt->second, materialPath))
+            {
+                slot.ShaderPath = cacheIt->second.ShaderPath;
+                slot.Parameters = cacheIt->second.Parameters;
                 return;
+            }
+
+            auto materialAsset = XJMaterialAssetSerializer::LoadFromFile(materialPath);
+            if (!materialAsset)
+            {
+                gMaterialInspectorCache.erase(slot.MaterialAsset);
+                return;
+            }
         
             slot.ShaderPath = materialAsset->ShaderPath;
         
             if (materialAsset->ShaderPath.empty())
+            {
+                gMaterialInspectorCache.erase(slot.MaterialAsset);
                 return;
+            }
         
             auto shaderAsset = XJShaderAssetSerializer::LoadFromFile(materialAsset->ShaderPath);
             if (!shaderAsset)
+            {
+                gMaterialInspectorCache.erase(slot.MaterialAsset);
                 return;
+
+            }
+
+            slot.Parameters.clear();
+            slot.Parameters.reserve(shaderAsset->Schema.Parameters.size());
         
             for (const auto& def : shaderAsset->Schema.Parameters)
             {
@@ -265,8 +339,23 @@ namespace XJ
                 else
                     parameter.Value = ToEditorMaterialParameterValue(def.DefaultValue);
             
-                slot.Parameters.push_back(parameter);
+                slot.Parameters.push_back(std::move(parameter));
             }
+
+            const auto materialWriteTime = GetFileWriteTime(materialPath);
+            const auto shaderWriteTime = GetFileWriteTime(slot.ShaderPath);
+
+            // 时间戳读取失败时不缓存，避免把临时失败或坏文件永久保留在 Inspector。
+            if (!materialWriteTime || !shaderWriteTime)
+                return;
+
+            MaterialInspectorCacheEntry entry;
+            entry.MaterialPath = materialPath;
+            entry.MaterialWriteTime = *materialWriteTime;
+            entry.ShaderPath = slot.ShaderPath;
+            entry.ShaderWriteTime = *shaderWriteTime;
+            entry.Parameters = slot.Parameters;
+            gMaterialInspectorCache[slot.MaterialAsset] = std::move(entry);
         }
 
         bool ApplyRuntimeMaterialTextureParameter(
@@ -313,6 +402,11 @@ namespace XJ
         }
         
     
+    }
+
+    void XJEditorSceneService::InvalidateMaterialInspectorCache(XJAssetHandle materialHandle)
+    {
+        InvalidateMaterialInspectorCacheEntry(materialHandle);
     }
 
     XJEntity* XJEditorSceneService::FindEntityById(XJScene& scene, XJEditorEntityId id)
@@ -743,6 +837,9 @@ namespace XJ
 
     bool XJEditorSceneService::SetMeshRendererMaterial(XJScene& scene, XJEditorEntityId entityId, uint32_t slotIndex, XJAssetHandle materialAsset, XJAssetRegistry& assetRegistry, XJSceneInstantiateContext& instantiateContext, const std::shared_ptr<XJTexture>& defaultTexture, const std::shared_ptr<XJSampler>& defaultSampler) 
     {
+        if (slotIndex >= kMaxMaterialSlotCount)
+            return false;
+
         XJEntity* entity = FindEntityById(scene, entityId);
         if (!entity || !entity->IsValid())
             return false;
@@ -843,6 +940,9 @@ namespace XJ
         if (!XJMaterialAssetSerializer::SaveToFile(*material, meta->SourcePath))
             return false;
 
+        // 编辑器刚修改了材质，主动失效 Inspector 快照，不依赖文件系统时间戳精度。
+        InvalidateMaterialInspectorCacheEntry(materialAsset);
+
         if(entity->HasComponent<XJUnlitMaterialComponent>())
         {
             auto& renderComponent = entity->GetComponent<XJUnlitMaterialComponent>();
@@ -911,6 +1011,9 @@ namespace XJ
 
         if(!XJMaterialAssetSerializer::SaveToFile(*material, meta->SourcePath))
             return false;
+
+        // Reset 也会改写 .xjmat，下一次 ViewModel 刷新必须重新生成参数快照。
+        InvalidateMaterialInspectorCacheEntry(materialAsset);
 
         if(entity->HasComponent<XJUnlitMaterialComponent>())
         {

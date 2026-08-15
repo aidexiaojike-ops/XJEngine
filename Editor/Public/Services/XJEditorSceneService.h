@@ -33,6 +33,7 @@ namespace XJ
             static XJEditorSceneViewModel BuildSceneViewModel(XJScene& scene, const ShouldExposeEntityCallback& shouldExposeEntity = {});//显示模型
 
             static XJEditorEntityDetailsView BuildEntityDetailsView(XJScene& scene, XJEditorEntityId entityId, XJAssetRegistry* assetRegistry, const ShouldExposeEntityCallback& shouldExposeEntity);
+            static void InvalidateMaterialInspectorCache(XJAssetHandle materialHandle);//材质文件被外部恢复后，强制刷新 Inspector 参数快照
 
             static void RenameEntity(XJScene& scene, XJEditorEntityId entityId, const std::string& name);//通过ID修改名字
             static void UpdateTransform(XJScene& scene, const XJEditorUpdateTransformRequest& request);//更改位置

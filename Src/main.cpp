@@ -1,7 +1,8 @@
 ﻿#include "XJEntryPoint.h"
 #include "Edit/Mathinclude.h"
-#include "Edit/XJEventTesting.h"
 #include "Edit/FileUtil.h"
+#include "Event/XJEventObserver.h"
+#include "Event/XJMouseEvent.h"
 #include "Event/XJWindowEvent.h"
 
 #include "Graphic/XJVulkanRenderPass.h"
@@ -38,11 +39,19 @@
 
 
 #include <filesystem>
+#include <stdexcept>
     
 class XJEngineApp : public XJ::XJApplication
 {
   
 protected:
+
+    ~XJEngineApp() override
+    {
+        // OnDestroy is the normal unregistration path. This also covers partial
+        // initialization failures where application teardown starts earlier.
+        mEventObserver.reset();
+    }
 
 
     void  OnConfiguration(XJ::AppSettings *appSettings) override
@@ -56,11 +65,26 @@ protected:
 
     void OnInit() override
     {
+        XJ::XJAppContext* appContext = XJApplication::XJGetAppContext();
+        XJ::XJRenderContext *kRenderContext = appContext ? appContext->renderContext : nullptr;
+        if (!kRenderContext)
+        {
+            spdlog::critical("Engine initialization failed: render context is null.");
+            throw std::runtime_error("XJEngine requires a valid render context");
+        }
 
-        XJ::XJRenderContext *kRenderContext = XJApplication::XJGetAppContext()->renderContext;
         XJ::XJVulkanDevice* kDevice = kRenderContext->XJGetDevice();
         XJ::XJVulkanPhysicalDevices* kPhysicalDevices = kRenderContext->XJGetPhysicalDevices();
         XJ::XJVulkanSwapchain* kSwapchain = kRenderContext->XJGetSwapchain();
+
+        if (!kDevice || !kPhysicalDevices || !kSwapchain ||
+            !kRenderContext->XJGetInstance() ||
+            !kDevice->XJGetDefaultCmdPool() ||
+            !kDevice->XJGetFirstGraphicQueue())
+        {
+            spdlog::critical("Engine initialization failed: one or more Vulkan services are null.");
+            throw std::runtime_error("XJEngine Vulkan services are incomplete");
+        }
       
          // 配置 RenderPass 附件
         std::vector<XJ::Attachment> attachments{};
@@ -114,10 +138,10 @@ protected:
         spdlog::info("分配了 {} 个命令缓冲区", mCommandBuffers.size());
         // 初始化摄像机控制器：鼠标灵敏度、平移、缩放、旋转
         mCameraController = std::make_unique<XJ::XJEditorCameraController>(0.25f, 0.05f, 0.3f, 0.25f);
-        // 滚轮事件回调
-        mEventTesting = std::make_shared<XJ::XJEventTesting>();
-        mOvserver = std::make_shared<XJ::XJEventObserver>();
-        mOvserver->OnEvent<XJ::XJMouseScrollEvent>([this](const XJ::XJMouseScrollEvent& event)
+        // This callback captures the application, so OnDestroy explicitly
+        // unregisters the observer before any callback target is torn down.
+        mEventObserver = std::make_unique<XJ::XJEventObserver>();
+        mEventObserver->OnEvent<XJ::XJMouseScrollEvent>([this](const XJ::XJMouseScrollEvent& event)
         {
             mEditorCameraManager.OnMouseScroll(event.mYOffset);
         });
@@ -126,10 +150,6 @@ protected:
         XJ::RGBAColor kBlackPixel{0, 0, 0, 255};// 黑色像素
         XJ::RGBAColor kMultiPixel[4] = { {255, 0, 0, 255}, {0, 255, 0, 255}, {0, 0, 255, 255}, {255, 255, 0, 255} };// 多像素测试数据
         mWhiteTexture = std::make_shared<XJ::XJTexture>(1,1, &kWhitePixel);// 创建白色纹理
-        mBlackTexture = std::make_shared<XJ::XJTexture>(1,1, &kBlackPixel);// 创建黑色纹理
-        mMultiPixelTexture = std::make_shared<XJ::XJTexture>(2,2, kMultiPixel);// 创建多像素纹理
-        auto kAsset = XJ::XJTextureImporter::ImportTexture(XJ_RES_TEXTURE_DIR"R-C.jpeg");
-        if (kAsset) mFileTexture = XJ::XJTextureFactory::CreateTextureFromAsset(*kAsset);// 创建文件纹理
         // 创建默认采样器
         mDefaultSampler = std::make_shared<XJ::XJSampler>(VK_FILTER_NEAREST, VK_SAMPLER_ADDRESS_MODE_REPEAT);// 创建默认采样器
 
@@ -144,11 +164,22 @@ protected:
         kUIRendererInfo.queueFamily    = kPhysicalDevices->XJGetGraphicQueueFamilyInfo().queueFamilyIndex;
         kUIRendererInfo.queue          = kDevice->XJGetFirstGraphicQueue()->XJGetQueue();
         kUIRendererInfo.imageCount     = static_cast<uint32_t>(kSwapchain->XJGetSwapchainImages().size());
+        kUIRendererInfo.msaaSamples    = mSampleCount;
+        kUIRendererInfo.colorFormat    = kSwapchain->XJGetSurfaceInfo().surfaceFormat.format;
 
         mUIContext = std::make_unique<XJ::XJUIContext>();
         mEditorRenderer = std::make_unique<XJ::XJEditorRenderer>();
-        mUIContext->Init(XJGetWindow()->XJGetImplWindowPointer());
-        mEditorRenderer->Init(kUIRendererInfo);
+        if (!XJGetWindow() || !mUIContext->Init(XJGetWindow()->XJGetImplWindowPointer()))
+        {
+            spdlog::critical("Engine initialization failed: ImGui context initialization failed.");
+            throw std::runtime_error("ImGui context initialization failed");
+        }
+
+        if (!mEditorRenderer->Init(kUIRendererInfo))
+        {
+            spdlog::critical("Engine initialization failed: ImGui Vulkan renderer initialization failed.");
+            throw std::runtime_error("ImGui Vulkan renderer initialization failed");
+        }
         ///拖拽资产到UI 生成json文件和UUID
         XJGetWindow()->SetDropCallback([this](int count, const char** paths)
         {
@@ -247,16 +278,25 @@ protected:
 
         if (mScenePreview)
         {
-           mScenePreview->SetAssetDropCallback([this, scene](const XJ::XJAssetDragPayload& payload)
+           mScenePreview->SetAssetDropCallback([this](const XJ::XJAssetDragPayload& payload)
             {
-                bool created = mSceneAssetDropController.CreateEntityFromDroppedAsset(*scene, payload, mAssetRegistry,
-                                mEditorSceneController.GetInstantiateContext(), mEditorUIState, mWhiteTexture, mDefaultSampler);
-                
-                if (created)
+                // Resolve the active scene when the drop is consumed instead of
+                // retaining an OnSceneInit raw pointer across scene reloads.
+                XJ::XJScene* activeScene = mRuntimeScene;
+                if (!activeScene)
+                    return;
+
+                mEditorSceneController.ExecuteExternalMutation(mEditorUIState, [this, activeScene, &payload]()
                 {
-                    mEditorSceneController.MarkSceneDirty();
-                    mEditorSceneController.SaveCurrentScene();
-                }
+                    return mSceneAssetDropController.CreateEntityFromDroppedAsset(
+                        *activeScene,
+                        payload,
+                        mAssetRegistry,
+                        mEditorSceneController.GetInstantiateContext(),
+                        mEditorUIState,
+                        mWhiteTexture,
+                        mDefaultSampler);
+                });
             });
         }
     }
@@ -264,7 +304,12 @@ protected:
     {
         spdlog::info("Scene destroyed");
 
-        mRuntimeScene = nullptr;
+        // Stop viewport drop delivery before invalidating scene-owned state.
+        if (mScenePreview)
+            mScenePreview->SetAssetDropCallback({});
+
+        if (mRuntimeScene == scene)
+            mRuntimeScene = nullptr;
 
         mEditorCameraManager.ClearAllCameraReferences();
         
@@ -356,8 +401,6 @@ protected:
         //mUIContext->BeginFrame();
         mEditorCameraManager.ValidateCameraPointers();
 
-        mEditorSceneController.RefreshViewModels(mEditorUIState);
-
         if (mEditorUILayer)
             mEditorUILayer->DrawUI();
 
@@ -379,9 +422,14 @@ protected:
         if (mGamePreview)
             mGamePreview->DrawUI();
 
+        // All editor drop targets have now had a chance to consume the GLFW event.
+        // Discard anything left pending so stale paths cannot leak into later frames.
+        mExternalDropController.DiscardUnconsumedDrop(mEditorUIState);
+
         // 这里处理 Editor Requests
         mEditorAssetController.ProcessRequests(mEditorUIState);
         mEditorSceneController.ProcessRequests(mEditorUIState);
+        // 所有本帧编辑请求处理完后统一生成一次 UI 快照，避免重复递归场景树。
         mEditorSceneController.RefreshViewModels(mEditorUIState);
        
         mEditorCameraManager.UpdatePreviewCameraControl(deltaTime, XJGetWindow());
@@ -514,6 +562,12 @@ protected:
 
     void OnDestroy() override
     {
+        // Stop callbacks that capture this before destroying any state they use.
+        if (XJGetWindow())
+            XJGetWindow()->SetDropCallback({});
+
+        mEventObserver.reset();
+
         mEditorCameraManager.ClearAllCameraReferences();
 
         XJ::XJRenderContext *kRenderContext = XJApplication::XJGetAppContext()->renderContext;
@@ -523,9 +577,6 @@ protected:
         mEditorSceneController.SetScene(nullptr);
 
         mWhiteTexture.reset();// 白色纹理
-        mBlackTexture.reset();// 黑色纹理
-        mMultiPixelTexture.reset();// 多像素纹理
-        mFileTexture.reset();// 文件纹理
         mDefaultSampler.reset();// 默认采样器
 
         XJ::XJMaterialFactory::GetInstance()->ClearCaches();
@@ -596,20 +647,18 @@ protected:
    
 private:
     // 渲染准备
+    // RenderTarget 内部引用 RenderPass 裸指针，因此 RenderPass 必须声明在前；
+    // C++ 逆序析构会保证 RenderTarget 先释放、RenderPass 后释放。
     std::shared_ptr<XJ::XJVulkanRenderPass>             mRenderPass;
     std::shared_ptr<XJ::XJRenderTarget>                 mRenderTarget;
     std::shared_ptr<XJ::XJRenderer>                     mRender;
     // 渲染资源
     std::vector<VkCommandBuffer>                        mCommandBuffers;
     std::shared_ptr<XJ::XJTexture>                      mWhiteTexture;// 白色纹理
-    std::shared_ptr<XJ::XJTexture>                      mBlackTexture;// 黑色纹理
-    std::shared_ptr<XJ::XJTexture>                      mMultiPixelTexture;// 多像素纹理
-    std::shared_ptr<XJ::XJTexture>                      mFileTexture;// 文件纹理
     std::shared_ptr<XJ::XJSampler>                      mDefaultSampler;// 默认采样器
 
-    // 事件
-    std::shared_ptr<XJ::XJEventTesting>                 mEventTesting;
-    std::shared_ptr<XJ::XJEventObserver>                mOvserver;
+    // UIState 必须声明在所有持有它引用的 UI 对象之前，保证逆序析构时 UI 先销毁。
+    XJ::XJEditorUIState                                 mEditorUIState;
     // UI
     std::unique_ptr<XJ::XJUIContext>                    mUIContext;
     std::unique_ptr<XJ::XJEditorRenderer>               mEditorRenderer;
@@ -633,11 +682,15 @@ private:
     XJ::XJAssetRegistry mAssetRegistry;
 
     XJ::XJEditorCameraManager mEditorCameraManager;
+
+    // Members are destroyed in reverse declaration order. Keep the observer
+    // after the camera manager so it unregisters before its callback target dies.
+    std::unique_ptr<XJ::XJEventObserver> mEventObserver;
+
     XJ::XJEditorExternalDropController mExternalDropController;
     XJ::XJEditorSceneAssetDropController mSceneAssetDropController;
 
     XJ::XJScene*                                        mRuntimeScene = nullptr;
-    XJ::XJEditorUIState                                 mEditorUIState;
     XJ::XJEditorAssetController                         mEditorAssetController;
     XJ::XJEditorSceneController                         mEditorSceneController;
 

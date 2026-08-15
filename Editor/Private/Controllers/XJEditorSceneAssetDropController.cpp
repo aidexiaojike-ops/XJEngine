@@ -55,16 +55,25 @@ namespace XJ
 
         std::shared_ptr<XJMesh> gpuMesh = XJMeshAssetLoader::LoadMesh(payload.Handle, loadContext);
 
-        if (gpuMesh)
+        if (!gpuMesh)
         {
-            auto& comp = entity->AddComponent<XJUnlitMaterialComponent>();
-            auto material = XJMaterialFactory::GetInstance()->GetOrCreateDefaultMaterial(
-                defaultTexture,
-                defaultSampler);
-
-            if (material)
-                comp.AddMesh(gpuMesh, material);
+            spdlog::error("Dropped mesh failed to load; entity creation was rolled back: handle=0x{:016X}", payload.Handle);
+            scene.DestroyEntity(entity);
+            return false;
         }
+
+        auto material = XJMaterialFactory::GetInstance()->GetOrCreateDefaultMaterial(
+            defaultTexture,
+            defaultSampler);
+        if (!material)
+        {
+            spdlog::error("Dropped mesh default material creation failed; entity creation was rolled back: handle=0x{:016X}", payload.Handle);
+            scene.DestroyEntity(entity);
+            return false;
+        }
+
+        auto& comp = entity->AddComponent<XJUnlitMaterialComponent>();
+        comp.AddMesh(gpuMesh, material);
 
         uiState.Selection.SelectedEntity = static_cast<XJEditorEntityId>(entity->XJGetUUID());
         uiState.Selection.SelectedAsset = 0;

@@ -103,6 +103,9 @@ namespace XJ
 
     struct XJEditorSceneRequestState//编辑器场景请求状态  这些请求由 UI 层设置，由控制器在合适的时机统一处理
     {
+        bool RequestUndo = false;//撤销最近一次场景修改
+        bool RequestRedo = false;//重做最近一次已撤销的场景修改
+
         bool RequestSaveScene = false;//// 是否请求保存当前场景
 
         std::vector<XJEditorEntityId> RequestDeleteEntities;//请求删除实体ID列表

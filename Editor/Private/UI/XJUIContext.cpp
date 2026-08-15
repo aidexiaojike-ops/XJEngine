@@ -1,6 +1,7 @@
 #include "UI/XJUIContext.h"
 #include "imgui.h"
 #include "imgui_impl_glfw.h"
+#include "imgui_impl_vulkan.h"
 
 namespace XJ
 {
@@ -39,6 +40,8 @@ namespace XJ
         if (!mInitialized)
             return;
 
+        // 即使当前 Vulkan 后端 NewFrame 为空操作，也保持官方调用顺序，避免后端升级后遗漏状态更新。
+        ImGui_ImplVulkan_NewFrame();
         ImGui_ImplGlfw_NewFrame();//告诉 ImGui GLFW 后端开始新的一帧
         ImGui::NewFrame();
     }

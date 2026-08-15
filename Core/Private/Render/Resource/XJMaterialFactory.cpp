@@ -456,6 +456,15 @@ namespace XJ
         return material;
     }
 
+    void XJMaterialFactory::InvalidateMaterialAsset(XJAssetHandle handle)
+    {
+        if (handle == 0)
+            return;
+
+        std::scoped_lock lock(mMutex);
+        mMaterialAssetCache.erase(handle);
+    }
+
     void XJMaterialFactory::ClearExpiredMaterials()
     {
         std::scoped_lock lock(mMutex);

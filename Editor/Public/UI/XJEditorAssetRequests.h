@@ -33,6 +33,11 @@ namespace XJ
         XJAssetHandle Handle = 0;
     };
 
+    struct XJEditorDeleteFolderRequest
+    {
+        std::filesystem::path FolderPath;
+    };
+
     struct XJEditorImportExternalFilesRequest
     {
         std::filesystem::path DestinationDirectory;
@@ -52,8 +57,13 @@ namespace XJ
         bool RequestDeleteAsset = false;
         XJEditorDeleteAssetRequest DeleteAsset;
 
+        bool RequestDeleteFolder = false;
+        XJEditorDeleteFolderRequest DeleteFolder;
+
         bool RequestImportExternalFiles = false;
         XJEditorImportExternalFilesRequest ImportExternalFiles;
+
+        std::string FolderOperationError;
     };
 }
 

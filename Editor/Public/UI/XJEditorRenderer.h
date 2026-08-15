@@ -10,23 +10,23 @@ namespace XJ
 
     struct XJEditorRendererInitInfo
     {
-        VkInstance       instance;
+        VkInstance       instance = VK_NULL_HANDLE;
         uint32_t         apiVersion = VK_API_VERSION_1_0;
-        VkPhysicalDevice physicalDevice;
-        VkDevice         device;
+        VkPhysicalDevice physicalDevice = VK_NULL_HANDLE;
+        VkDevice         device = VK_NULL_HANDLE;
 
-        VkRenderPass     renderPass;   // ✔ 核心
-        VkCommandPool    commandPool;
+        VkRenderPass     renderPass = VK_NULL_HANDLE;   // ✔ 核心
+        VkCommandPool    commandPool = VK_NULL_HANDLE;
 
-        uint32_t         queueFamily;
-        VkQueue          queue;
+        uint32_t         queueFamily = 0;
+        VkQueue          queue = VK_NULL_HANDLE;
 
-        uint32_t         imageCount;
+        uint32_t         imageCount = 0;
 
         VkSampleCountFlagBits msaaSamples = VK_SAMPLE_COUNT_1_BIT; // ✔ 可保留
         uint32_t         subpass = 0;                              // ✔ 可保留
 
-        VkFormat         colorFormat;
+        VkFormat         colorFormat = VK_FORMAT_UNDEFINED;
     };
 
     class XJEditorRenderer

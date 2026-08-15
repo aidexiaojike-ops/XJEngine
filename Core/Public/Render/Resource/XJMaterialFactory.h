@@ -39,6 +39,7 @@ namespace XJ
 
             void ClearExpiredMaterials();
             void ClearCaches();
+            void InvalidateMaterialAsset(XJAssetHandle handle);
 
             static XJMaterialFactory* GetInstance()
             {

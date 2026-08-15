@@ -128,8 +128,20 @@ namespace XJ
 
     void XJViewportRenderSurface::SetCamera(XJEntity* camera)
     {
-        if (mRenderTarget)
+        if (!mRenderTarget)
+            return;
+
+        if (camera)
+        {
+            // RenderTarget 只保存相机 UUID，不长期持有 XJEntity 裸指针。
             mRenderTarget->XJSetCamera(camera);
+        }
+        else
+        {
+            // 相机被删除或场景卸载时必须主动清空旧 UUID，
+            // 不能因为 camera == nullptr 就跳过设置。
+            mRenderTarget->XJClearCamera();
+        }
     }
 
     void XJViewportRenderSurface::CreateRenderPass(XJVulkanPhysicalDevices* physicalDevices)

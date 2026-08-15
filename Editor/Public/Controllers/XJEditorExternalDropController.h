@@ -12,6 +12,7 @@ namespace XJ
     {
         public:
             void OnExternalFilesDropped(XJEditorUIState& uiState, GLFWwindow* window, int count, const char** paths);
+            void DiscardUnconsumedDrop(XJEditorUIState& uiState);
     };
 }
 

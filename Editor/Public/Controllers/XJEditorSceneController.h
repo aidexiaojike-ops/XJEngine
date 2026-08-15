@@ -2,11 +2,13 @@
 #define XJ_EDITOR_SCENE_CONTROLLER_H
 
 #include "Asset/XJAsset.h"
+#include "Asset/XJMaterialAsset.h"
 #include "Asset/XJSceneAsset.h"
 #include "Asset/Instantiation/XJSceneInstantiator.h"
 #include "UI/XJEditorSelection.h"
 #include "UI/XJEditorComponentTypes.h"
 
+#include <deque>
 #include <filesystem>
 #include <functional>
 #include <memory>
@@ -70,6 +72,12 @@ namespace XJ
             //==========================================================
             void RefreshViewModels(XJEditorUIState& uiState);//更新编辑器视口
             void ProcessRequests(XJEditorUIState& uiState);//处理编辑器请求
+            bool CanUndo() const;
+            bool CanRedo() const;
+            bool Undo(XJEditorUIState& uiState);
+            bool Redo(XJEditorUIState& uiState);
+            void ClearHistory();
+            bool ExecuteExternalMutation(XJEditorUIState& uiState, const std::function<bool()>& action);
             //==========================================================
             // 访问器
             //==========================================================
@@ -86,6 +94,26 @@ namespace XJ
             void ClearRuntimeReferences();
         
         private:
+            struct MaterialHistorySnapshot
+            {
+                XJAssetHandle Handle = 0;
+                std::filesystem::path Path;
+                std::shared_ptr<XJMaterialAsset> Asset;
+            };
+
+            struct SceneHistorySnapshot
+            {
+                std::shared_ptr<XJSceneAsset> Scene;
+                XJEditorSelectionState Selection;
+                std::vector<MaterialHistorySnapshot> Materials;
+            };
+
+            SceneHistorySnapshot CaptureHistorySnapshot(
+                const XJEditorUIState& uiState,
+                const std::vector<XJAssetHandle>& materialHandles = {}) const;
+            bool RestoreHistorySnapshot(const SceneHistorySnapshot& snapshot, XJEditorUIState& uiState);
+            void PushUndoSnapshot(SceneHistorySnapshot snapshot);
+
             void ResetSceneRequestState(XJEditorUIState& uiState);// 重置场景请求状态
             void ResetSelectionForScene(XJEditorUIState& uiState, XJAssetHandle sceneHandle);// 重置与场景相关的选中状态
             bool InstantiateSceneAsset(std::shared_ptr<XJSceneAsset> sceneAsset, XJAssetHandle sceneHandle);// 将场景资产实例化为运行时的 XJScene
@@ -113,6 +141,11 @@ namespace XJ
 
             ShouldExposeEntityCallback mShouldExposeEntityCallback;
             XJAssetHandle mDefaultMeshHandle = 0;//默认mesh 的ECS id
+
+            static constexpr size_t kMaxHistoryEntries = 100;
+            std::deque<SceneHistorySnapshot> mUndoStack;
+            std::deque<SceneHistorySnapshot> mRedoStack;
+            bool mHistoryMutationOccurred = false;
 
     };
 }

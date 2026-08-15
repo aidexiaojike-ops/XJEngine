@@ -1,11 +1,16 @@
 #include "Controllers/XJEditorSceneController.h"
 
+#include "Asset/Importer/XJMaterialImporter.h"
 #include "Asset/Register/XJAssetBootstrap.h"
+#include "Asset/Serialization/XJMaterialAssetSerializer.h"
 #include "Asset/Serialization/XJSceneAssetSerializer.h"
+#include "Asset/XJAssetRegistry.h"
 #include "ECS/XJScene.h"
+#include "Render/Resource/XJMaterialFactory.h"
 #include "Services/XJEditorSceneService.h"
 #include "UI/XJEditorUIState.h"
 
+#include <algorithm>
 #include <spdlog/spdlog.h>
 #include <utility>
 
@@ -97,6 +102,7 @@ namespace XJ
         if(mAfterOpenSceneCallback)
             mAfterOpenSceneCallback(*mScene);
 
+        ClearHistory();
         RefreshViewModels(uiState);
         return true;
 
@@ -163,6 +169,7 @@ namespace XJ
         if (mAfterOpenSceneCallback)
             mAfterOpenSceneCallback(*mScene);
 
+        ClearHistory();
         RefreshViewModels(uiState);
         return true;  
     }
@@ -230,10 +237,236 @@ namespace XJ
         }
     }
 
+    XJEditorSceneController::SceneHistorySnapshot XJEditorSceneController::CaptureHistorySnapshot(
+        const XJEditorUIState& uiState,
+        const std::vector<XJAssetHandle>& materialHandles) const
+    {
+        SceneHistorySnapshot snapshot;
+        snapshot.Selection = uiState.Selection;
+
+        if (mScene)
+            snapshot.Scene = XJSceneAssetSerializer::BuildFromScene(*mScene);
+
+        if (!mAssetRegistry)
+            return snapshot;
+
+        for (XJAssetHandle handle : materialHandles)
+        {
+            if (handle == 0)
+                continue;
+
+            const auto duplicate = std::find_if(
+                snapshot.Materials.begin(),
+                snapshot.Materials.end(),
+                [handle](const MaterialHistorySnapshot& item)
+                {
+                    return item.Handle == handle;
+                });
+            if (duplicate != snapshot.Materials.end())
+                continue;
+
+            auto meta = mAssetRegistry->GetMeta(handle);
+            if (!meta || meta->Type != XJAssetType::Material)
+                continue;
+
+            auto material = XJMaterialImporter::ImportMaterial(meta->SourcePath.string());
+            if (!material)
+                continue;
+
+            material->mHandle = handle;
+            material->mName = meta->Name;
+            material->mPath = meta->SourcePath;
+            snapshot.Materials.push_back({handle, meta->SourcePath, std::move(material)});
+        }
+
+        return snapshot;
+    }
+
+    bool XJEditorSceneController::RestoreHistorySnapshot(
+        const SceneHistorySnapshot& snapshot,
+        XJEditorUIState& uiState)
+    {
+        if (!mScene || !snapshot.Scene)
+            return false;
+
+        // 材质参数存放在独立 .xjmat 文件中，必须先恢复文件，再重建场景运行时材质。
+        for (const auto& materialSnapshot : snapshot.Materials)
+        {
+            if (!materialSnapshot.Asset || materialSnapshot.Path.empty())
+                continue;
+
+            if (!XJMaterialAssetSerializer::SaveToFile(*materialSnapshot.Asset, materialSnapshot.Path))
+                return false;
+
+            XJMaterialFactory::GetInstance()->InvalidateMaterialAsset(materialSnapshot.Handle);
+            XJEditorSceneService::InvalidateMaterialInspectorCache(materialSnapshot.Handle);
+        }
+
+        const XJAssetHandle sceneHandle = mInstantiateContext.SourceScene.Handle;
+        if (!InstantiateSceneAsset(snapshot.Scene, sceneHandle))
+            return false;
+
+        uiState.Selection = snapshot.Selection;
+        uiState.SelectedEntityDetails = {};
+
+        // 预览相机不会写入场景快照，恢复后通过现有回调重新创建并绑定视口。
+        if (mAfterOpenSceneCallback)
+            mAfterOpenSceneCallback(*mScene);
+
+        MarkSceneDirty();
+        RefreshViewModels(uiState);
+        return true;
+    }
+
+    void XJEditorSceneController::PushUndoSnapshot(SceneHistorySnapshot snapshot)
+    {
+        if (!snapshot.Scene)
+            return;
+
+        mUndoStack.push_back(std::move(snapshot));
+        while (mUndoStack.size() > kMaxHistoryEntries)
+            mUndoStack.pop_front();
+
+        // 新修改会形成新的历史分支，之前的 Redo 链必须失效。
+        mRedoStack.clear();
+    }
+
+    bool XJEditorSceneController::CanUndo() const
+    {
+        return !mUndoStack.empty();
+    }
+
+    bool XJEditorSceneController::CanRedo() const
+    {
+        return !mRedoStack.empty();
+    }
+
+    bool XJEditorSceneController::Undo(XJEditorUIState& uiState)
+    {
+        if (!CanUndo())
+            return false;
+
+        const SceneHistorySnapshot& target = mUndoStack.back();
+        std::vector<XJAssetHandle> materialHandles;
+        materialHandles.reserve(target.Materials.size());
+        for (const auto& item : target.Materials)
+            materialHandles.push_back(item.Handle);
+
+        SceneHistorySnapshot current = CaptureHistorySnapshot(uiState, materialHandles);
+        SceneHistorySnapshot snapshot = std::move(mUndoStack.back());
+        mUndoStack.pop_back();
+
+        if (!RestoreHistorySnapshot(snapshot, uiState))
+        {
+            mUndoStack.push_back(std::move(snapshot));
+            return false;
+        }
+
+        mRedoStack.push_back(std::move(current));
+        while (mRedoStack.size() > kMaxHistoryEntries)
+            mRedoStack.pop_front();
+        return true;
+    }
+
+    bool XJEditorSceneController::Redo(XJEditorUIState& uiState)
+    {
+        if (!CanRedo())
+            return false;
+
+        const SceneHistorySnapshot& target = mRedoStack.back();
+        std::vector<XJAssetHandle> materialHandles;
+        materialHandles.reserve(target.Materials.size());
+        for (const auto& item : target.Materials)
+            materialHandles.push_back(item.Handle);
+
+        SceneHistorySnapshot current = CaptureHistorySnapshot(uiState, materialHandles);
+        SceneHistorySnapshot snapshot = std::move(mRedoStack.back());
+        mRedoStack.pop_back();
+
+        if (!RestoreHistorySnapshot(snapshot, uiState))
+        {
+            mRedoStack.push_back(std::move(snapshot));
+            return false;
+        }
+
+        mUndoStack.push_back(std::move(current));
+        while (mUndoStack.size() > kMaxHistoryEntries)
+            mUndoStack.pop_front();
+        return true;
+    }
+
+    void XJEditorSceneController::ClearHistory()
+    {
+        mUndoStack.clear();
+        mRedoStack.clear();
+    }
+
+    bool XJEditorSceneController::ExecuteExternalMutation(
+        XJEditorUIState& uiState,
+        const std::function<bool()>& action)
+    {
+        if (!mScene || !action)
+            return false;
+
+        // 视口拖放等操作不经过 SceneRequests，也必须先保存修改前快照。
+        SceneHistorySnapshot before = CaptureHistorySnapshot(uiState);
+        if (!before.Scene || !action())
+            return false;
+
+        PushUndoSnapshot(std::move(before));
+        NotifyAfterMutation();
+        return true;
+    }
+
     void XJEditorSceneController::ProcessRequests(XJEditorUIState& uiState)
     {
         if(!mScene)
             return;
+
+        // Undo/Redo 会整体重建场景，必须优先处理，并丢弃本帧基于旧快照产生的其他请求。
+        if (uiState.SceneRequests.RequestUndo)
+        {
+            uiState.SceneRequests.RequestUndo = false;
+            Undo(uiState);
+            ResetSceneRequestState(uiState);
+            return;
+        }
+
+        if (uiState.SceneRequests.RequestRedo)
+        {
+            uiState.SceneRequests.RequestRedo = false;
+            Redo(uiState);
+            ResetSceneRequestState(uiState);
+            return;
+        }
+
+        const bool hasMutationRequest =
+            uiState.SceneRequests.RequestCreateEmptyEntity ||
+            uiState.SceneRequests.RequestAddComponent ||
+            uiState.SceneRequests.RequestDeleteComponent ||
+            uiState.SceneRequests.RequestSetMeshRendererMesh ||
+            uiState.SceneRequests.RequestSetMeshRendererMaterial ||
+            uiState.SceneRequests.RequestResetMeshRendererMaterial ||
+            uiState.SceneRequests.RequestSetMaterialParameter ||
+            uiState.SceneRequests.RequestResetMaterialParameter ||
+            uiState.SceneRequests.RequestRenameEntity ||
+            uiState.SceneRequests.RequestUpdateTransform ||
+            uiState.SceneRequests.RequestUpdateCamera ||
+            !uiState.SceneRequests.RequestDeleteEntities.empty();
+
+        std::vector<XJAssetHandle> changedMaterialHandles;
+        if (uiState.SceneRequests.RequestSetMaterialParameter)
+            changedMaterialHandles.push_back(uiState.SceneRequests.SetMaterialParameter.MaterialAsset);
+        if (uiState.SceneRequests.RequestResetMaterialParameter)
+            changedMaterialHandles.push_back(uiState.SceneRequests.ResetMaterialParameter.MaterialAsset);
+
+        // 同一帧的多个请求作为一个事务撤销。空闲帧不构建快照，避免 Undo 功能
+        // 重新引入每帧序列化整个场景的性能问题。
+        SceneHistorySnapshot before;
+        if (hasMutationRequest)
+            before = CaptureHistorySnapshot(uiState, changedMaterialHandles);
+        mHistoryMutationOccurred = false;
+
         //数据更新
         if (uiState.SceneRequests.RequestFindEntitiesUsingAsset != 0)
         {
@@ -298,7 +531,6 @@ namespace XJ
                 uiState.SelectedEntityDetails = {};
             
                 NotifyAfterMutation();
-                RefreshViewModels(uiState);
             }
         }
 
@@ -318,7 +550,6 @@ namespace XJ
                 uiState.SelectedEntityDetails = {};
 
                 NotifyAfterMutation();
-                RefreshViewModels(uiState);
             }
         }
 
@@ -338,7 +569,6 @@ namespace XJ
                 uiState.SelectedEntityDetails = {};
             
                 NotifyAfterMutation();
-                RefreshViewModels(uiState);
             }
         }
         if (uiState.SceneRequests.RequestSetMeshRendererMaterial)//设置材质
@@ -358,7 +588,6 @@ namespace XJ
                 uiState.SelectedEntityDetails = {};
 
                 NotifyAfterMutation();
-                RefreshViewModels(uiState);
             }
 
         }
@@ -379,7 +608,6 @@ namespace XJ
                 uiState.SelectedEntityDetails = {};
             
                 NotifyAfterMutation();
-                RefreshViewModels(uiState);
             }
         }
 
@@ -409,7 +637,6 @@ namespace XJ
                 uiState.SelectedEntityDetails = {};
             
                 NotifyAfterMutation();
-                RefreshViewModels(uiState);
             }
         }
 
@@ -438,7 +665,6 @@ namespace XJ
                 uiState.SelectedEntityDetails = {};
 
                 NotifyAfterMutation();
-                RefreshViewModels(uiState);
             }
         }
 
@@ -511,6 +737,9 @@ namespace XJ
             uiState.SceneRequests.RequestSaveScene = false;
             SaveCurrentScene();
         }
+
+        if (mHistoryMutationOccurred && before.Scene)
+            PushUndoSnapshot(std::move(before));
     }
 
     XJSceneInstantiateContext& XJEditorSceneController::GetInstantiateContext()
@@ -539,6 +768,8 @@ namespace XJ
     }
     void XJEditorSceneController::ResetSceneRequestState(XJEditorUIState& uiState)
     {
+        uiState.SceneRequests.RequestUndo = false;
+        uiState.SceneRequests.RequestRedo = false;
         uiState.SceneRequests.RequestDeleteEntities.clear();
         uiState.SceneRequests.RequestFindEntitiesUsingAsset = 0;
         uiState.SceneRequests.RequestSaveScene = false;
@@ -602,6 +833,8 @@ namespace XJ
 
     void XJEditorSceneController::NotifyAfterMutation()
     {
+        // ProcessRequests 在帧末根据这个标记提交一次历史快照。
+        mHistoryMutationOccurred = true;
         MarkSceneDirty();
 
         // Keep editing responsive: inspector drags/text input may generate many
@@ -613,6 +846,7 @@ namespace XJ
 
     void XJEditorSceneController::ClearRuntimeReferences()
     {
+        ClearHistory();
         mScene = nullptr;
         mDefaultTexture.reset();
         mDefaultSampler.reset();

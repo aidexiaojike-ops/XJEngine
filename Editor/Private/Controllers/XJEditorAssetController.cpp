@@ -77,6 +77,32 @@ namespace XJ
             }
         }
         // ---------- 删除资产 ----------
+
+        if (uiState.AssetRequests.RequestDeleteFolder)
+        {
+            auto request = std::move(uiState.AssetRequests.DeleteFolder);
+            uiState.AssetRequests.RequestDeleteFolder = false;
+            uiState.AssetRequests.DeleteFolder = {};
+            uiState.AssetRequests.FolderOperationError.clear();
+
+            std::string error;
+            const bool deleted = XJEditorAssetService::DeleteEmptyFolder(
+                *mAssetRegistry,
+                request.FolderPath,
+                mRootPath,
+                mRegistryPath,
+                error);
+
+            if (!deleted)
+            {
+                uiState.AssetRequests.FolderOperationError = std::move(error);
+            }
+            else if (uiState.Selection.SelectedAsset != 0 &&
+                     !mAssetRegistry->Contains(uiState.Selection.SelectedAsset))
+            {
+                uiState.Selection.SelectedAsset = 0;
+            }
+        }
         
         if (uiState.AssetRequests.RequestDeleteAsset)
         {

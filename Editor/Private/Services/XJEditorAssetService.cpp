@@ -121,6 +121,40 @@ namespace XJ
             return value.find_first_of("<>:\"/\\|?*") != std::string::npos;
         }
 
+        std::string NormalizePathForComparison(const std::filesystem::path& path)
+        {
+            std::error_code ec;
+            std::filesystem::path absolutePath = std::filesystem::absolute(path, ec);
+            if (ec)
+                absolutePath = path;
+
+            std::string value = absolutePath.lexically_normal().generic_string();
+
+#ifdef _WIN32
+            // Windows 路径比较不区分大小写，避免 registry 与磁盘大小写不同导致漏清理。
+            std::transform(value.begin(), value.end(), value.begin(), [](unsigned char ch)
+            {
+                return static_cast<char>(std::tolower(ch));
+            });
+#endif
+
+            while (value.size() > 1 && value.back() == '/')
+                value.pop_back();
+
+            return value;
+        }
+
+        bool IsPathInsideDirectory(const std::filesystem::path& candidate, const std::filesystem::path& directory)
+        {
+            const std::string candidatePath = NormalizePathForComparison(candidate);
+            const std::string directoryPath = NormalizePathForComparison(directory);
+            if (candidatePath.empty() || directoryPath.empty())
+                return false;
+
+            // 加上分隔符，防止 Resource/Foo2 被误判为 Resource/Foo 的子路径。
+            return candidatePath.starts_with(directoryPath + "/");
+        }
+
         std::filesystem::path BuildUniqueAssetPath(const XJAssetRegistry& assetRegistry, const std::filesystem::path& directory, const std::string& baseName, const std::string& extension)
         {
             std::filesystem::path targetDirectory = directory.empty() ? std::filesystem::path("Resource") : directory;
@@ -398,6 +432,94 @@ namespace XJ
             return false;
 
         return assetRegistry.Save(registryPath);
+    }
+
+    bool XJEditorAssetService::DeleteEmptyFolder(
+        XJAssetRegistry& assetRegistry,
+        const std::filesystem::path& folderPath,
+        const std::filesystem::path& rootPath,
+        const std::filesystem::path& registryPath,
+        std::string& outError)
+    {
+        outError.clear();
+
+        const std::string normalizedFolder = NormalizePathForComparison(folderPath);
+        const std::string normalizedRoot = NormalizePathForComparison(rootPath);
+        if (normalizedFolder.empty() || normalizedRoot.empty())
+        {
+            outError = "Invalid folder path.";
+            return false;
+        }
+
+        if (normalizedFolder == normalizedRoot)
+        {
+            outError = "The asset root folder cannot be deleted.";
+            return false;
+        }
+
+        if (!IsPathInsideDirectory(folderPath, rootPath))
+        {
+            outError = "The folder is outside the asset root.";
+            return false;
+        }
+
+        std::error_code ec;
+        const bool exists = std::filesystem::exists(folderPath, ec);
+        if (ec || !exists)
+        {
+            outError = ec ? "Failed to inspect folder: " + ec.message() : "The folder no longer exists.";
+            return false;
+        }
+
+        if (!std::filesystem::is_directory(folderPath, ec) || ec)
+        {
+            outError = ec ? "Failed to inspect folder: " + ec.message() : "The selected path is not a directory.";
+            return false;
+        }
+
+        if (!std::filesystem::is_empty(folderPath, ec) || ec)
+        {
+            outError = ec ? "Failed to inspect folder contents: " + ec.message() : "The folder is not empty.";
+            return false;
+        }
+
+        // 空目录仍可能有陈旧 registry 条目，例如文件被资源管理器直接删除。
+        std::vector<XJAssetMeta> staleMetas;
+        for (const auto& [handle, meta] : assetRegistry.XJGetAllMetas())
+        {
+            if (IsPathInsideDirectory(meta.SourcePath, folderPath))
+                staleMetas.push_back(meta);
+        }
+
+        const bool removed = std::filesystem::remove(folderPath, ec);
+        if (ec || !removed)
+        {
+            outError = ec ? "Failed to delete folder: " + ec.message() : "The folder could not be deleted.";
+            return false;
+        }
+
+        for (const XJAssetMeta& meta : staleMetas)
+            assetRegistry.RemoveAsset(meta.Handle);
+
+        if (assetRegistry.Save(registryPath))
+            return true;
+
+        // registry 落盘失败时恢复内存条目与空目录，尽量保持三方状态一致。
+        for (const XJAssetMeta& meta : staleMetas)
+            assetRegistry.RegisterAsset(meta);
+
+        ec.clear();
+        std::filesystem::create_directory(folderPath, ec);
+        if (ec)
+        {
+            spdlog::critical(
+                "Delete folder rollback failed for '{}': {}",
+                folderPath.string(),
+                ec.message());
+        }
+
+        outError = "Failed to save the asset registry. The deletion was rolled back.";
+        return false;
     }
 
     bool XJEditorAssetService::ImportExternalFile(XJAssetRegistry& assetRegistry, const std::filesystem::path& sourcePath, const std::filesystem::path& destinationDirectory)

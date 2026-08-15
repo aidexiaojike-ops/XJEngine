@@ -1,6 +1,7 @@
 #include "UI/XJEditorRenderer.h"
 #include "imgui.h"
 #include "imgui_impl_vulkan.h"
+#include <spdlog/spdlog.h>
 
 
 namespace XJ
@@ -14,7 +15,18 @@ namespace XJ
     {
         Shutdown();
 
-         mDevice = info.device; 
+        if (info.instance == VK_NULL_HANDLE ||
+            info.physicalDevice == VK_NULL_HANDLE ||
+            info.device == VK_NULL_HANDLE ||
+            info.renderPass == VK_NULL_HANDLE ||
+            info.queue == VK_NULL_HANDLE ||
+            info.imageCount == 0)
+        {
+            spdlog::error("Editor renderer initialization failed: invalid Vulkan initialization info.");
+            return false;
+        }
+
+        mDevice = info.device;
 
         //创建描述符池
         VkDescriptorPoolSize kPoolSizes[] = {
@@ -37,8 +49,10 @@ namespace XJ
         kPoolCI.maxSets = 1000;
         kPoolCI.poolSizeCount = std::size(kPoolSizes);
         kPoolCI.pPoolSizes = kPoolSizes;
-        if (vkCreateDescriptorPool(info.device, &kPoolCI, nullptr, &mDescriptorPool) != VK_SUCCESS)
+        const VkResult poolResult = vkCreateDescriptorPool(info.device, &kPoolCI, nullptr, &mDescriptorPool);
+        if (poolResult != VK_SUCCESS)
         {
+            spdlog::error("Editor descriptor pool creation failed: VkResult={}", static_cast<int>(poolResult));
             mDevice = VK_NULL_HANDLE;
             return false;
         }
@@ -68,7 +82,14 @@ namespace XJ
         kInitInfo.Allocator = nullptr;
         kInitInfo.CheckVkResultFn = nullptr;
 
-        ImGui_ImplVulkan_Init(&kInitInfo);
+        if (!ImGui_ImplVulkan_Init(&kInitInfo))
+        {
+            spdlog::error("ImGui Vulkan backend initialization failed.");
+            vkDestroyDescriptorPool(mDevice, mDescriptorPool, nullptr);
+            mDescriptorPool = VK_NULL_HANDLE;
+            mDevice = VK_NULL_HANDLE;
+            return false;
+        }
         mInitialized = true;
 
 

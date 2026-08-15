@@ -34,12 +34,16 @@ namespace XJ
 
     bool XJScenePreview::Render(VkCommandBuffer cmd)
     {
+         // SetCamera(nullptr) 会明确清空 RenderTarget 中保存的旧相机 UUID。
         mSurface.SetCamera(mPreviewCamera);
 
         if (!mSurface.BeginRender(cmd))
             return false;
 
-        mSurface.RenderMaterialSystem(cmd);
+        // 没有有效相机时仍然开始并结束 render pass，以清除上一帧图像，
+        // 但不执行依赖相机矩阵的材质渲染系统。
+        if (mPreviewCamera)
+            mSurface.RenderMaterialSystem(cmd);
         mSurface.EndRender(cmd);
         return true;
     }

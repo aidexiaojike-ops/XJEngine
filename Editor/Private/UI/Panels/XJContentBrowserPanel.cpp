@@ -6,13 +6,16 @@
 #include "Asset/XJAsset.h"
 #include <imgui.h>
 #include <algorithm>
+#include <cstdint>
 #include <cstring>
 #include <vector>
 #include <string>
+#include <spdlog/spdlog.h>
 
 
 #ifdef _WIN32
 #include <windows.h>
+#include <shellapi.h>
 #endif
 
 namespace XJ
@@ -21,8 +24,15 @@ namespace XJ
     static void OpenFolderInExplorer(const std::filesystem::path& folderPath)
     {
         #ifdef _WIN32
-            std::filesystem::path absPath = std::filesystem::absolute(folderPath);
-            ShellExecuteW(
+            std::error_code ec;
+            const std::filesystem::path absPath = std::filesystem::absolute(folderPath, ec);
+            if (ec)
+            {
+                spdlog::error("Failed to resolve folder path '{}': {}", folderPath.string(), ec.message());
+                return;
+            }
+
+            const HINSTANCE result = ShellExecuteW(
                 nullptr,
                 L"open",
                 absPath.wstring().c_str(),
@@ -30,6 +40,9 @@ namespace XJ
                 nullptr,
                 SW_SHOWNORMAL
             );
+
+            if (reinterpret_cast<intptr_t>(result) <= 32)
+                spdlog::error("Failed to open folder in Explorer: {}", absPath.string());
         #endif
     }
 
@@ -77,6 +90,20 @@ namespace XJ
         //DrawAssetTable();
         DrawCreateFolderPopup();
         HandleExternalFileDrop(windowMin, windowMax);
+
+        if (!mState.AssetRequests.FolderOperationError.empty())
+            ImGui::OpenPopup("Folder Operation Error");
+
+        if (ImGui::BeginPopupModal("Folder Operation Error", nullptr, ImGuiWindowFlags_AlwaysAutoResize))
+        {
+            ImGui::TextWrapped("%s", mState.AssetRequests.FolderOperationError.c_str());
+            if (ImGui::Button("OK"))
+            {
+                mState.AssetRequests.FolderOperationError.clear();
+                ImGui::CloseCurrentPopup();
+            }
+            ImGui::EndPopup();
+        }
 
         ImGui::End();
         
@@ -178,7 +205,8 @@ namespace XJ
 
                 if (isRenaming)
                 {
-                    ImGui::PushID(static_cast<int>(handle));
+                    const std::string renameId = std::to_string(handle);
+                    ImGui::PushID(renameId.c_str());//保留完整 64 位 handle，避免截断后 ID 冲突
 
                     if (mFocusRenameAssetInput)
                     {
@@ -459,6 +487,19 @@ namespace XJ
     {
         if(!mConfig)
             return;
+
+        if (!mConfig->currentPath.empty())
+        {
+            std::error_code ec;
+            if (!std::filesystem::exists(mConfig->currentPath, ec))
+            {
+                // 当前目录被删除后返回资源根目录，避免继续遍历不存在的路径。
+                mConfig->currentPath = std::filesystem::path(mConfig->rootPath)
+                    .lexically_normal()
+                    .generic_string();
+            }
+        }
+
         //打开对应的文件夹
         if (mState.RequestSelectAssetInContentBrowser && mState.AssetRegistry && mConfig)
         {
@@ -481,7 +522,7 @@ namespace XJ
             }
         }
     
-        ImGui::Text("Path Path: %s", mConfig->currentPath.c_str());
+        ImGui::Text("Path: %s", mConfig->currentPath.c_str());
         ImGui::Separator();//分割线
         DrawToolbar();
         DrawAssetTable();
@@ -549,42 +590,21 @@ namespace XJ
 
     void XJContentBrowserPanel::TryDeleteFolder(const std::filesystem::path& path)
     {
-        if(!mConfig)
+        if(!mConfig || !mState.AssetRegistry)
             return;
 
-        std::filesystem::path rootPath = mConfig->rootPath;
+        const std::filesystem::path rootPath = std::filesystem::path(mConfig->rootPath).lexically_normal();
+        const std::filesystem::path folderPath = path.lexically_normal();
 
-        if(path == rootPath)
-            return;
-
-        if(!std::filesystem::exists(path))
-            return;
-        
-        if(!std::filesystem::is_directory(path))
-            return;
-
-        if(!std::filesystem::is_empty(path))
+        if(folderPath == rootPath)
         {
-            ImGui::OpenPopup("Error");
-            if(ImGui::BeginPopupModal("Error", nullptr, ImGuiWindowFlags_AlwaysAutoResize))
-            {
-                ImGui::Text("Folder is not empty!");
-                if(ImGui::Button("OK"))
-                    ImGui::CloseCurrentPopup();
-                ImGui::EndPopup();
-            }
+            mState.AssetRequests.FolderOperationError = "The asset root folder cannot be deleted.";
             return;
         }
 
-        std::filesystem::remove(path);
-         auto current = std::filesystem::path(mConfig->currentPath).generic_string();
-        auto deleted = path.generic_string();
-
-        if (current == deleted)
-        {
-            mConfig->currentPath = rootPath.generic_string();//如果当前浏览路径被删除了，重置为根路径
-        }
-        
+        // UI 只发请求；Controller 会在目录树遍历结束后执行事务式删除和 registry 保存。
+        mState.AssetRequests.RequestDeleteFolder = true;
+        mState.AssetRequests.DeleteFolder.FolderPath = folderPath;
     }
     void XJContentBrowserPanel::HandleExternalFileDrop(const ImVec2& windowMin, const ImVec2& windowMax)
     {
@@ -599,27 +619,25 @@ namespace XJ
             dropPos.y >= windowMin.y &&
             dropPos.y <= windowMax.y;
 
-        //if (!insideContentBrowser)
-        //{
-        //    mState.PendingExternalDroppedFiles.clear();
-        //    mState.HasPendingExternalDrop = false;
-        //    return;
-        //}
         if (!insideContentBrowser)
         {
+            // Leave this event available to other drop targets. The global
+            // frame-end cleanup discards it if no target consumes it.
             return;
         }
 
+        // Consume the event exactly once and transfer ownership to the import request.
         auto droppedFiles = std::move(mState.PendingExternalDroppedFiles);
         mState.PendingExternalDroppedFiles.clear();
+        mState.PendingExternalDropMousePos = glm::vec2(0.0f);
         mState.HasPendingExternalDrop = false;
 
-        if (!droppedFiles.empty())
-        {
-            mState.AssetRequests.RequestImportExternalFiles = true;
-            mState.AssetRequests.ImportExternalFiles.DestinationDirectory = GetCurrentAssetDirectory();
-            mState.AssetRequests.ImportExternalFiles.SourcePaths = std::move(droppedFiles);
-        }
+        if (droppedFiles.empty())
+            return;
+
+        mState.AssetRequests.RequestImportExternalFiles = true;
+        mState.AssetRequests.ImportExternalFiles.DestinationDirectory = GetCurrentAssetDirectory();
+        mState.AssetRequests.ImportExternalFiles.SourcePaths = std::move(droppedFiles);
     }
 
     std::filesystem::path XJContentBrowserPanel::GetCurrentAssetDirectory() const

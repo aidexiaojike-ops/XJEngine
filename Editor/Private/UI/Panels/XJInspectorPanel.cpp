@@ -960,17 +960,20 @@ namespace XJ
         ImGui::Spacing();
 
         if (ImGui::Button("Select Mesh", ImVec2(-1.0f, 0.0f)))
+        {
+            // 每次打开选择器都从空搜索开始，避免跨实体或跨场景残留。
+            std::memset(mMeshSearchBuffer, 0, sizeof(mMeshSearchBuffer));
             ImGui::OpenPopup("SelectMeshPopup");
+        }
 
         if (ImGui::BeginPopup("SelectMeshPopup"))
         {
-            static char searchBuffer[128] = {};
             ImGui::SetNextItemWidth(260.0f);
-            ImGui::InputText("Search", searchBuffer, sizeof(searchBuffer));
+            ImGui::InputText("Search", mMeshSearchBuffer, sizeof(mMeshSearchBuffer));
 
             ImGui::Separator();
 
-            const std::string search = searchBuffer;
+            const std::string search = mMeshSearchBuffer;
 
             bool found = false;
 
@@ -1041,23 +1044,20 @@ namespace XJ
         std::string popupId = "SelectMaterialPopup##" + std::to_string(slot.SlotIndex);
 
         if (ImGui::Button("Select Material", ImVec2(-1.0f, 0.0f)))
+        {
+            // 不按 slot 建静态 map，避免多场景/多 Inspector 共享和无限增长。
+            std::memset(mMaterialSearchBuffer, 0, sizeof(mMaterialSearchBuffer));
             ImGui::OpenPopup(popupId.c_str());
+        }
         
         if(ImGui::BeginPopup(popupId.c_str()))
         {
-            static std::unordered_map<uint32_t, std::string> searchBySlot;
-            std::string& searchText = searchBySlot[slot.SlotIndex];
-
-            char searchBuffer[128] = {};
-            std::strncpy(searchBuffer, searchText.c_str(), sizeof(searchBuffer) - 1);
-
             ImGui::SetNextItemWidth(260.0f);
-            if (ImGui::InputText("Search", searchBuffer, sizeof(searchBuffer)))
-                searchText = searchBuffer;
+            ImGui::InputText("Search", mMaterialSearchBuffer, sizeof(mMaterialSearchBuffer));
 
             ImGui::Separator();
 
-            const std::string search = searchText;
+            const std::string search = mMaterialSearchBuffer;
 
             bool found = false;
             const auto metas = mState.AssetRegistry->XJGetAllMetas();

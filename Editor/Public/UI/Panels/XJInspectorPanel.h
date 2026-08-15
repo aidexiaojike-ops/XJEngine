@@ -59,6 +59,8 @@ namespace XJ
 
             XJEditorUIState& mState;
             XJEditorPanelConfig_Inspector* mConfig = nullptr;
+            char mMeshSearchBuffer[128] = {};
+            char mMaterialSearchBuffer[128] = {};
     };
 }
 #endif

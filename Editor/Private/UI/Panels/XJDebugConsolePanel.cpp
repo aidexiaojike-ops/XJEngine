@@ -91,7 +91,7 @@ namespace XJ
             }
             
             //color by level 根据日志级别设置不同的文本颜色，增强日志的可读性和区分度
-            ImVec4 color;
+            ImVec4 color = ImVec4(1.0f, 1.0f, 1.0f, 1.0f);
             switch(entry.Level)
             {
                 case XJEditorLogLevel::Trace:    color = ImVec4(0.5f, 0.5f, 0.5f, 1.0f); break;
@@ -99,6 +99,7 @@ namespace XJ
                 case XJEditorLogLevel::Warning:  color = ImVec4(1.0f, 1.0f, 0.5f, 1.0f); break;
                 case XJEditorLogLevel::Error:    color = ImVec4(1.0f, 0.5f, 0.5f, 1.0f); break;
                 case XJEditorLogLevel::Critical: color = ImVec4(1.0f, 0.5f, 0.0f, 1.0f); break;
+                default: break;
             }
 
             ImGui::PushStyleColor(ImGuiCol_Text, color);//设置文本颜色
