@@ -181,9 +181,10 @@ Swapchain
 #### **Editor UI System**
 - **Lifecycle Hooks**: `OnUIBegin`/`OnUIEnd`/`OnUIRender`/`OnUIDestroy` virtual methods in XJApplication base class
 - **MVVM Architecture**: Controllers (camera, scene, drop, asset), Services, ViewModels decouple UI from ECS
-- **XJEditorSceneController**: Scene load/save/open, dirty tracking, entity mutation requests
+- **XJEditorSceneController**: Scene load/save/open, dirty tracking, entity mutation requests, and snapshot-based Undo/Redo history (scene + material assets, up to 100 entries)
 - **XJEditorAssetController**: Asset create/rename/delete/import lifecycle management
 - **XJEditorAssetRequests**: MVVM request structs (CreateAsset, RenameAsset, DeleteAsset, ImportExternalFiles)
+- **Console Logging**: `XJEditorLog` bridges spdlog into the editor Console panel via a custom spdlog sink (async-safe payload copying, level mapping, thread-safe queue)
 - **XJEditorSceneAssetDropController**: Content Browser asset drag to Scene Preview with ray-cast entity placement
 - **XJEditorExternalDropController**: OS file drag-drop into editor window (e.g., drag .glb from Explorer)
 - **XJEditorCameraManager**: Viewport camera binding and editor camera lifecycle (entity-ID based, resolving through the scene to avoid dangling pointers)
