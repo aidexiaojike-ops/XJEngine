@@ -11,8 +11,13 @@ namespace XJ
 
     XJAppContext XJApplication::sAppContext{};//全局应用程序上下文
 
+
+    XJApplication::XJApplication() = default;
+    XJApplication::~XJApplication() = default;
+
     void XJApplication::Start(int argc, char** argv)
     {
+        mStopped = false;
         ConfigureWorkingDirectory();
 
         // 在这里可以添加应用程序启动时的初始化代码
@@ -40,12 +45,34 @@ namespace XJ
 
     void XJApplication::Stop()
     {
+        if (mStopped)
+            return;
+
+        mStopped = true;
+
         // 在这里可以添加应用程序停止时的清理代码
         spdlog::info("应用程序停止");
-        // 先停 UI/场景/用户资源；此时 renderContext 仍有效，纹理/采样器析构还能安全访问设备。
-        OnUIDestroy();
-        UnLoadScene();
-        OnDestroy();
+
+        auto runShutdownStage = [](const char* name, auto&& stage)
+        {
+            try
+            {
+                stage();
+            }
+            catch (const std::exception& e)
+            {
+                spdlog::error("{} failed during shutdown: {}", name, e.what());
+            }
+            catch (...)
+            {
+                spdlog::error("{} failed during shutdown with an unknown exception.", name);
+            }
+        };
+
+        // 每个阶段独立执行，单个失败不能阻断 Vulkan/window 的最终清理。
+        runShutdownStage("OnUIDestroy", [this]() { OnUIDestroy(); });
+        runShutdownStage("UnLoadScene", [this]() { UnLoadScene(); });
+        runShutdownStage("OnDestroy", [this]() { OnDestroy(); });
 
         // 用户资源释放后，再销毁渲染上下文和窗口。
         mRenderContext.reset();

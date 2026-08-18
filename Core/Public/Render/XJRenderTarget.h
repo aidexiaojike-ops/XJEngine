@@ -51,6 +51,7 @@ namespace XJ
             ~XJRenderTarget();
            
             void UpdateIfNeeded();
+            void RequestRecreate() { bShouldUpdate = true; }
 
             bool BeginRenderTarget(VkCommandBuffer commandBuffer);//开始渲染目标
             void EndRenderTarget(VkCommandBuffer commandBuffer);//结束渲染目标

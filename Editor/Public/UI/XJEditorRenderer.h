@@ -42,6 +42,7 @@ namespace XJ
 
             bool Init(const XJEditorRendererInitInfo& info);
             void RenderDrawData(VkCommandBuffer cmd, ImDrawData* drawData);
+            void UpdateSwapchainImageCount(uint32_t imageCount);
             void Shutdown();
     };
     

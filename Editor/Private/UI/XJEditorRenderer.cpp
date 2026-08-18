@@ -20,7 +20,7 @@ namespace XJ
             info.device == VK_NULL_HANDLE ||
             info.renderPass == VK_NULL_HANDLE ||
             info.queue == VK_NULL_HANDLE ||
-            info.imageCount == 0)
+            info.imageCount < 2)
         {
             spdlog::error("Editor renderer initialization failed: invalid Vulkan initialization info.");
             return false;
@@ -66,7 +66,7 @@ namespace XJ
         kInitInfo.QueueFamily = info.queueFamily;
         kInitInfo.Queue = info.queue;
         kInitInfo.DescriptorPool = mDescriptorPool;
-        kInitInfo.MinImageCount = info.imageCount;
+        kInitInfo.MinImageCount = 2;
         kInitInfo.ImageCount = info.imageCount;
         kInitInfo.PipelineInfoMain = {};
         //// 🔥 核心：新版写法
@@ -131,6 +131,14 @@ namespace XJ
     void XJEditorRenderer::RenderDrawData(VkCommandBuffer cmd, ImDrawData* drawData)
     {
         if(mInitialized && drawData) ImGui_ImplVulkan_RenderDrawData(drawData, cmd);
+    }
+
+    void XJEditorRenderer::UpdateSwapchainImageCount(uint32_t imageCount)
+    {
+        if (!mInitialized || imageCount < 2)
+            return;
+
+        ImGui_ImplVulkan_SetImageCount(imageCount);
     }
     void XJEditorRenderer::Shutdown()
     {

@@ -32,8 +32,9 @@ int main(int argc, char* argv[])
             return EXIT_FAILURE;
         }
 
-        app->Start(argc, argv);
+        // Start 可能在部分初始化后抛异常，此时 catch 仍需调用 Stop 回滚。
         started = true;
+        app->Start(argc, argv);
         //main loop
         app->MainLoop();
 

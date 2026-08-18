@@ -140,13 +140,11 @@ namespace XJ
         {
             XJDebug_Log(vkDeviceWaitIdle(kDevice->XJGetDevice()));//device wait idle 等待设备空闲
 
-            VkExtent2D oldExtent  = {kSwapchain->XJGetWidth(), kSwapchain->XJGetHeight()};
              //重建交换链
             bool recreated  = kSwapchain->ReCreate();
-            VkExtent2D newExtent  = {kSwapchain->XJGetWidth(), kSwapchain->XJGetHeight()};
 
-            result.resizeNeeded = recreated &&
-                (oldExtent.width != newExtent.width || oldExtent.height != newExtent.height);
+            // 即使 extent 不变，新 swapchain 也拥有全新的 VkImage。
+            result.resizeNeeded = recreated;
             
             if (!recreated)
             {
@@ -243,12 +241,9 @@ namespace XJ
         {
             XJDebug_Log(vkDeviceWaitIdle(kDevice->XJGetDevice()));//device wait idle 等待设备空闲
 
-            VkExtent2D oldExtent  = { kSwapchain->XJGetWidth(), kSwapchain->XJGetHeight() };
             bool recreated  = kSwapchain->ReCreate();
              //重建交换链
-            VkExtent2D newExtent = { kSwapchain->XJGetWidth(), kSwapchain->XJGetHeight() };//更新渲染目标的分辨率
-            result.resizeNeeded = recreated &&
-                (oldExtent.width != newExtent.width || oldExtent.height != newExtent.height);
+            result.resizeNeeded = recreated;
 
             if (!recreated)
             {

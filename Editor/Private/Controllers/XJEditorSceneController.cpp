@@ -844,14 +844,22 @@ namespace XJ
             mAfterMutationCallback();
     }
 
-    void XJEditorSceneController::ClearRuntimeReferences()
+    void XJEditorSceneController::ClearSceneReferences()
     {
         ClearHistory();
         mScene = nullptr;
-        mDefaultTexture.reset();
-        mDefaultSampler.reset();
         mSceneAsset.reset();
         mInstantiateContext = {};
+        mSceneDirty = false;
+        mHistoryMutationOccurred = false;
+    }
+
+    void XJEditorSceneController::ClearRuntimeReferences()
+    {
+        ClearSceneReferences();
+
+        mDefaultTexture.reset();
+        mDefaultSampler.reset();
     
         mBeforeDeleteCallback = {};
         mAfterMutationCallback = {};

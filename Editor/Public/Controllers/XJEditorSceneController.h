@@ -91,6 +91,7 @@ namespace XJ
             void SetShouldExposeEntityCallback(ShouldExposeEntityCallback callback);
             void SetDefaultMeshHandle(XJAssetHandle handle);//设置默认mesh
 
+            void ClearSceneReferences();//仅清理当前 scene 相关状态，保留默认资源和长期 callbacks
             void ClearRuntimeReferences();
         
         private:

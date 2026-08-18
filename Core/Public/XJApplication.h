@@ -24,7 +24,8 @@ namespace XJ
     class XJApplication
     {
         public:
-            virtual ~XJApplication() = default;
+            XJApplication();
+            virtual ~XJApplication();
             static XJAppContext* XJGetAppContext() { return &sAppContext; }
 
             std::chrono::steady_clock::time_point XJGetStartTimePoint() const { return mStartTimePoint; }
@@ -74,6 +75,7 @@ namespace XJ
           
             uint64_t mFrameIndex = 0;//帧索引
             bool bPaused = false;//是否暂停
+            bool mStopped = true;//Stop 幂等，并支持 Start 部分失败后的回滚
 
             static XJAppContext sAppContext;//全局应用程序上下文
 

@@ -120,56 +120,63 @@ namespace XJ
         swapchainInfo.clipped = VK_TRUE;
         swapchainInfo.oldSwapchain = oldSwapchain;
   
-        VkResult ret = vkCreateSwapchainKHR(device, &swapchainInfo, nullptr, &mSwapchain);
+        VkSwapchainKHR newSwapchain = VK_NULL_HANDLE;
+        VkResult ret = vkCreateSwapchainKHR(device, &swapchainInfo, nullptr, &newSwapchain);
         if(ret != VK_SUCCESS)
         {
             spdlog::error("{0},{1}",__FUNCTION__, vk_result_string(ret));
-            mSwapchain = oldSwapchain;
             return false;
         }
-        mExtent = swapchainExtent;
-        
-        if (oldSwapchain != VK_NULL_HANDLE)
-        {
-            vkDestroySwapchainKHR(device, oldSwapchain, nullptr);
-        }
 
-        spdlog::trace("交换链 {0}:old:{1},new:{2},image count:{3}, format:{4}, present mode:{5}",
-            __FUNCTION__,(void*)oldSwapchain,(void*)mSwapchain,imageCount,
-            vk_format_string(mSurfaceInfo.surfaceFormat.format), vk_present_mode_string(mSurfaceInfo.presentMode));
-        //获取到交换链里面的内容之后
+        // 在销毁旧 swapchain 前完整取得新 images；任何失败都可以安全回滚。
         uint32_t swapchainImageCount = 0;
 
-        ret = vkGetSwapchainImagesKHR(device, mSwapchain, &swapchainImageCount, nullptr);
+        ret = vkGetSwapchainImagesKHR(device, newSwapchain, &swapchainImageCount, nullptr);
         if (ret != VK_SUCCESS)
         {
             spdlog::error(
                 "{}: 获取交换链图片数量失败: {}",
                 __FUNCTION__,
                 vk_result_string(ret));
+            vkDestroySwapchainKHR(device, newSwapchain, nullptr);
             return false;
         }
 
         if (swapchainImageCount == 0)
         {
             spdlog::error("{}: 交换链图片数量为 0", __FUNCTION__);
+            vkDestroySwapchainKHR(device, newSwapchain, nullptr);
             return false;
         }
 
-        mImages.resize(swapchainImageCount);
+        std::vector<VkImage> newImages(swapchainImageCount);
 
-        ret = vkGetSwapchainImagesKHR(device, mSwapchain, &swapchainImageCount, mImages.data());
+        ret = vkGetSwapchainImagesKHR(device, newSwapchain, &swapchainImageCount, newImages.data());
         if (ret != VK_SUCCESS)
         {
             spdlog::error(
                 "{}: 获取交换链图片失败: {}",
                 __FUNCTION__,
                 vk_result_string(ret));
-            mImages.clear();
+            vkDestroySwapchainKHR(device, newSwapchain, nullptr);
             return false;
         }
 
-        mImages.resize(swapchainImageCount);
+        newImages.resize(swapchainImageCount);
+
+        mSwapchain = newSwapchain;
+        mExtent = swapchainExtent;
+        mImages = std::move(newImages);
+        mCurrentImageIndex = -1;
+
+        if (oldSwapchain != VK_NULL_HANDLE)
+            vkDestroySwapchainKHR(device, oldSwapchain, nullptr);
+
+        spdlog::trace("交换链 {0}:old:{1},new:{2},image count:{3}, format:{4}, present mode:{5}",
+            __FUNCTION__,(void*)oldSwapchain,(void*)mSwapchain,mImages.size(),
+            vk_format_string(mSurfaceInfo.surfaceFormat.format), vk_present_mode_string(mSurfaceInfo.presentMode));
+
+        ++mGeneration;
         return true;
     }
     void XJVulkanSwapchain::SetupSurfaceCapabilities()

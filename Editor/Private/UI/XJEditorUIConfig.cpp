@@ -1,6 +1,7 @@
 #include "UI/XJEditorUIConfig.h"
 #include <fstream>
 #include <nlohmann/json.hpp>
+#include <spdlog/spdlog.h>
 
 namespace XJ
 {
@@ -84,8 +85,18 @@ namespace XJ
     }
     bool XJEditorUIConfig::Save(const std::filesystem::path& path) const
     {
-        if (path.has_parent_path())// 确保目录存在
-            std::filesystem::create_directories(path.parent_path());
+        try
+        {
+        if (path.has_parent_path())
+        {
+            std::error_code ec;
+            std::filesystem::create_directories(path.parent_path(), ec);
+            if (ec)
+            {
+                spdlog::error("Failed to create editor UI config directory '{}': {}", path.parent_path().string(), ec.message());
+                return false;
+            }
+        }
 
         nlohmann::json j;// 构建 JSON 对象
         j["version"] = version;
@@ -126,5 +137,11 @@ namespace XJ
         std::ofstream out(path);// 写入 JSON 文件
         out << j.dump(2);
         return out.good();// 返回写入是否成功
+        }
+        catch (const std::exception& e)
+        {
+            spdlog::error("Failed to save editor UI config '{}': {}", path.string(), e.what());
+            return false;
+        }
     }
 }

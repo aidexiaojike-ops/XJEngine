@@ -49,6 +49,7 @@ namespace XJ
             SurfaceInfo mSurfaceInfo;
 
             VkExtent2D mExtent{0, 0};
+            uint64_t mGeneration = 0;//每次成功创建一代新的 swapchain images 后递增
 
         public:
             XJVulkanSwapchain(XJVulkanPhysicalDevices* physicalDevice, XJVulkanDevice* device, XJVulkanSurface* surface);
@@ -73,6 +74,7 @@ namespace XJ
             const std::vector<VkImage>& XJGetSwapchainImages() const { return mImages; }
             uint32_t XJGetWidth() const { return mExtent.width; }
             uint32_t XJGetHeight() const { return mExtent.height; }
+            uint64_t XJGetGeneration() const { return mGeneration; }
 
             const SurfaceInfo& XJGetSurfaceInfo() const { return mSurfaceInfo; }
             
