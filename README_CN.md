@@ -98,6 +98,11 @@ File -> Importer -> Asset (CPU) -> Factory -> Resource (GPU) -> Renderer
 
 ### 编辑器架构（MVVM）
 
+- **编辑器运行时**：`XJEditorRuntime`（pimpl 封装）统一管理编辑器生命周期——项目配置（`XJEditorProjectConfig`）、工作区、视口系统、帧渲染、输入绑定与 UI Host，由 `Src/XJEditorApplication` 驱动
+- **工作区**：`XJEditorWorkspace` 管理引擎内项目工作区（资源根目录、资产注册表、场景接线）
+- **帧渲染**：`XJEditorFrameRenderer` + `XJEditorRenderResources` 负责 ImGui/Vulkan 帧渲染与共享编辑器渲染资源；`XJEditorUIHost` 承载 UI 层
+- **输入绑定**：`XJEditorInputBindings` 集中编辑器输入映射（摄像机、视口、操作）
+- **视口系统**：`XJEditorViewportSystem` 统筹 Scene/Game 预览视口、摄像机解析、受保护编辑器实体以及场景挂载/卸载
 - **Controllers**：`XJEditorSceneController`（场景加载/保存/切换 + 基于快照的 Undo/Redo 历史，含场景与材质资产，最多 100 条）+ `XJEditorAssetController`（资产 CRUD）+ `XJEditorCameraManager`（基于实体 ID 的视口摄像机绑定与解析，避免悬垂指针）+ `XJEditorSceneAssetDropController`（资产拖放到场景）+ `XJEditorExternalDropController`（OS文件拖入）
 - **Console 日志**：`XJEditorLog` 通过自定义 spdlog sink 将引擎日志桥接到 Console 面板（异步安全复制、级别映射、线程安全队列）
 - **Viewport 渲染表面**：`XJViewport` 接口（`GetViewportTextureID`/`IsViewportTextureReady`/`OnViewportResized`）由 `XJViewportRenderSurface` 实现，负责离屏 render pass、render target、调整大小时的延迟 descriptor 释放以及 ImGui 纹理显示

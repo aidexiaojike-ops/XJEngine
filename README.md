@@ -179,6 +179,11 @@ Swapchain
 - **Thread Safety**: Safe event handling in multi-threaded scenarios
 
 #### **Editor UI System**
+- **Editor Runtime**: `XJEditorRuntime` (pimpl) owns the full editor lifecycle — project config (`XJEditorProjectConfig`), workspace, viewport system, frame renderer, input bindings, and UI host — driven by `XJEditorApplication` in `Src/`
+- **Editor Workspace**: `XJEditorWorkspace` manages the in-engine project workspace (resource root, asset registry, scene wiring)
+- **Frame Renderer**: `XJEditorFrameRenderer` + `XJEditorRenderResources` own ImGui/Vulkan frame rendering and shared editor render resources; `XJEditorUIHost` hosts the UI layer
+- **Input Bindings**: `XJEditorInputBindings` centralizes editor input mapping (camera, viewport, actions)
+- **Viewport System**: `XJEditorViewportSystem` orchestrates Scene/Game preview viewports, camera resolution, protected editor entities, and scene attach/detach
 - **Lifecycle Hooks**: `OnUIBegin`/`OnUIEnd`/`OnUIRender`/`OnUIDestroy` virtual methods in XJApplication base class
 - **MVVM Architecture**: Controllers (camera, scene, drop, asset), Services, ViewModels decouple UI from ECS
 - **XJEditorSceneController**: Scene load/save/open, dirty tracking, entity mutation requests, and snapshot-based Undo/Redo history (scene + material assets, up to 100 entries)
