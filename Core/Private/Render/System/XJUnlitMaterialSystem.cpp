@@ -381,7 +381,7 @@ namespace XJ
                 sizeof(pc),
                 &pc);
 
-            item.Mesh->Draw(cmdBuffer);
+            item.Mesh->DrawSubmesh(cmdBuffer, item.SubmeshIndex);
         }
         
     }

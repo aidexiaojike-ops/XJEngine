@@ -8,6 +8,7 @@
 #include "ECS/Component/XJSceneAssetComponents.h"
 #include "ECS/Component/XJTransformComponent.h"
 #include "ECS/Component/Material/XJUnlitMaterialComponent.h"
+#include "ECS/Component/XJSceneAssetComponents.h"
 
 #include "Asset/Loader/XJMeshAssetLoader.h"
 #include "Asset/XJAssetRegistry.h"
@@ -107,42 +108,68 @@ namespace XJ
             if (!gpuMesh)
                 return false;
                 
-            uint32_t slotCount = 1;
-            if (entity.HasComponent<XJMaterialAssetRefComponent>())
+            const uint32_t submeshCount = gpuMesh->GetSubmeshCount();
+            if(submeshCount == 0)
+                return false;
+
+            const uint32_t materialSlotCount = gpuMesh->GetMaterialSlotCount();
+            if (materialSlotCount == 0)
+                return false;
+
+            XJMaterialAssetRefComponent* materialRefs =nullptr;
+
+            if (entity.HasComponent<
+                    XJMaterialAssetRefComponent>())
             {
-                const auto& materialRef = entity.GetComponent<XJMaterialAssetRefComponent>();
-
-                // 当前 XJMesh 还没有暴露 submesh/primitive 数量，所以按资产保存的
-                // material slot 数恢复运行时 slot。没有材质引用时至少保留默认 slot 0。
-                if(!materialRef.Materials.empty())
-                    slotCount = std::max(slotCount, static_cast<uint32_t>(materialRef.Materials.size()));
+                materialRefs = &entity.GetComponent<
+                    XJMaterialAssetRefComponent>();
             }
-            std::vector<std::shared_ptr<XJUnlitMaterial>> materials;
-            materials.reserve(slotCount);
-
-            for(uint32_t slotIndex = 0; slotIndex < slotCount; ++slotIndex)
+            else
             {
-                auto material = CreateMaterialForSlot(entity, slotIndex, assetRegistry, defaultTexture, defaultSampler);
-                if (!material)
-                    return false;
-
-                materials.push_back(material);
+                materialRefs = &entity.AddComponent<
+                    XJMaterialAssetRefComponent>();
             }
-    
-            if (entity.HasComponent<XJUnlitMaterialComponent>())
+
+            // 保留场景中已有材质，缺少的槽使用空引用表示默认材质。
+            // 如果新 Mesh 槽更少，resize 也会删除无效尾部引用。
+            materialRefs->Materials.resize(
+                materialSlotCount);
+            
+            if(entity.HasComponent<XJUnlitMaterialComponent>())
+            {
                 entity.RemoveComponent<XJUnlitMaterialComponent>();
-
+            }
 
             auto& renderComponent = entity.AddComponent<XJUnlitMaterialComponent>();
 
-            for (uint32_t slotIndex = 0; slotIndex < slotCount; ++slotIndex)
+            for (uint32_t submeshIndex = 0; submeshIndex < submeshCount; ++submeshIndex)
             {
-                // 同一个合并后的 gpuMesh 暂时重复挂到每个材质 slot。
-                // 等 mesh loader 暴露 primitive/submesh 后，这里应改为 slot -> submesh。
-                renderComponent.AddMesh(gpuMesh, materials[slotIndex]);
+                const XJSubmesh* submesh = gpuMesh->GetSubmesh(submeshIndex);
+            
+                if (!submesh)
+                    continue;
+            
+                auto material = CreateMaterialForSlot(
+                    entity,
+                    submesh->MaterialSlot,
+                    assetRegistry,
+                    defaultTexture,
+                    defaultSampler);
+                
+                if (!material)
+                {
+                    entity.RemoveComponent<XJUnlitMaterialComponent>();
+                
+                    return false;
+                }
+            
+                renderComponent.AddMesh(
+                    gpuMesh,
+                    material,
+                    submeshIndex);
             }
 
-            return true;
+            return renderComponent.XJGetMeshCount() > 0;
         }
 
         std::optional<XJEditorEntityView> BuildEntityViewRecursive(XJEntity* entity, const XJEditorSceneService::ShouldExposeEntityCallback& shouldExposeEntity)

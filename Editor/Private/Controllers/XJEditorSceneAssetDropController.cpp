@@ -72,8 +72,35 @@ namespace XJ
             return false;
         }
 
+        const uint32_t submeshCount = gpuMesh->GetSubmeshCount();
+        if(submeshCount == 0)
+        {
+            spdlog::error("Dropped mesh has no submeshes; " "entity creation was rolled back.");
+
+            scene.DestroyEntity(entity);
+            return false;
+        }
+        const uint32_t materialSlotCount = gpuMesh->GetMaterialSlotCount();
+
+        if (materialSlotCount == 0)
+        {
+            spdlog::error(
+                "Dropped mesh has no material slots.");
+            
+            scene.DestroyEntity(entity);
+            return false;
+        }
+
         auto& comp = entity->AddComponent<XJUnlitMaterialComponent>();
-        comp.AddMesh(gpuMesh, material);
+        auto& materialRefs = entity->AddComponent<XJMaterialAssetRefComponent>();
+        // 新拖入实体使用默认材质，但资产引用槽必须与 Mesh 的 MaterialSlot 对齐。
+        materialRefs.Materials.resize(materialSlotCount);
+
+        for(uint32_t submeshIndex = 0; submeshIndex < submeshCount; ++submeshIndex)
+        {
+            // 拖入新 Mesh 时所有 submesh 暂时使用同一个默认材质
+            comp.AddMesh(gpuMesh, material, submeshIndex);
+        }
 
         uiState.Selection.SelectedEntity = static_cast<XJEditorEntityId>(entity->XJGetUUID());
         uiState.Selection.SelectedAsset = 0;

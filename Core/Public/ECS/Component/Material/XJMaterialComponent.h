@@ -7,6 +7,8 @@
 
 #include <memory>
 #include <vector>
+#include <cstdint>
+#include <spdlog/spdlog.h>
 
 
 namespace XJ
@@ -19,16 +21,32 @@ namespace XJ
             {
                 std::shared_ptr<XJMesh> Mesh;
                 std::shared_ptr<T> Material;
+
+                // 指向 Mesh 内部实际绘制的 submesh。
+                uint32_t SubmeshIndex = 0;
             };
-            void AddMesh(std::shared_ptr<XJMesh> mesh, std::shared_ptr<T> material = nullptr)//添加网格
+            void AddMesh(std::shared_ptr<XJMesh> mesh, std::shared_ptr<T> material = nullptr, uint32_t submeshIndex = 0)//添加网格
             {
                 if(!mesh)
+                    return;
+
+                if(submeshIndex >= mesh->GetSubmeshCount())
                 {
+                    spdlog::warn(
+                        "Material component rejected invalid "
+                        "submesh index {}, mesh submesh count={}.",
+                        submeshIndex,
+                        mesh->GetSubmeshCount());
+
                     return;
                 }
-                // 允许同一个 mesh 拥有多个材质 slot。glTF mesh 可能由多个 primitive 组成，
-                // 场景资产中的 materials[n] 需要稳定映射到运行时 slot[n]，不能按 mesh 去重。
-                mSlots.push_back({std::move(mesh), std::move(material)});
+                
+                MeshMaterialSlot slot;
+                slot.Mesh = std::move(mesh);
+                slot.Material = std::move(material);
+                slot.SubmeshIndex = submeshIndex;
+
+                mSlots.push_back(std::move(slot));
             };
 
             bool SetSlotMaterial(uint32_t index, std::shared_ptr<T> material)

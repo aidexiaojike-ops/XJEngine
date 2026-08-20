@@ -3,15 +3,29 @@
 
 #include <spdlog/spdlog.h>
 #include <exception>
-
+#include <utility>
+#include <limits>
 
 namespace XJ
 {
     std::shared_ptr<XJMesh>XJMeshFactory::CreateFromAsset(const XJMeshAsset& asset)
     {
-         if (asset.mVertices.empty())
+        if (asset.mVertices.empty())
         {
             spdlog::error("XJMeshFactory::CreateFromAsset failed: asset has no vertices.");
+            return nullptr;
+        }
+
+        if(asset.mIndices.empty())
+        {
+            spdlog::error("XJMeshFactory::CreateFromAsset " "failed: asset has no indices.");
+
+            return nullptr;
+        }
+        if(asset.mVertices.size() > std::numeric_limits<uint32_t>::max() || asset.mIndices.size()> std::numeric_limits<uint32_t>::max())
+        {
+            spdlog::error("XJMeshFactory::CreateFromAsset " "failed: mesh exceeds uint32_t range.");
+
             return nullptr;
         }
 
@@ -19,17 +33,60 @@ namespace XJ
         vertices.reserve(asset.mVertices.size());//预留空间，避免重复分配
         for(const auto& vertex : asset.mVertices)
         {
-            XJVulkanVertex kVulkanVertex{};
-            kVulkanVertex.position = vertex.Position;
-            kVulkanVertex.normal = vertex.Normal;
-            kVulkanVertex.tangent = vertex.Tangent;
-            kVulkanVertex.texcoord0 = vertex.UV;
+            XJVulkanVertex gpuVertex{};
+            gpuVertex.position = vertex.Position;
+            gpuVertex.normal = vertex.Normal;
+            gpuVertex.tangent = vertex.Tangent;
+            gpuVertex.texcoord0 = vertex.UV;
 
-            vertices.push_back(kVulkanVertex);
+            vertices.push_back(gpuVertex);
         }
+
+        std::vector<XJSubmesh> submeshes;
+        if(asset.mPrimitives.empty())
+        {
+            // 兼容旧资产：没有 primitive metadata 时，
+             // 整个 index buffer 作为 material slot 0。
+            XJSubmesh fallbackSubmesh;
+            fallbackSubmesh.FirstIndex = 0;
+            fallbackSubmesh.IndexCount = static_cast<uint32_t>(asset.mIndices.size());
+            fallbackSubmesh.MaterialSlot = 0;
+
+            submeshes.push_back(fallbackSubmesh);
+        }
+        else
+        {
+            submeshes.reserve(asset.mPrimitives.size());
+            const uint32_t totalIndexCount = static_cast<uint32_t>(asset.mIndices.size());
+
+            for(const XJMeshPrimitive& primitive : asset.mPrimitives)
+            {
+                if(!primitive.IsValid(totalIndexCount))
+                {
+                     spdlog::error(
+                        "XJMeshFactory::CreateFromAsset "
+                        "failed: invalid primitive range, "
+                        "firstIndex={}, indexCount={}, "
+                        "totalIndices={}.",
+                        primitive.FirstIndex,
+                        primitive.IndexCount,
+                        totalIndexCount);
+
+                    return nullptr;
+                }
+
+                XJSubmesh submesh;
+                submesh.FirstIndex = primitive.FirstIndex;
+                submesh.IndexCount = primitive.IndexCount;
+                submesh.MaterialSlot = primitive.MaterialSlot;
+
+                submeshes.push_back(submesh);
+            }
+        }
+
         try
         {
-            return std::make_shared<XJMesh>(vertices, asset.mIndices);
+            return std::make_shared<XJMesh>(vertices, asset.mIndices, std::move(submeshes));
         }
         catch (const std::exception& e)
         {
@@ -64,7 +121,19 @@ namespace XJ
 
         try
         {
-            return std::make_shared<XJMesh>(vertices, indices);
+            std::vector<XJSubmesh> submeshes;
+
+            XJSubmesh cubeSubmesh;
+            cubeSubmesh.FirstIndex = 0;
+            cubeSubmesh.IndexCount = static_cast<uint32_t>(indices.size());
+            cubeSubmesh.MaterialSlot = 0;
+
+            submeshes.push_back(cubeSubmesh);
+
+            return std::make_shared<XJMesh>(
+                vertices,
+                indices,
+                std::move(submeshes));
         }
         catch (const std::exception& e)
         {

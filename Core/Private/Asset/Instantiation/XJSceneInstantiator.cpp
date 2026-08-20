@@ -10,6 +10,7 @@
 #include "ECS/XJEntity.h"
 #include "ECS/XJScene.h"
 #include "Render/Resource/XJMaterialFactory.h"
+#include "Render/Resource/XJMesh.h"
 
 #include <spdlog/spdlog.h>
 
@@ -206,17 +207,49 @@ namespace XJ
         auto& comp = entity.AddComponent<XJUnlitMaterialComponent>();
         comp.ClearMeshes();
 
-        const uint32_t slotCount = data.MeshRenderer.Materials.empty()
-            ? 1u
-            : static_cast<uint32_t>(data.MeshRenderer.Materials.size());
-
-        // 当前 loader 返回的是合并后的 XJMesh，尚未暴露 glTF primitive/submesh 数量。
-        // 先按序列化的 material slot 数量恢复，避免 materials[1..n] 被静默忽略。
-        for (uint32_t slotIndex = 0; slotIndex < slotCount; ++slotIndex)
+        const uint32_t submeshCount = gpuMesh->GetSubmeshCount();
+        if(submeshCount == 0)//如果没材质通道 移除material 组件
         {
-            auto mat = CreateMaterialForSlot(data.MeshRenderer.Materials, slotIndex, ctx);
-            if (mat)
-                comp.AddMesh(gpuMesh, mat);
+            spdlog::error(
+                "Scene instantiate skipped mesh: "
+                "GPU mesh contains no submeshes.");
+                    
+            entity.RemoveComponent<XJUnlitMaterialComponent>();
+                    
+            return;
+        }
+
+        const uint32_t materialSlotCount = gpuMesh->GetMaterialSlotCount();
+        if (materialSlotCount == 0)
+        {
+            spdlog::error("Scene instantiate skipped mesh: GPU mesh contains no material slots.");
+            entity.RemoveComponent<XJUnlitMaterialComponent>();
+            return;
+        }
+
+        XJMaterialAssetRefComponent* materialRefs = nullptr;
+        if (entity.HasComponent<XJMaterialAssetRefComponent>())
+            materialRefs = &entity.GetComponent<XJMaterialAssetRefComponent>();
+        else
+            materialRefs = &entity.AddComponent<XJMaterialAssetRefComponent>();
+
+        // 空引用表示该槽使用默认材质，同时保证 Inspector 显示全部槽位。
+        materialRefs->Materials.resize(materialSlotCount);
+
+        for(uint32_t submeshIndex = 0; submeshIndex < submeshCount; ++submeshIndex)
+        {
+            const XJSubmesh* submesh = gpuMesh->GetSubmesh(submeshIndex);
+
+            if(!submesh)
+                continue;
+
+            // MaterialSlot 来自 glTF primitive metadata。
+            auto material = CreateMaterialForSlot(data.MeshRenderer.Materials, submesh->MaterialSlot, ctx); 
+
+            if(!material)
+                continue;
+            
+            comp.AddMesh(gpuMesh, material, submeshIndex);
         }
     }
 

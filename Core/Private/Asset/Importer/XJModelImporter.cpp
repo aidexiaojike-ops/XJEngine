@@ -116,6 +116,13 @@ namespace XJ
 
         for (const tinygltf::Primitive& primitive : mesh.primitives)
         {
+            // 第一版渲染管线只支持 triangle list。glTF mode=-1 也按规范默认 TRIANGLES。
+            if (primitive.mode != -1 && primitive.mode != TINYGLTF_MODE_TRIANGLES)
+            {
+                spdlog::warn("glTF: primitive skipped because mode {} is not TRIANGLES", primitive.mode);
+                continue;
+            }
+
             auto posIt = primitive.attributes.find("POSITION");
             if (posIt == primitive.attributes.end())
             {
@@ -141,9 +148,33 @@ namespace XJ
                 continue;
             }
 
-            const uint32_t firstVertex = static_cast<uint32_t>(meshAsset->mVertices.size());
+            if (meshAsset->mVertices.size() > std::numeric_limits<uint32_t>::max() ||
+                meshAsset->mIndices.size() > std::numeric_limits<uint32_t>::max())
+            {
+                spdlog::error("glTF: merged mesh exceeds uint32_t draw range");
+                break;
+            }
+
+            const size_t vertexStart = meshAsset->mVertices.size();
+            const size_t indexStart = meshAsset->mIndices.size();
+            const uint32_t firstVertex = static_cast<uint32_t>(vertexStart);
+            const uint32_t firstIndex = static_cast<uint32_t>(indexStart);
+
+            auto rollbackPrimitive = [&]()
+            {
+                meshAsset->mVertices.resize(vertexStart);
+                meshAsset->mIndices.resize(indexStart);
+            };
+
             // POSITION 是创建顶点数组的基准，NORMAL/UV 必须和它 count 一致，不能用自己的 count 直接写 mVertices。
             const size_t vertexCount = positionAccessor->count;
+
+            if (vertexCount == 0 ||
+                vertexCount > std::numeric_limits<uint32_t>::max() - firstVertex)
+            {
+                spdlog::error("glTF: primitive vertex count is invalid or overflows uint32_t");
+                continue;
+            }
 
             for (size_t i = 0; i < vertexCount; ++i)
             {
@@ -211,7 +242,18 @@ namespace XJ
             }
 
             if (primitive.indices >= 0)
-            {
+            {// getAccessorData() 校验前   primitive.indices 越界
+                if (primitive.indices >= static_cast<int>(model.accessors.size()))
+                {
+                    spdlog::error(
+                        "glTF: primitive has invalid "
+                        "index accessor {}",
+                        primitive.indices);
+                    
+                    rollbackPrimitive();
+                    continue;
+                }
+
                 const tinygltf::Accessor* indexAccessor = nullptr;
                 const uint8_t* indexData = nullptr;
                 size_t indexStride = 0;
@@ -226,6 +268,7 @@ namespace XJ
                         indexStride,
                         elementSize))
                 {
+                    rollbackPrimitive();
                     continue;
                 }
 
@@ -234,45 +277,127 @@ namespace XJ
                     indexAccessor->componentType != TINYGLTF_COMPONENT_TYPE_UNSIGNED_INT)
                 {
                     spdlog::error("glTF: unsupported index component type {}", indexAccessor->componentType);
+                    rollbackPrimitive();
                     continue;
                 }
 
-                for (size_t i = 0; i < indexAccessor->count; ++i)
+                if(indexAccessor->count == 0|| indexAccessor->count>std::numeric_limits<uint32_t>::max() - firstIndex)
                 {
-                    uint32_t index = 0;
+                    spdlog::error("glTF: primitive index count is " "invalid or overflows uint32_t");
+
+                    rollbackPrimitive();
+                    continue;
+                }
+                // 先构造局部索引。全部验证成功后再提交到 MeshAsset，
+                // 避免单个坏索引留下不完整的 primitive。
+                std::vector<uint32_t> primitiveIndices;
+                primitiveIndices.reserve(indexAccessor->count);
+                bool indicesValid = true;
+
+                for (size_t indexPosition = 0; indexPosition < indexAccessor->count; ++indexPosition)
+                {
+                    uint32_t localIndex = 0;
 
                     if (indexAccessor->componentType == TINYGLTF_COMPONENT_TYPE_UNSIGNED_BYTE)
                     {
                         uint8_t value = 0;
-                        std::memcpy(&value, indexData + i * indexStride, sizeof(value));
-                        index = value;
+                        std::memcpy(&value, indexData + indexPosition * indexStride, sizeof(value));
+                        localIndex = value;
                     }
                     else if (indexAccessor->componentType == TINYGLTF_COMPONENT_TYPE_UNSIGNED_SHORT)
                     {
                         uint16_t value = 0;
-                        std::memcpy(&value, indexData + i * indexStride, sizeof(value));
-                        index = value;
+                        std::memcpy(&value, indexData + indexPosition * indexStride, sizeof(value));
+                        localIndex = value;
                     }
                     else
                     {
-                        std::memcpy(&index, indexData + i * indexStride, sizeof(index));
+                        std::memcpy(&localIndex, indexData + indexPosition * indexStride, sizeof(localIndex));
                     }
 
-                    if (index >= vertexCount)
+                    if (localIndex >= vertexCount)
                     {
-                        spdlog::error("glTF: index {} out of vertex range {}", index, vertexCount);
-                        continue;
+                        spdlog::error("glTF: index {} out of vertex range {}", localIndex, vertexCount);
+                        indicesValid = false;
+                        break;
                     }
 
-                    if (firstVertex > std::numeric_limits<uint32_t>::max() - index)
+                    if (firstVertex > std::numeric_limits<uint32_t>::max() - localIndex)
                     {
                         spdlog::error("glTF: index overflow");
-                        continue;
+                        indicesValid = false;
+                        break;
                     }
                     // 索引是相对当前 primitive 顶点起点的，需要加 firstVertex 变成合并后 meshAsset 的全局索引。
-                    meshAsset->mIndices.push_back(firstVertex + index);
+                    primitiveIndices.push_back(firstVertex + localIndex);
                 }
+
+                if (!indicesValid)
+                {
+                    rollbackPrimitive();
+                    continue;
+                }
+
+                meshAsset->mIndices.insert(
+                    meshAsset->mIndices.end(),
+                    primitiveIndices.begin(),
+                    primitiveIndices.end());
             }
+            else
+            {
+                // 无索引 primitive 自动生成连续索引，
+                // 让运行时统一使用 vkCmdDrawIndexed。
+                if(vertexCount > std::numeric_limits<uint32_t>::max() -  firstIndex)
+                {
+                    spdlog::error("glTF: generated index count " "overflows uint32_t");
+
+                    rollbackPrimitive();
+                    continue;
+                }
+                for (uint32_t localIndex = 0; localIndex < static_cast<uint32_t>(vertexCount); ++localIndex)
+                    meshAsset->mIndices.push_back(firstVertex + localIndex);
+            }
+
+            const size_t appendedIndexCount = meshAsset->mIndices.size() - indexStart;
+            if(appendedIndexCount == 0 || appendedIndexCount > std::numeric_limits<uint32_t>::max())
+            {
+                spdlog::error("glTF: generated primitive index count " "is invalid");
+
+                rollbackPrimitive();
+                continue;
+            }
+
+            const uint32_t indexCount = static_cast<uint32_t>(appendedIndexCount);
+            // TRIANGLES 必须每三个索引组成一个三角形。
+            if (indexCount == 0 || indexCount % 3 != 0)
+            {
+                spdlog::error("glTF: TRIANGLES primitive has invalid index count {}", indexCount);
+                rollbackPrimitive();
+                continue;
+            }
+
+            int32_t sourceMaterialIndex = primitive.material;
+            if(sourceMaterialIndex >= static_cast<int32_t>(model.materials.size()))
+            {
+                spdlog::warn("glTF: primitive material index {} ""is out of range",sourceMaterialIndex);
+                sourceMaterialIndex = -1;
+            }
+
+            XJMeshPrimitive importedPrimitive;
+            importedPrimitive.FirstIndex = firstIndex;
+            importedPrimitive.IndexCount = indexCount;
+            // 第一版让每个有效 primitive 对应一个独立材质槽。
+            importedPrimitive.MaterialSlot = static_cast<uint32_t>(meshAsset->mPrimitives.size());
+            importedPrimitive.SourceMaterialIndex = sourceMaterialIndex;
+
+            if (!importedPrimitive.IsValid(static_cast<uint32_t>(meshAsset->mIndices.size())))
+            {
+                spdlog::error("glTF: generated primitive draw range is invalid");
+                rollbackPrimitive();
+                continue;
+            }
+
+            meshAsset->mPrimitives.push_back(importedPrimitive);
         }
 
         return meshAsset;

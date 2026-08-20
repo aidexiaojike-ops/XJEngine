@@ -43,7 +43,7 @@ namespace XJ
         }
         if (event.XJGetEventType() != EVENT_TYPE_MOUSE_MOVE)
         {
-            spdlog::trace("Event {} dispatched in {} ms", event.XJGetEventTypeName(), stopwatch.elapsed().count() * 1000);//输出事件分发时间
+            //spdlog::trace("Event {} dispatched in {} ms", event.XJGetEventTypeName(), stopwatch.elapsed().count() * 1000);//输出事件分发时间
         }
     }
 

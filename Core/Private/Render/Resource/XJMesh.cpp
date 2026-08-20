@@ -6,10 +6,12 @@
 
 #include <spdlog/spdlog.h>
 #include <stdexcept>
+#include <utility>
 
 namespace XJ
 {
-    XJMesh::XJMesh(const std::vector<XJVulkanVertex>& vertices, const std::vector<uint32_t>& indices)
+    XJMesh::XJMesh(const std::vector<XJVulkanVertex>& vertices, const std::vector<uint32_t>& indices, std::vector<XJSubmesh> submeshes)
+        : mSubmeshes(std::move(submeshes))
     {
         if (vertices.empty())
         {
@@ -29,6 +31,47 @@ namespace XJ
 
         mVertexCount = static_cast<uint32_t>(vertices.size());
         mIndexCount = static_cast<uint32_t>(indices.size());
+
+        if(mIndexCount == 0)
+        {
+            // 当前 submesh 结构只描述索引范围。
+            // importer 下一阶段会为无索引 primitive 自动生成索引。
+            if (!mSubmeshes.empty())
+            {
+                spdlog::error( "XJMesh create failed: indexed submeshes " "were supplied without an index buffer.");
+                throw std::invalid_argument("XJMesh submeshes require indices");
+            }
+        }
+        else
+        {
+            // 兼容旧调用方：未传 submesh 时生成覆盖整个 Mesh 的默认范围。
+            if(mSubmeshes.empty())
+            {
+                XJSubmesh defaultSubmesh;
+                defaultSubmesh.FirstIndex = 0;
+                defaultSubmesh.IndexCount = mIndexCount;
+                defaultSubmesh.MaterialSlot = 0;
+
+                mSubmeshes.push_back(defaultSubmesh);
+            }
+        }
+
+        for(const XJSubmesh& submesh : mSubmeshes)
+        {
+            if (!submesh.IsValid(mIndexCount))
+            {
+                spdlog::error(
+                    "XJMesh create failed: invalid "
+                    "submesh range, firstIndex={}, "
+                    "indexCount={}, totalIndices={}.",
+                    submesh.FirstIndex,
+                    submesh.IndexCount,
+                    mIndexCount);
+
+                throw std::invalid_argument("XJMesh contains invalid submesh");
+            }
+        }
+
 
         mVertexBuffer = std::make_shared<XJVulkanBuffer>(
             device,
@@ -60,38 +103,85 @@ namespace XJ
 
     XJMesh::~XJMesh() = default;
 
-    void XJMesh::Draw(VkCommandBuffer commandBuffer)
+    void XJMesh::Draw(VkCommandBuffer commandBuffer) const
+    {
+      
+        if (!Bind(commandBuffer))
+            return;
+    
+        if (mIndexCount > 0)
+        {
+            vkCmdDrawIndexed(commandBuffer, mIndexCount, 1, 0, 0, 0);
+            return;
+        }
+
+
+        vkCmdDraw(commandBuffer, mVertexCount, 1, 0, 0);
+    }
+
+    bool XJMesh::Bind(VkCommandBuffer commandBuffer) const
     {
         if (commandBuffer == VK_NULL_HANDLE)
         {
-            spdlog::warn("XJMesh::Draw skipped: command buffer is null.");
-            return;
+            spdlog::warn("XJMesh::Bind skipped: command buffer is null.");
+            return false;
         }
 
         if (!IsValid())
         {
             spdlog::warn("XJMesh::Draw skipped: mesh is invalid.");
-            return;
+            return false; 
         }
 
         VkBuffer vertexBuffers[] = { mVertexBuffer->XJGetBuffer() };
         VkDeviceSize offsets[] = { 0 };
 
-        vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets);
+         vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets);
 
         if (mIndexCount > 0)
         {
             if (!mIndexBuffer || mIndexBuffer->XJGetBuffer() == VK_NULL_HANDLE)
             {
                 spdlog::warn("XJMesh::Draw skipped indexed draw: index buffer is invalid.");
-                return;
+                return false; 
             }
 
             vkCmdBindIndexBuffer(commandBuffer, mIndexBuffer->XJGetBuffer(), 0, VK_INDEX_TYPE_UINT32);
-            vkCmdDrawIndexed(commandBuffer, mIndexCount, 1, 0, 0, 0);
+        
+        }
+        
+        return true;
+    }
+
+    void XJMesh::DrawSubmesh(VkCommandBuffer commandBuffer, uint32_t submeshIndex) const
+    {
+        const XJSubmesh* submesh = GetSubmesh(submeshIndex);
+
+        if(!submesh)
+        {
+            spdlog::warn("XJMesh::DrawSubmesh skipped: " "submesh index {} is out of range {}.", submeshIndex, mSubmeshes.size());
+
             return;
         }
 
-        vkCmdDraw(commandBuffer, mVertexCount, 1, 0, 0);
+
+        if(!submesh->IsValid(mIndexCount))
+        {
+            spdlog::warn( "XJMesh::DrawSubmesh skipped: " "submesh range is invalid.");
+
+            return;
+        }
+
+        if (!HasIndexedGeometry())
+        {
+            spdlog::warn("XJMesh::DrawSubmesh skipped: ""indexed geometry is unavailable.");
+
+            return;
+        }
+
+        if (!Bind(commandBuffer))
+            return;
+
+        vkCmdDrawIndexed(commandBuffer, submesh->IndexCount, 1, submesh->FirstIndex, 0, 0);
     }
 }

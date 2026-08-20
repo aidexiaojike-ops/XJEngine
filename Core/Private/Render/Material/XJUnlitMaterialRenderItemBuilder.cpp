@@ -37,6 +37,7 @@ namespace XJ
                 XJMaterialRenderItem item{};
                 item.Material = material;
                 item.Mesh = slot.Mesh;
+                item.SubmeshIndex = slot.SubmeshIndex;
                 item.ModelMatrix = transComp.GetModelMatrix();
             
                 outItems.push_back(item);
