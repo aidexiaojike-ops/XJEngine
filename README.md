@@ -168,7 +168,8 @@ Swapchain
 - **Scene Switching**: Create/destroy entities via ECS lifecycle, support for multiple `.xjscene` files
 - **Scene Instantiator**: `XJSceneInstantiator` converts scene assets into live ECS entities with hierarchy
 - **Scene Serializer**: `XJSceneAssetSerializer` reads/writes `.xjscene` files via nlohmann/json
-- **glTF 2.0 Importer**: `XJModelImporter` parses `.glb`/`.gltf` via tinygltf
+- **glTF 2.0 Importer**: `XJModelImporter` parses `.glb`/`.gltf` via tinygltf, merging primitives into a shared vertex/index buffer with per-primitive index ranges (`XJMeshPrimitive`) and validating accessors/modes (skipping non-TRIANGLES) with rollback on invalid data
+- **Submesh Rendering**: `XJMesh` exposes `XJSubmesh` index ranges shared across vertex/index buffers with `Bind`/`Draw`/`DrawSubmesh`; `XJMaterialRenderItem` carries a `SubmeshIndex` so each primitive is drawn with its own material slot
 - **Factories**: `XJMeshFactory`, `XJTextureFactory`, `XJMaterialFactory` convert Assets into GPU Render Resources
 - **Data Flow**: `File → Scanner/Importer → Asset → Factory → Render Resource → Renderer`
 
