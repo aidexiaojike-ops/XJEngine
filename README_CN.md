@@ -87,6 +87,7 @@ File -> Importer -> Asset (CPU) -> Factory -> Resource (GPU) -> Renderer
 - **场景切换**：支持多个 `.xjscene` 文件，通过 ECS 生命周期创建/销毁实体
 - **注册表**：`XJAssetRegistry` 用于持久化资产句柄与元数据；运行时生成的句柄使用高位命名空间，与稳定的注册表句柄隔离，避免冲突
 - **Submesh 渲染**：`XJMesh` 通过 `XJSubmesh` 索引范围共享顶点/索引缓冲，提供 `Bind`/`Draw`/`DrawSubmesh`；`XJMaterialRenderItem` 携带 `SubmeshIndex`，使每个 primitive 使用各自材质槽绘制
+- **AABB 包围盒**：`XJBoundingBox`（Expand/Merge/Transformed）在 glTF 导入时逐 primitive 计算并存入 `XJMeshPrimitive`/`XJSubmesh`；`XJMesh` 通过 `GetBounds()` 暴露整体包围盒
 - **glTF 导入**：`XJModelImporter` 将 primitive 合并进共享顶点/索引缓冲，保存每个 primitive 的索引范围（`XJMeshPrimitive`），校验 accessor 与绘制模式（跳过非 TRIANGLES），数据无效时回滚
 - **原子 JSON IO**：`XJJsonIO` 统一提供 JSON 读取辅助（float/vec2/vec3/vec4/uint64）与原子文件写入（临时文件 + rename），供所有资产序列化器使用
 - **引导程序**：`XJAssetBootstrap` 管理默认资产注册和场景创建
@@ -109,7 +110,7 @@ File -> Importer -> Asset (CPU) -> Factory -> Resource (GPU) -> Renderer
 - **Console 日志**：`XJEditorLog` 通过自定义 spdlog sink 将引擎日志桥接到 Console 面板（异步安全复制、级别映射、线程安全队列）
 - **Viewport 渲染表面**：`XJViewport` 接口（`GetViewportTextureID`/`IsViewportTextureReady`/`OnViewportResized`）由 `XJViewportRenderSurface` 实现，负责离屏 render pass、render target、调整大小时的延迟 descriptor 释放以及 ImGui 纹理显示
 - **Services**：`XJEditorSceneService` + `XJEditorAssetService`（Controller 与 ECS 之间的桥接层）
-- **ViewModels**：`XJEditorSceneViewModel`、`XJEditorSelection`、`XJEditorComponentTypes`、`XJEditorAssetRequests`（UI 面板读取快照，写入请求）
+- **ViewModels**：`XJEditorSceneViewModel`、`XJEditorSelection`、`XJEditorComponentTypes`、`XJEditorAssetRequests`（UI 面板读取快照，写入请求）、`XJEditorAssetViewModel`（资产详情视图：基本信息、着色器验证、网格包围盒展示）
 - **面板功能**：Inspector 支持 Transform/Camera/MeshRenderer 组件增删编辑，Hierarchy 支持右键菜单创建/删除/重命名
 - **数据流**：`UI Panel → Request → Controller → Service → ECS`
 
@@ -152,6 +153,7 @@ make -j$(nproc)
 XJEngine/
 ├── Core/                    # 引擎核心：ECS、渲染、资产、摄像机
 │   ├── Public/Camera/       # 摄像机模块（独立于 ECS）
+│   ├── Public/Geometry/     # 几何工具（AABB 包围盒）
 │   ├── Public/Asset/        # Asset 层（CPU）
 │   │   ├── Importer/        # 模型/纹理/材质导入器
 │   │   ├── Loader/          # 资产加载器

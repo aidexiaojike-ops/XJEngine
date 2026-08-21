@@ -170,6 +170,7 @@ Swapchain
 - **Scene Serializer**: `XJSceneAssetSerializer` reads/writes `.xjscene` files via nlohmann/json
 - **glTF 2.0 Importer**: `XJModelImporter` parses `.glb`/`.gltf` via tinygltf, merging primitives into a shared vertex/index buffer with per-primitive index ranges (`XJMeshPrimitive`) and validating accessors/modes (skipping non-TRIANGLES) with rollback on invalid data
 - **Submesh Rendering**: `XJMesh` exposes `XJSubmesh` index ranges shared across vertex/index buffers with `Bind`/`Draw`/`DrawSubmesh`; `XJMaterialRenderItem` carries a `SubmeshIndex` so each primitive is drawn with its own material slot
+- **AABB Bounding Box**: `XJBoundingBox` (expand/merge/transformed) computed during glTF import per-primitive and stored in `XJMeshPrimitive`/`XJSubmesh`; `XJMesh` exposes the overall bounds via `GetBounds()`
 - **Factories**: `XJMeshFactory`, `XJTextureFactory`, `XJMaterialFactory` convert Assets into GPU Render Resources
 - **Data Flow**: `File → Scanner/Importer → Asset → Factory → Render Resource → Renderer`
 
@@ -187,6 +188,7 @@ Swapchain
 - **Viewport System**: `XJEditorViewportSystem` orchestrates Scene/Game preview viewports, camera resolution, protected editor entities, and scene attach/detach
 - **Lifecycle Hooks**: `OnUIBegin`/`OnUIEnd`/`OnUIRender`/`OnUIDestroy` virtual methods in XJApplication base class
 - **MVVM Architecture**: Controllers (camera, scene, drop, asset), Services, ViewModels decouple UI from ECS
+- **Asset ViewModel**: `XJEditorAssetViewModel` exposes asset details (handle, type, name, path), shader validation view (`XJEditorShaderValidationView`), and mesh bounds view (`XJEditorMeshBoundsView` with per-submesh AABB) for the Inspector panel
 - **XJEditorSceneController**: Scene load/save/open, dirty tracking, entity mutation requests, and snapshot-based Undo/Redo history (scene + material assets, up to 100 entries)
 - **XJEditorAssetController**: Asset create/rename/delete/import lifecycle management
 - **XJEditorAssetRequests**: MVVM request structs (CreateAsset, RenameAsset, DeleteAsset, ImportExternalFiles)
@@ -316,6 +318,8 @@ XJEngine/
 │   │   ├── Camera/          # 摄像机模块（独立于 ECS）
 │   │   │   ├── XJCameraController.h
 │   │   │   └── XJCameraMath.h
+│   │   ├── Geometry/        # 几何工具
+│   │   │   └── XJBoundingBox.h      # AABB 包围盒（Expand/Merge/Transformed）
 │   │   └── Render/         # 渲染相关
 │   │       ├── XJSampler.h
 │   │       ├── XJRenderTarget.h
