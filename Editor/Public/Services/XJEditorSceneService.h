@@ -2,6 +2,7 @@
 #define XJ_EDITOR_SCENE_SERVICE_H
 
 #include "Asset/XJAsset.h"
+#include "Asset/XJAssetRef.h"
 #include "UI/XJEditorSceneViewModel.h"
 #include "UI/XJEditorSelection.h"
 #include "UI/XJEditorComponentTypes.h"
@@ -40,7 +41,7 @@ namespace XJ
             static void UpdateCamera(XJScene& scene, const XJEditorUpdateCameraRequest& request);//更新摄像机
 
             static XJEditorEntityId CreateEmptyEntity(XJScene& scene, const std::string& name, XJEditorEntityId parentId);//创建一个空的实体
-            static bool AddComponent(XJScene& scene, XJEditorEntityId entityId, XJEditorComponentType componentType);//添加组件
+            static bool AddComponent(XJScene& scene, XJEditorEntityId entityId, XJEditorComponentType componentType, const XJAssetRef& sourceScene);//添加组件
             static bool DeleteComponent(XJScene& scene, XJEditorEntityId entityId, XJEditorComponentType componentType);//删除组件
             static bool AddMeshRendererComponent(XJScene& scene, XJEditorEntityId entityId, XJAssetHandle defaultMeshAsset, XJAssetRegistry& assetRegistry, XJSceneInstantiateContext& instantiateContext, const std::shared_ptr<XJTexture>& defaultTexture, const std::shared_ptr<XJSampler>& defaultSampler);//添加mesh组件
             static bool SetMeshRendererMesh(XJScene& scene, XJEditorEntityId entityId, XJAssetHandle meshAsset, XJAssetRegistry& assetRegistry, XJSceneInstantiateContext& instantiateContext, const std::shared_ptr<XJTexture>& defaultTexture, const std::shared_ptr<XJSampler>& defaultSampler);//设置mesh

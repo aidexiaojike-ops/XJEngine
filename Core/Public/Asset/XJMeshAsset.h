@@ -2,6 +2,7 @@
 #define XJ_MESH_ASSET_H
 
 #include "Asset/XJAsset.h"
+#include "Geometry/XJBoundingBox.h"
 
 #include <cstdint>
 #include <vector>
@@ -31,6 +32,9 @@ namespace XJ
         // -1 表示该 primitive 没有指定 glTF material。
         int32_t SourceMaterialIndex = -1;
 
+        // glTF primitive 的模型局部空间包围盒。
+        XJBoundingBox Bounds;
+
         bool IsValid(uint32_t totalIndexCount) const
         {
             if(IndexCount == 0)
@@ -39,7 +43,12 @@ namespace XJ
             if(FirstIndex > totalIndexCount)
                 return false;
 
-            return IndexCount <= totalIndexCount - FirstIndex;
+            if (IndexCount > totalIndexCount - FirstIndex)
+            {
+                return false;
+            }
+
+            return Bounds.IsValid();
         }
     };
 

@@ -56,19 +56,68 @@ namespace XJ
             }
         }
 
-        for(const XJSubmesh& submesh : mSubmeshes)
+        mBounds.Reset();
+
+        for(XJSubmesh& submesh : mSubmeshes)
         {
-            if (!submesh.IsValid(mIndexCount))
+            // 构造阶段先只检查索引范围。Builtin/旧资产可能没有预计算 Bounds，
+            // 下方会根据最终 GPU 顶点和索引重新计算并写回。
+            if (submesh.IndexCount == 0 ||
+                submesh.FirstIndex > mIndexCount ||
+                submesh.IndexCount > mIndexCount - submesh.FirstIndex)
             {
                 spdlog::error(
                     "XJMesh create failed: invalid "
-                    "submesh range, firstIndex={}, "
-                    "indexCount={}, totalIndices={}.",
-                    submesh.FirstIndex,
-                    submesh.IndexCount,
-                    mIndexCount);
+                    "submesh index range.");
+                
+                throw std::invalid_argument( "XJMesh contains invalid submesh range");
+            }
 
-                throw std::invalid_argument("XJMesh contains invalid submesh");
+            XJBoundingBox calculatedBounds;
+            const uint32_t endIndex = submesh.FirstIndex + submesh.IndexCount;
+
+            for(uint32_t indexPosition = submesh.FirstIndex; indexPosition < endIndex; ++indexPosition)
+            {
+                const uint32_t vertexIndex = indices[indexPosition];
+
+                if(vertexIndex >= vertices.size())
+                {
+                    spdlog::error(
+                        "XJMesh create failed: "
+                        "index {} references vertex {}, "
+                        "but vertex count is {}.",
+                        indexPosition,
+                        vertexIndex,
+                        vertices.size());
+
+                        throw std::invalid_argument( "XJMesh index is outside vertex range");
+
+                }
+
+                calculatedBounds.Expand(vertices[vertexIndex].position);
+            }
+            if (!calculatedBounds.IsValid())
+            {
+                spdlog::error(
+                    "XJMesh create failed: "
+                    "submesh bounds are invalid.");
+                
+                throw std::invalid_argument("XJMesh submesh bounds are invalid");
+            }
+
+            // GPU 顶点数据是最终权威来源。
+            // 即使 Asset 已提供 Bounds，也重新计算以防导入数据损坏。
+            submesh.Bounds = calculatedBounds;
+
+            mBounds.Merge(submesh.Bounds);
+        }
+
+        if (mIndexCount == 0)
+        {
+            for (const XJVulkanVertex& vertex :
+                 vertices)
+            {
+                mBounds.Expand(vertex.position);
             }
         }
 

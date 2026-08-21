@@ -40,6 +40,8 @@ namespace XJ
         {
             uiState.AssetRequests.RequestRefreshRegistry = false;
             XJEditorAssetService::RefreshRegistry(*mAssetRegistry, mRootPath, mRegistryPath);
+
+            ++uiState.AssetDetailEpoch;
         }
         // ---------- 创建资产 ----------
         if (uiState.AssetRequests.RequestCreateAsset)
@@ -60,6 +62,7 @@ namespace XJ
                 uiState.Selection.SelectedAsset = createdHandle;
                 uiState.Selection.SelectedEntity = XJ_INVALID_EDITOR_ENTITY_ID;
                 uiState.Selection.HighlightedEntities.clear();
+                ++uiState.AssetDetailEpoch; 
             }
         }
         // ---------- 重命名资产 ----------
@@ -74,6 +77,7 @@ namespace XJ
                 uiState.Selection.SelectedAsset = request.Handle;
                 uiState.Selection.SelectedEntity = XJ_INVALID_EDITOR_ENTITY_ID;
                 uiState.Selection.HighlightedEntities.clear();
+                ++uiState.AssetDetailEpoch;
             }
         }
         // ---------- 删除资产 ----------
@@ -92,15 +96,19 @@ namespace XJ
                 mRootPath,
                 mRegistryPath,
                 error);
-
+            // ---------- 删除文件夹 ----------
             if (!deleted)
             {
                 uiState.AssetRequests.FolderOperationError = std::move(error);
             }
-            else if (uiState.Selection.SelectedAsset != 0 &&
-                     !mAssetRegistry->Contains(uiState.Selection.SelectedAsset))
+            else 
             {
-                uiState.Selection.SelectedAsset = 0;
+                ++uiState.AssetDetailEpoch; 
+                if (uiState.Selection.SelectedAsset != 0 &&
+                     !mAssetRegistry->Contains(uiState.Selection.SelectedAsset))
+                {
+                    uiState.Selection.SelectedAsset = 0;
+                }
             }
         }
         
@@ -133,13 +141,14 @@ namespace XJ
                     for (XJEditorEntityId id : users)
                         uiState.Selection.HighlightedEntities.insert(id);
                 }
-            }
-        
+            }   
+             // ---------- 删除资产 ---------
             if (canDelete &&
-                XJEditorAssetService::DeleteAsset(*mAssetRegistry, request.Handle, mRegistryPath) &&
-                uiState.Selection.SelectedAsset == request.Handle)
+                XJEditorAssetService::DeleteAsset(*mAssetRegistry, request.Handle, mRegistryPath))
             {
-                uiState.Selection.SelectedAsset = 0;
+                ++uiState.AssetDetailEpoch;                    
+                if (uiState.Selection.SelectedAsset == request.Handle)
+                    uiState.Selection.SelectedAsset = 0;
             }
         }
         // ---------- 导入外部文件 ----------
@@ -156,7 +165,10 @@ namespace XJ
                 importedAny |= XJEditorAssetService::ImportExternalFile(*mAssetRegistry, sourcePath, request.DestinationDirectory);
             // 如果至少有一个文件导入成功，立即保存注册表
             if (importedAny)
+            {
                 mAssetRegistry->Save(mRegistryPath);
+                ++uiState.AssetDetailEpoch;                    
+            }
         }
     }
 }

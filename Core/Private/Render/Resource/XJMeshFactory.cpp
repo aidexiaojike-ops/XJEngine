@@ -79,6 +79,8 @@ namespace XJ
                 submesh.FirstIndex = primitive.FirstIndex;
                 submesh.IndexCount = primitive.IndexCount;
                 submesh.MaterialSlot = primitive.MaterialSlot;
+                submesh.Bounds = primitive.Bounds;
+
 
                 submeshes.push_back(submesh);
             }

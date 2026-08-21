@@ -3,6 +3,7 @@
 
 #include "Graphic/XJVulkanBuffer.h"
 #include "Graphic/XJVulkanVertex.h"
+#include "Geometry/XJBoundingBox.h"
 
 #include <cstdint>
 #include <memory>
@@ -19,6 +20,8 @@ namespace XJ
         uint32_t IndexCount = 0;
         uint32_t MaterialSlot = 0;
 
+        XJBoundingBox Bounds;
+
         bool IsValid(uint32_t totalIndexCount) const
         {
             if (IndexCount == 0)
@@ -27,8 +30,12 @@ namespace XJ
             if (FirstIndex > totalIndexCount)
                 return false;
 
-            return IndexCount <=
-                totalIndexCount - FirstIndex;
+            if (IndexCount > totalIndexCount - FirstIndex)
+            {
+                return false;
+            }
+
+            return Bounds.IsValid();
         }
     };
 
@@ -120,6 +127,11 @@ namespace XJ
             
                 return count;
             }
+            
+            const XJBoundingBox& GetBounds() const
+            {
+                return mBounds;
+            }
 
         private:
             std::shared_ptr<XJVulkanBuffer> mVertexBuffer;
@@ -130,6 +142,7 @@ namespace XJ
             uint32_t mIndexCount = 0;
 
             std::vector<XJSubmesh> mSubmeshes;
+            XJBoundingBox mBounds;//整体包围盒
     };
 }
 

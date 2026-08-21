@@ -45,6 +45,13 @@ namespace XJ
         auto& transform = entity->GetComponent<XJTransformComponent>();
         transform.position = CalculateSpawnPositionFromDropRay(scene, payload);
         transform.UpdateModelMatrix();// 更新模型矩阵以应用位置
+  
+        if (instantiateContext.SourceScene.IsValid())
+        {
+            auto& sceneRef = entity->AddComponent<XJSceneAssetRefComponent>();
+            sceneRef.SourceScene = instantiateContext.SourceScene;
+            sceneRef.SourceEntity = entity->XJGetUUID();
+        }
 
         auto& meshRef = entity->AddComponent<XJMeshAssetRefComponent>();
         meshRef.Mesh = { payload.Handle, XJAssetType::Mesh };

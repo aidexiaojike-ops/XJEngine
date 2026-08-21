@@ -520,7 +520,7 @@ namespace XJ
             }
             else
             {
-                added = XJEditorSceneService::AddComponent(*mScene, request.EntityId, request.ComponentType);
+                added = XJEditorSceneService::AddComponent(*mScene, request.EntityId, request.ComponentType, mInstantiateContext.SourceScene);
             }
 
             if(added)

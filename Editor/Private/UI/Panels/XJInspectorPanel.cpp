@@ -293,8 +293,17 @@ namespace XJ
             return;
         }
 
-        XJEditorAssetDetailsView details = XJEditorAssetService::BuildAssetDetailsView(*mState.AssetRegistry, handle);
-        
+        // 选中资产与资产版本号都未变时复用快照，避免每帧解析 JSON / glTF。
+        const uint64_t epoch = mState.AssetDetailEpoch;
+        if (handle != mCachedAssetHandle || epoch != mCachedAssetEpoch)
+        {
+            mCachedAssetHandle = handle;
+            mCachedAssetEpoch = epoch;
+            mCachedAssetDetails = XJEditorAssetService::BuildAssetDetailsView(*mState.AssetRegistry, handle);
+        }
+
+        const XJEditorAssetDetailsView& details = mCachedAssetDetails;
+
         if (!details.Valid)
         {
             ImGui::Text("Asset not found: 0x%016llX", static_cast<uint64_t>(handle));
@@ -318,6 +327,9 @@ namespace XJ
                 DrawShaderValidationView(details.ShaderValidation);
             }
         }
+
+        if (details.HasMeshBounds)
+            DrawMeshBoundsView(details.MeshBounds);
     }
 
 
@@ -351,6 +363,13 @@ namespace XJ
                 hasAnyAvailable = true;
                 if (ImGui::MenuItem("Mesh Renderer"))
                     RequestAddComponent(details, XJEditorComponentType::MeshRenderer);
+            }
+
+            if (!details.SceneRef.Valid)
+            {
+                hasAnyAvailable = true;
+                if (ImGui::MenuItem("Scene Asset Ref"))
+                    RequestAddComponent(details, XJEditorComponentType::SceneAssetRef);
             }
 
             if (!hasAnyAvailable)
@@ -1123,5 +1142,36 @@ namespace XJ
         mState.SceneRequests.ResetMaterialParameter.SlotIndex = slot.SlotIndex;
         mState.SceneRequests.ResetMaterialParameter.MaterialAsset = slot.MaterialAsset;
         mState.SceneRequests.ResetMaterialParameter.ParameterName = parameter.Name;
+    }
+    
+    void XJInspectorPanel::DrawMeshBoundsView(const XJEditorMeshBoundsView& bounds)
+    {
+        if (!bounds.Valid)
+            return;
+
+        if (!ImGui::CollapsingHeader("Mesh Bounds", ImGuiTreeNodeFlags_DefaultOpen))
+            return;
+
+        ImGui::LabelText("Min", "%.4f, %.4f, %.4f", bounds.Min.x, bounds.Min.y, bounds.Min.z);
+        ImGui::LabelText("Max", "%.4f, %.4f, %.4f", bounds.Max.x, bounds.Max.y, bounds.Max.z);
+        ImGui::LabelText("Center", "%.4f, %.4f, %.4f", bounds.Center.x, bounds.Center.y, bounds.Center.z);
+        ImGui::LabelText("Extents", "%.4f, %.4f, %.4f", bounds.Extents.x, bounds.Extents.y, bounds.Extents.z);
+
+        if (bounds.Submeshes.empty())
+            return;
+
+        ImGui::Spacing();
+        ImGui::SeparatorText("Submeshes");
+
+        for (const auto& submesh : bounds.Submeshes)
+        {
+            ImGui::PushID(static_cast<int>(submesh.SubmeshIndex));
+            ImGui::Text("Submesh %u (Slot %u)", submesh.SubmeshIndex, submesh.MaterialSlot);
+            ImGui::Indent();
+            ImGui::LabelText("Min", "%.4f, %.4f, %.4f", submesh.Min.x, submesh.Min.y, submesh.Min.z);
+            ImGui::LabelText("Max", "%.4f, %.4f, %.4f", submesh.Max.x, submesh.Max.y, submesh.Max.z);
+            ImGui::Unindent();
+            ImGui::PopID();
+        }
     }
 }

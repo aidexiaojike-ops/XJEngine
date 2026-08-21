@@ -32,6 +32,7 @@ namespace XJ
     namespace
     {
         constexpr uint32_t kMaxMaterialSlotCount = 64;
+        constexpr size_t kMaterialInspectorCacheMaxEntries = 256;
 
         bool IsValidMeshAsset(XJAssetRegistry& assetRegistry, XJAssetHandle meshAsset)//是否有模型资产
         {
@@ -383,6 +384,9 @@ namespace XJ
             entry.ShaderWriteTime = *shaderWriteTime;
             entry.Parameters = slot.Parameters;
             gMaterialInspectorCache[slot.MaterialAsset] = std::move(entry);
+
+            if (gMaterialInspectorCache.size() > kMaterialInspectorCacheMaxEntries)
+                gMaterialInspectorCache.clear();
         }
 
         bool ApplyRuntimeMaterialTextureParameter(
@@ -704,7 +708,7 @@ namespace XJ
         return static_cast<XJEditorEntityId>(entity->XJGetUUID());
     }
 
-    bool XJEditorSceneService::AddComponent(XJScene& scene, XJEditorEntityId entityId, XJEditorComponentType componentType)
+    bool XJEditorSceneService::AddComponent(XJScene& scene, XJEditorEntityId entityId, XJEditorComponentType componentType, const XJAssetRef& sourceScene)
     {
         XJEntity* entity = FindEntityById(scene, entityId);
 
@@ -744,6 +748,17 @@ namespace XJ
                 camera.XJSetFov(60.0f);
                 camera.XJSetNear(0.1f);
                 camera.XJSetFar(100.0f);
+                return true;
+            }
+
+            case XJEditorComponentType::SceneAssetRef:
+            {
+                if (entity->HasComponent<XJSceneAssetRefComponent>())
+                    return false;
+
+                auto& sceneRef = entity->AddComponent<XJSceneAssetRefComponent>();
+                sceneRef.SourceScene = sourceScene;
+                sceneRef.SourceEntity = entity->XJGetUUID();
                 return true;
             }
 

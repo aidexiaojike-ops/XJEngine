@@ -3,16 +3,21 @@
 #include "Asset/XJAssetRegistry.h"
 #include "Asset/XJMaterialAsset.h"
 #include "Asset/XJSceneAsset.h"
+#include "Asset/Importer/XJModelImporter.h" 
 #include "Asset/Importer/XJMaterialImporter.h"
 #include "Asset/Register/XJAssetRegistryScanner.h"
 #include "Asset/Serialization/XJMaterialAssetSerializer.h"
 #include "Asset/Serialization/XJSceneAssetSerializer.h"
 #include "Asset/Serialization/XJShaderAssetSerializer.h"
+#include "Asset/XJMeshAsset.h"  
+#include "Geometry/XJBoundingBox.h" 
 #include "Render/Shader/XJShaderValidation.h"
 
 #include <algorithm>
 #include <cctype>
 #include <utility>
+#include <optional>                              
+#include <unordered_map> 
 
 #include <spdlog/spdlog.h>
 
@@ -74,28 +79,28 @@ namespace XJ
             return view;
         }
 
-        void FillShaderValidationFromPath(XJEditorAssetDetailsView& view, const std::filesystem::path& shaderPath)//根据路径填充着色器验证信息
+        XJEditorShaderValidationView LoadShaderValidationView(const std::filesystem::path& shaderPath)
         {
-            if (shaderPath.empty())
-                return;
+            XJEditorShaderValidationView validation;
 
-            view.HasShaderValidation = true;
-            view.ShaderPath = shaderPath;
+            if (shaderPath.empty())
+                return validation;
 
             auto shaderAsset = XJShaderAssetSerializer::LoadFromFile(shaderPath);
             if (!shaderAsset)
             {
-                view.ShaderValidation.Valid = false;
+                validation.Valid = false;
 
                 XJEditorAssetValidationMessageView message;
                 message.Severity = XJEditorAssetValidationSeverity::Error;
                 message.Message = "Failed to load shader asset: " + shaderPath.generic_string();
-                view.ShaderValidation.Messages.push_back(std::move(message));
+                validation.Messages.push_back(std::move(message));
 
-                return;
+                return validation;
             }
 
-            view.ShaderValidation = ToEditorValidationView(shaderAsset->Validation);
+            validation = ToEditorValidationView(shaderAsset->Validation);
+            return validation;
         }
 
         std::string TrimAssetName(const std::string& value)
@@ -235,6 +240,155 @@ namespace XJ
             return true;
         }
 
+        constexpr size_t kAssetInspectorCacheMaxEntries = 256;
+
+        template <typename Map>
+        void TrimCacheIfNeeded(Map& cache)
+        {
+            if (cache.size() > kAssetInspectorCacheMaxEntries)
+                cache.clear();
+        }
+
+    }
+
+    std::optional<std::filesystem::file_time_type> GetFileWriteTimeOrNull(const std::filesystem::path& path)
+    {
+        if (path.empty())
+            return std::nullopt;
+
+        std::error_code ec;
+        const auto writeTime = std::filesystem::last_write_time(path, ec);
+        if (ec)
+            return std::nullopt;
+
+        return writeTime;
+    }
+    
+    struct ShaderValidationCacheEntry
+    {
+        std::filesystem::path ShaderPath;
+        std::filesystem::file_time_type WriteTime{};
+        XJEditorShaderValidationView Validation;
+    };
+
+    struct MaterialValidationCacheEntry
+    {
+        std::filesystem::path MaterialPath;
+        std::filesystem::file_time_type MaterialWriteTime{};
+        std::filesystem::path ShaderPath;
+        std::filesystem::file_time_type ShaderWriteTime{};
+        XJEditorShaderValidationView Validation;
+    };
+
+    std::unordered_map<XJAssetHandle, ShaderValidationCacheEntry> gShaderValidationCache;
+    std::unordered_map<XJAssetHandle, MaterialValidationCacheEntry> gMaterialValidationCache;
+
+    bool IsShaderValidationCacheValid(const ShaderValidationCacheEntry& entry, const std::filesystem::path& shaderPath)
+    {
+        if (entry.ShaderPath != shaderPath)
+            return false;
+
+        const auto writeTime = GetFileWriteTimeOrNull(shaderPath);
+        return writeTime && *writeTime == entry.WriteTime;
+    }
+
+    bool IsMaterialValidationCacheValid(const MaterialValidationCacheEntry& entry, const std::filesystem::path& materialPath)
+    {
+        if (entry.MaterialPath != materialPath)
+            return false;
+
+        const auto materialWriteTime = GetFileWriteTimeOrNull(materialPath);
+        if (!materialWriteTime || *materialWriteTime != entry.MaterialWriteTime)
+            return false;
+
+        const auto shaderWriteTime = GetFileWriteTimeOrNull(entry.ShaderPath);
+        return shaderWriteTime && *shaderWriteTime == entry.ShaderWriteTime;
+    }
+
+    constexpr const char* kBuiltinTJCubeSource = "builtin://mesh/TJCube";
+
+    bool IsBuiltinTJCubeSource(const std::filesystem::path& sourcePath)
+    {
+        const std::string source = sourcePath.generic_string();
+        return source == kBuiltinTJCubeSource || source == "builtin:/mesh/TJCube";
+    }
+
+
+    struct MeshBoundsCacheEntry
+    {
+        std::filesystem::path SourcePath;
+        std::filesystem::file_time_type WriteTime{};
+
+        XJEditorMeshBoundsView Bounds;
+    };
+
+    std::unordered_map<XJAssetHandle, MeshBoundsCacheEntry> gMeshBoundsCache;
+
+    bool IsMeshBoundsCacheValid(const MeshBoundsCacheEntry& entry, const std::filesystem::path& sourcePath)
+    {
+        if (entry.SourcePath != sourcePath)
+            return false;
+            
+        const auto writeTime = GetFileWriteTimeOrNull(sourcePath);
+        return writeTime && *writeTime == entry.WriteTime;
+    }
+
+    void FillMeshBoundsFromPath(XJEditorAssetDetailsView& view, const std::filesystem::path& sourcePath)
+    {
+        if (IsBuiltinTJCubeSource(sourcePath))
+        {
+            view.HasMeshBounds = true;
+            view.MeshBounds.Valid = true;
+            view.MeshBounds.Min = glm::vec3(-0.5f);
+            view.MeshBounds.Max = glm::vec3(0.5f);
+            view.MeshBounds.Center = glm::vec3(0.0f);
+            view.MeshBounds.Extents = glm::vec3(0.5f);
+
+            XJEditorMeshBoundsView::SubmeshBounds submesh;
+            submesh.SubmeshIndex = 0;
+            submesh.MaterialSlot = 0;
+            submesh.Min = view.MeshBounds.Min;
+            submesh.Max = view.MeshBounds.Max;
+            view.MeshBounds.Submeshes.push_back(submesh);
+
+            return;
+        }
+        XJGltfImporter importer;
+
+        if (!importer.LoadMeshAsset(sourcePath.string()))
+            return;
+
+        auto meshAsset = importer.ExtractMesh(0);
+
+        if (!meshAsset)
+            return;
+
+        XJBoundingBox total;
+        for (const XJMeshPrimitive& primitive : meshAsset->mPrimitives)
+        {
+            if (!primitive.Bounds.IsValid())
+                continue;
+
+            total.Merge(primitive.Bounds);
+
+            XJEditorMeshBoundsView::SubmeshBounds submesh;
+            submesh.SubmeshIndex = static_cast<uint32_t>(view.MeshBounds.Submeshes.size());
+            submesh.MaterialSlot = primitive.MaterialSlot;
+            submesh.Min = primitive.Bounds.Min;
+            submesh.Max = primitive.Bounds.Max;
+
+            view.MeshBounds.Submeshes.push_back(submesh);
+        }
+
+        if (!total.IsValid())
+            return;
+
+        view.HasMeshBounds = true;
+        view.MeshBounds.Valid = true;
+        view.MeshBounds.Min = total.Min;
+        view.MeshBounds.Max = total.Max;
+        view.MeshBounds.Center = total.GetCenter();
+        view.MeshBounds.Extents = total.GetExtents();
     }
 
     XJEditorAssetDetailsView XJEditorAssetService::BuildAssetDetailsView(const XJAssetRegistry& assetRegistry, XJAssetHandle handle)
@@ -256,14 +410,100 @@ namespace XJ
 
         if (meta.Type == XJAssetType::Shader)
         {
-            FillShaderValidationFromPath(view, meta.SourcePath);
+            const std::filesystem::path shaderPath = meta.SourcePath.lexically_normal();
+            view.HasShaderValidation = true;
+            view.ShaderPath = shaderPath;
+
+            auto cacheIt = gShaderValidationCache.find(handle);
+            if (cacheIt != gShaderValidationCache.end() &&
+                IsShaderValidationCacheValid(cacheIt->second, shaderPath))
+            {
+                view.ShaderValidation = cacheIt->second.Validation;
+            }
+            else
+            {
+                view.ShaderValidation = LoadShaderValidationView(shaderPath);
+
+                ShaderValidationCacheEntry entry;
+                entry.ShaderPath = shaderPath;
+                entry.Validation = view.ShaderValidation;
+
+                const auto writeTime = GetFileWriteTimeOrNull(shaderPath);
+                if (writeTime)
+                {
+                    entry.WriteTime = *writeTime;
+                    gShaderValidationCache[handle] = std::move(entry);
+                    TrimCacheIfNeeded(gShaderValidationCache);
+                }
+            }
         }
         else if (meta.Type == XJAssetType::Material)
         {
-            auto materialAsset = XJMaterialImporter::ImportMaterial(meta.SourcePath.string());
-        
-            if (materialAsset && !materialAsset->ShaderPath.empty())
-                FillShaderValidationFromPath(view, materialAsset->ShaderPath);
+            const std::filesystem::path materialPath = meta.SourcePath.lexically_normal();
+
+            auto cacheIt = gMaterialValidationCache.find(handle);
+            if (cacheIt != gMaterialValidationCache.end() &&
+                IsMaterialValidationCacheValid(cacheIt->second, materialPath))
+            {
+                view.HasShaderValidation = cacheIt->second.Validation.Valid;
+                view.ShaderPath = cacheIt->second.ShaderPath;
+                view.ShaderValidation = cacheIt->second.Validation;
+            }
+            else
+            {
+                auto materialAsset = XJMaterialImporter::ImportMaterial(materialPath.string());
+
+                if (materialAsset && !materialAsset->ShaderPath.empty())
+                {
+                    view.HasShaderValidation = true;
+                    view.ShaderPath = materialAsset->ShaderPath.lexically_normal();
+                    view.ShaderValidation = LoadShaderValidationView(view.ShaderPath);
+
+                    MaterialValidationCacheEntry entry;
+                    entry.MaterialPath = materialPath;
+                    entry.ShaderPath = view.ShaderPath;
+                    entry.Validation = view.ShaderValidation;
+
+                    const auto materialWriteTime = GetFileWriteTimeOrNull(materialPath);
+                    const auto shaderWriteTime = GetFileWriteTimeOrNull(view.ShaderPath);
+                    if (materialWriteTime && shaderWriteTime)
+                    {
+                        entry.MaterialWriteTime = *materialWriteTime;
+                        entry.ShaderWriteTime = *shaderWriteTime;
+                        gMaterialValidationCache[handle] = std::move(entry);
+                        TrimCacheIfNeeded(gMaterialValidationCache);
+                    }
+                }
+            }
+        }
+        else if (meta.Type == XJAssetType::Mesh)
+        {
+            const std::filesystem::path meshPath = meta.SourcePath.lexically_normal();
+
+            auto cacheIt = gMeshBoundsCache.find(handle);
+            if (cacheIt != gMeshBoundsCache.end() &&
+                IsMeshBoundsCacheValid(cacheIt->second, meshPath))
+            {
+                view.HasMeshBounds = cacheIt->second.Bounds.Valid;
+                view.MeshBounds = cacheIt->second.Bounds;
+            }
+            else
+            {
+                FillMeshBoundsFromPath(view, meshPath);
+
+                // 时间戳读取失败时不缓存（内置 TJCube 无源文件，每次走特判，开销可忽略）。
+                MeshBoundsCacheEntry entry;
+                entry.SourcePath = meshPath;
+                entry.Bounds = view.MeshBounds;
+
+                const auto writeTime = GetFileWriteTimeOrNull(meshPath);
+                if (writeTime)
+                {
+                    entry.WriteTime = *writeTime;
+                    gMeshBoundsCache[handle] = std::move(entry);
+                    TrimCacheIfNeeded(gMeshBoundsCache);
+                }
+            }
         }
 
         return view;

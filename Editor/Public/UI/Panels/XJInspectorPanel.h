@@ -6,6 +6,7 @@
 #include "UI/XJEditorSceneViewModel.h"
 #include "UI/XJEditorUIConfig.h"
 #include "UI/XJEditorSelection.h"
+#include "UI/XJEditorAssetViewModel.h"
 #include <string>
 #include <variant>
 
@@ -29,6 +30,7 @@ namespace XJ
             void DrawCameraComponent(const XJEditorEntityDetailsView& details);//显示 Camera 组件的 UI，允许用户查看和修改摄像机的 FOV、近远裁剪面等属性
             void DrawAssetRefComponent(const XJEditorEntityDetailsView& details);//显示 AssetRef 组件的 UI，允许用户查看和修改实体引用的资产（如场景、网格等）
             void DrawAssetDetails(XJAssetHandle handle);//显示资产的详细信息，如类型、来源路径等
+            void DrawMeshBoundsView(const XJEditorMeshBoundsView& bounds);//显示网格资产的包围盒（整体 + 各 submesh）
 
             bool DrawComponentFrame(const char* label, XJEditorComponentType componentType, const XJEditorEntityDetailsView& details);//组件UI
             void DrawComponentOptionsMenu(const char* label, XJEditorComponentType componentType, const XJEditorEntityDetailsView& details);//组件UI边上的三个小点打开后里面的内容
@@ -61,6 +63,10 @@ namespace XJ
             XJEditorPanelConfig_Inspector* mConfig = nullptr;
             char mMeshSearchBuffer[128] = {};
             char mMaterialSearchBuffer[128] = {};
+
+            XJAssetHandle mCachedAssetHandle = 0;
+            uint64_t mCachedAssetEpoch = 0;
+            XJEditorAssetDetailsView mCachedAssetDetails;
     };
 }
 #endif

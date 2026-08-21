@@ -1,4 +1,5 @@
 #include "Asset/Importer/XJModelImporter.h"
+#include "Geometry/XJBoundingBox.h"
 // #include <tiny_gltf.h>
 #include "spdlog/spdlog.h"
 #include <cstring>
@@ -116,6 +117,9 @@ namespace XJ
 
         for (const tinygltf::Primitive& primitive : mesh.primitives)
         {
+            // 每个 primitive 必须独立计算 Bounds，不能继承前一个 primitive 的范围。
+            XJBoundingBox primitiveBounds;
+
             // 第一版渲染管线只支持 triangle list。glTF mode=-1 也按规范默认 TRIANGLES。
             if (primitive.mode != -1 && primitive.mode != TINYGLTF_MODE_TRIANGLES)
             {
@@ -180,6 +184,7 @@ namespace XJ
             {
                 Vertex vertex{};
                 vertex.Position = readVec3(positionData, positionStride, i);
+                primitiveBounds.Expand(vertex.Position);//计算bound
                 meshAsset->mVertices.push_back(vertex);
             }
             // NORMAL 是可选属性；如果存在但数量不匹配，跳过写入，避免越界覆盖顶点数组。
@@ -382,13 +387,14 @@ namespace XJ
                 spdlog::warn("glTF: primitive material index {} ""is out of range",sourceMaterialIndex);
                 sourceMaterialIndex = -1;
             }
-
+            //创建 metadata
             XJMeshPrimitive importedPrimitive;
             importedPrimitive.FirstIndex = firstIndex;
             importedPrimitive.IndexCount = indexCount;
             // 第一版让每个有效 primitive 对应一个独立材质槽。
             importedPrimitive.MaterialSlot = static_cast<uint32_t>(meshAsset->mPrimitives.size());
             importedPrimitive.SourceMaterialIndex = sourceMaterialIndex;
+            importedPrimitive.Bounds = primitiveBounds;
 
             if (!importedPrimitive.IsValid(static_cast<uint32_t>(meshAsset->mIndices.size())))
             {
