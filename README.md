@@ -201,7 +201,8 @@ Swapchain
 - **Multi-Viewport**: Support for floating/detached editor windows via ImGui platform windows
 - **XJEditorUILayer**: Orchestrates editor panels with drag-drop support
 - **Viewport System**: `XJViewport` interface (`GetViewportTextureID`/`IsViewportTextureReady`/`OnViewportResized`) backed by `XJViewportRenderSurface`, which owns the off-screen render pass, render target, deferred descriptor-set release on resize, and ImGui texture display
-- **Scene/Game Preview**: `XJScenePreview` and `XJGamePreview` panels for separate scene and game camera views
+- **Scene/Game Preview**: `XJScenePreview` and `XJGamePreview` panels for separate scene and game camera views, with an entity pick callback (`SetEntityPickCallback`) that fires ray-AABB intersection from the viewport
+- **Workspace**: `XJEditorWorkspace` manages the in-engine project workspace, including `SelectEntityFromViewportRay` for ray-based entity selection in the viewport
 - **UI Config**: `XJEditorUIConfig` reads/writes `EditorUI.json` for per-panel visibility and layout persistence
 
 ## 🛠️ System Requirements
@@ -319,7 +320,8 @@ XJEngine/
 │   │   │   ├── XJCameraController.h
 │   │   │   └── XJCameraMath.h
 │   │   ├── Geometry/        # 几何工具
-│   │   │   └── XJBoundingBox.h      # AABB 包围盒（Expand/Merge/Transformed）
+│   │   │   ├── XJBoundingBox.h      # AABB 包围盒（Expand/Merge/Transformed）
+│   │   │   └── XJRayIntersection.h  # 射线-AABB 相交检测
 │   │   └── Render/         # 渲染相关
 │   │       ├── XJSampler.h
 │   │       ├── XJRenderTarget.h
