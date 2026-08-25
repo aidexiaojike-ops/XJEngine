@@ -67,6 +67,10 @@ namespace XJ
             void SetSceneHooks(XJEditorWorkspaceSceneHooks hooks);
             void ClearSceneHooks();
             bool HandleSceneAssetDrop(const XJAssetDragPayload& payload);
+            void SelectEntityFromViewportRay(
+                const glm::vec3& rayOrigin,
+                const glm::vec3& rayDirection,
+                float maxDistance);
 
         private:
             class Impl;

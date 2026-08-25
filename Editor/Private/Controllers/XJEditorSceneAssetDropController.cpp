@@ -13,8 +13,10 @@
 #include "UI/XJEditorUIState.h"
 
 #include <algorithm>
-#include <cmath>
 #include <spdlog/spdlog.h>
+
+#include "Geometry/XJRayIntersection.h"
+#include "Render/Resource/XJMesh.h"
 
 
 namespace XJ
@@ -123,69 +125,85 @@ namespace XJ
 
          glm::vec3 spawnPosition{0.0f};
 
-         if (RaycastSceneWithinDistance(scene, payload.RayOrigin, payload.RayDirection, 5.0f, spawnPosition))
+         const float rayMaxDistance = std::max(payload.RayMaxDistance, 0.1f);
+
+         if (RaycastSceneWithinDistance(scene, payload.RayOrigin, payload.RayDirection, rayMaxDistance, spawnPosition))
          {
              return spawnPosition;
          }
 
-         return payload.RayOrigin + payload.RayDirection * 5.0f;
+         // 未命中时仍放在摄像机附近，不直接放到 Far Plane。
+         const float fallbackDistance = std::min(5.0f, rayMaxDistance);
+         return payload.RayOrigin + glm::normalize(payload.RayDirection) * fallbackDistance;
     }
 
         //射线距离
     bool XJEditorSceneAssetDropController::RaycastSceneWithinDistance(XJScene& scene, const glm::vec3& rayOrigin, const glm::vec3& rayDirection, float maxDistance, glm::vec3& outSpawnPosition)
     {
-        float closestT = maxDistance;
-        bool hit = false;
+        if (maxDistance <= 0.0f)
+            return false;
 
+        float closestDistance = maxDistance;
+        bool foundHit = false;
 
         const auto& registry = scene.XJGetEcsRegistry();
-        auto view = registry.view<XJTransformComponent, XJMeshAssetRefComponent>();
 
-        view.each([&](auto entity, const XJTransformComponent& transform, const XJMeshAssetRefComponent& meshRef)
+        // MeshAssetRef 只有资产 handle，没有 GPU Mesh/Bounds。
+        // Runtime material component 才保存真正的 XJMesh。
+        auto view = registry.view<XJTransformComponent, XJUnlitMaterialComponent>();
+
+        view.each([&](auto entity, const XJTransformComponent& transform, const XJUnlitMaterialComponent& renderComponent)
         {
-            float radius = std::max(transform.scale.x, std::max(transform.scale.y, transform.scale.z));
-            radius = std::max(radius, 0.5f);
+            (void)entity;
 
-            float t = 0.0f;
-            if (!IntersectRaySphere(rayOrigin, rayDirection, transform.position, radius, maxDistance, t))
+            std::shared_ptr<XJMesh> mesh;
+
+            // 同一个 Mesh 的多个 submesh 会产生多个 draw slot，
+            // 这里只需要取得第一个有效 Mesh 并检测整体 Bounds。
+            for (const auto& slot : renderComponent.XJGetSlots())
+            {
+                if (slot.Mesh)
+                {
+                    mesh = slot.Mesh;
+                    break;
+                }
+            }
+
+            if (!mesh || !mesh->GetBounds().IsValid())
+            {
+                return;
+            }
+
+            const XJBoundingBox worldBounds = mesh->GetBounds().Transformed( transform.GetModelMatrix());
+
+            if (!worldBounds.IsValid())
                 return;
 
-            if (t < closestT)
-            {
-                closestT = t;
-                hit = true;
+            XJRayAABBHit hit;
 
-                outSpawnPosition = transform.position;
-                outSpawnPosition.y += radius + 0.05f;
+            if (!XJIntersectRayAABB(
+                    rayOrigin,
+                    rayDirection,
+                    worldBounds,
+                    closestDistance,
+                    hit))
+            {
+                return;
             }
+
+            if (!hit.Hit || hit.Distance >= closestDistance)
+            {
+                return;
+            }
+
+            closestDistance = hit.Distance;
+            foundHit = true;
+
+            // 稍微沿表面法线推出，避免新物体原点正好落入旧物体内部。
+            outSpawnPosition = hit.Position + hit.Normal * 0.05f;
         });
 
-        return hit;
-    }
-
-        //临时的碰撞球
-    bool XJEditorSceneAssetDropController::IntersectRaySphere(const glm::vec3& rayOrigin,const glm::vec3& rayDir,const glm::vec3& center,float radius,float maxDistance,float& outT)
-    {
-        glm::vec3 oc = rayOrigin - center;
-
-        float b = glm::dot(oc, rayDir);
-        float c = glm::dot(oc, oc) - radius * radius;
-        float h = b * b - c;
-
-        if (h < 0.0f)
-            return false;
-
-        h = std::sqrt(h);
-
-        float t = -b - h;
-        if (t < 0.0f)
-            t = -b + h;
-
-        if (t < 0.0f || t > maxDistance)
-            return false;
-
-        outT = t;
-        return true;
+        return foundHit;
     }
 
 }

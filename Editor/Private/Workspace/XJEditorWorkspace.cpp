@@ -9,6 +9,7 @@
 #include "UI/XJEditorUIState.h"
 #include "ECS/XJScene.h"
 #include "Services/XJEditorAssetService.h"
+#include "Services/XJEditorSceneService.h"
 
 #include <spdlog/spdlog.h>
 #include <utility>
@@ -293,6 +294,27 @@ namespace XJ
                         mImpl->DefaultTexture,
                         mImpl->DefaultSampler);
             });
+    }
+
+    void XJEditorWorkspace::SelectEntityFromViewportRay(
+        const glm::vec3& rayOrigin,
+        const glm::vec3& rayDirection,
+        float maxDistance)
+    {
+        if (!mImpl->Initialized || !mImpl->Scene)
+            return;
+
+        const XJEditorEntityId selectedEntity =
+            XJEditorSceneService::FindClosestMeshEntityFromRay(
+                *mImpl->Scene,
+                rayOrigin,
+                rayDirection,
+                maxDistance);
+
+        mImpl->UIState.Selection.SelectedEntity = selectedEntity;
+        mImpl->UIState.Selection.SelectedAsset = 0;
+        mImpl->UIState.Selection.HighlightedEntities.clear();
+        mImpl->UIState.SelectedEntityDetails = {};
     }
 
 }

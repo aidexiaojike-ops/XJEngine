@@ -33,10 +33,19 @@ namespace XJ
             }
 
             using AssetDropCallback = std::function<void(const XJAssetDragPayload&)>;
+            using EntityPickCallback = std::function<void(
+                const glm::vec3& rayOrigin,
+                const glm::vec3& rayDirection,
+                float maxDistance)>;
 
             void SetAssetDropCallback(AssetDropCallback callback)
             {
                 mAssetDropCallback = std::move(callback);
+            }
+
+            void SetEntityPickCallback(EntityPickCallback callback)
+            {
+                mEntityPickCallback = std::move(callback);
             }
 
             void DrawUI() override;
@@ -60,8 +69,9 @@ namespace XJ
             XJViewportRenderSurface mSurface;
             XJEntity* mPreviewCamera = nullptr;//用于预览的摄像机实体
 
-            bool CalculateDropPositionFromViewportRay(const ImVec2& imageMin, const ImVec2& imageSize, glm::vec3& outOrigin, glm::vec3& outDirection) const;//根据鼠标在视口中的位置计算拖放物体在世界空间中的位置
+            bool CalculateDropPositionFromViewportRay(const ImVec2& imageMin, const ImVec2& imageSize, glm::vec3& outOrigin, glm::vec3& outDirection, float& outMaxDistance) const;//根据鼠标在视口中的位置计算拖放物体在世界空间中的位置
             AssetDropCallback mAssetDropCallback;
+            EntityPickCallback mEntityPickCallback;
 
         protected:
             ImTextureID GetViewportTextureID() const override;

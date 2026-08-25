@@ -29,6 +29,11 @@ namespace XJ
             static XJEntity* FindEntityById(XJScene& scene, XJEditorEntityId id);//ID找到ecs
             static std::vector<XJEditorEntityId> FindEntitiesUsingAsset(XJScene& scene, XJAssetHandle assetHandle);//删除前做引用检查
             static XJAssetHandle GetMeshAssetFromEntity(XJScene& scene, XJEditorEntityId entityId);
+            static XJEditorEntityId FindClosestMeshEntityFromRay(
+                XJScene& scene,
+                const glm::vec3& rayOrigin,
+                const glm::vec3& rayDirection,
+                float maxDistance);
             static void DeleteEntities(XJScene& scene, const std::vector<XJEditorEntityId>& entityIds);//ID是删除
 
             static XJEditorSceneViewModel BuildSceneViewModel(XJScene& scene, const ShouldExposeEntityCallback& shouldExposeEntity = {});//显示模型

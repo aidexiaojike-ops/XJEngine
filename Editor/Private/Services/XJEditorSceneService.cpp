@@ -1,4 +1,5 @@
 #include "Services/XJEditorSceneService.h"
+#include "Geometry/XJRayIntersection.h"
 #include <optional>
 
 #include "ECS/XJEntity.h"
@@ -525,6 +526,66 @@ namespace XJ
 
         const auto& meshRef = entity->GetComponent<XJMeshAssetRefComponent>();
         return meshRef.Mesh.IsValid() ? meshRef.Mesh.Handle : 0;
+    }
+
+    XJEditorEntityId XJEditorSceneService::FindClosestMeshEntityFromRay(
+        XJScene& scene,
+        const glm::vec3& rayOrigin,
+        const glm::vec3& rayDirection,
+        float maxDistance)
+    {
+        if (maxDistance <= 0.0f || glm::length(rayDirection) <= 0.000001f)
+            return XJ_INVALID_EDITOR_ENTITY_ID;
+
+        XJEditorEntityId closestEntity = XJ_INVALID_EDITOR_ENTITY_ID;
+        float closestDistance = maxDistance;
+
+        const auto& registry = scene.XJGetEcsRegistry();
+        auto view = registry.view<XJTransformComponent, XJUnlitMaterialComponent>();
+
+        view.each([&](auto enttEntity, const XJTransformComponent& transform, const XJUnlitMaterialComponent& renderComponent)
+        {
+            bool entityHit = false;
+            float entityDistance = closestDistance;
+
+            for (const auto& slot : renderComponent.XJGetSlots())
+            {
+                if (!slot.Mesh)
+                    continue;
+
+                const XJSubmesh* submesh = slot.Mesh->GetSubmesh(slot.SubmeshIndex);
+                if (!submesh || !submesh->Bounds.IsValid())
+                    continue;
+
+                const XJBoundingBox worldBounds = submesh->Bounds.Transformed(transform.GetModelMatrix());
+                XJRayAABBHit hit;
+
+                if (XJIntersectRayAABB(
+                        rayOrigin,
+                        rayDirection,
+                        worldBounds,
+                        entityDistance,
+                        hit) &&
+                    hit.Hit &&
+                    hit.Distance < entityDistance)
+                {
+                    entityDistance = hit.Distance;
+                    entityHit = true;
+                }
+            }
+
+            if (!entityHit)
+                return;
+
+            XJEntity* entity = scene.GetEntity(enttEntity);
+            if (!entity)
+                return;
+
+            closestDistance = entityDistance;
+            closestEntity = static_cast<XJEditorEntityId>(entity->XJGetUUID());
+        });
+
+        return closestEntity;
     }
 
     void XJEditorSceneService::DeleteEntities(XJScene& scene, const std::vector<XJEditorEntityId>& entityIds)

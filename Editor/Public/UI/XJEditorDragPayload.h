@@ -15,6 +15,7 @@ namespace XJ
         bool HasViewportRay = false;
         glm::vec3 RayOrigin{0.0f};
         glm::vec3 RayDirection{0.0f};
+        float RayMaxDistance = 100.0f;//通常来自预览相机 Far Plane
         //位置
         bool HasWorldPosition = false;
         glm::vec3 WorldPosition{0.0f};

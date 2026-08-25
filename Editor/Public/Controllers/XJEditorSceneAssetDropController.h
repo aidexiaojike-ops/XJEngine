@@ -48,13 +48,7 @@ namespace XJ
                 float maxDistance,
                 glm::vec3& outSpawnPosition);
 
-            bool IntersectRaySphere(
-                const glm::vec3& rayOrigin,
-                const glm::vec3& rayDirection,
-                const glm::vec3& center,
-                float radius,
-                float maxDistance,
-                float& outT);
+
     };
 
 

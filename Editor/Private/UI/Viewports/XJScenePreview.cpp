@@ -19,6 +19,8 @@ namespace XJ
 
     void XJScenePreview::Shutdown()
     {
+        mAssetDropCallback = {};
+        mEntityPickCallback = {};
         mSurface.Shutdown();
     }
 
@@ -63,7 +65,7 @@ namespace XJ
         mSurface.Resize(width, height);
     }
 
-    bool XJScenePreview::CalculateDropPositionFromViewportRay(const ImVec2& imageMin, const ImVec2& imageSize, glm::vec3& outOrigin, glm::vec3& outDirection) const
+    bool XJScenePreview::CalculateDropPositionFromViewportRay(const ImVec2& imageMin, const ImVec2& imageSize, glm::vec3& outOrigin, glm::vec3& outDirection, float& outMaxDistance) const
     {
         if (!mPreviewCamera || !mPreviewCamera->HasComponent<XJCameraComponent>() 
                             || !mPreviewCamera->HasComponent<XJTransformComponent>())
@@ -78,23 +80,31 @@ namespace XJ
         //float ndcY = 1.0f - (relativeMousePos.y / imageSize.y) * 2.0f; // Y轴需要翻转
         const float ndcY = (relativeMousePos.y / imageSize.y) * 2.0f - 1.0f; // Y轴需要翻转
 
-        // 获取摄像机的投影矩阵和视图矩阵
+        // 获取摄像机的投影矩阵和视图矩阵。
         auto& cameraComp = mPreviewCamera->GetComponent<XJCameraComponent>();
         auto& transformComp = mPreviewCamera->GetComponent<XJTransformComponent>();
 
-        const glm::mat4 invProjection = glm::inverse(cameraComp.XJGetProjectionMatrix());
-        const glm::mat4 invView = glm::inverse(cameraComp.XJGetViewMatrix());
+        const glm::mat4 projection = cameraComp.XJGetProjectionMatrix();
+        const glm::mat4 view = cameraComp.XJGetViewMatrix();
+        const glm::mat4 inverseViewProjection = glm::inverse(projection * view);
 
-        // 计算从屏幕空间到世界空间的射线
-        const glm::vec4 rayClip(ndcX, ndcY, 0.0f, 1.0f);
-        glm::vec4 rayEye = invProjection * rayClip;
+        // Vulkan NDC 深度范围是 [0, 1]。分别反投影 near/far 两点，
+        // 比“逆投影后强制 z=-1”更稳，也不会混淆位置向量和方向向量。
+        glm::vec4 nearWorldH = inverseViewProjection * glm::vec4(ndcX, ndcY, 0.0f, 1.0f);
+        glm::vec4 farWorldH = inverseViewProjection * glm::vec4(ndcX, ndcY, 1.0f, 1.0f);
 
-        if (std::abs(rayEye.w) > 0.000001f)
-            rayEye /= rayEye.w;
+        constexpr float epsilon = 0.000001f;
+        if (std::abs(nearWorldH.w) <= epsilon || std::abs(farWorldH.w) <= epsilon)
+            return false;
 
-        rayEye = glm::vec4(rayEye.x, rayEye.y, -1.0f, 0.0f);
+        const glm::vec3 nearWorld = glm::vec3(nearWorldH) / nearWorldH.w;
+        const glm::vec3 farWorld = glm::vec3(farWorldH) / farWorldH.w;
+        const glm::vec3 rayVector = farWorld - nearWorld;
 
-        const glm::vec3 rayWorld = glm::normalize(glm::vec3(invView * rayEye));
+        if (glm::length(rayVector) <= epsilon)
+            return false;
+
+        const glm::vec3 rayWorld = glm::normalize(rayVector);
 
         // 假设我们想将物体放置在距离摄像机一定距离的位置，例如10单位
         //float distanceFromCamera = 10.0f;
@@ -107,6 +117,7 @@ namespace XJ
 
         outOrigin = transformComp.position;
         outDirection = rayWorld;
+        outMaxDistance = cameraComp.XJGetFar();
 
         return true;
     }
@@ -137,6 +148,28 @@ namespace XJ
 
                     ImGui::Image(GetViewportTextureID(), avail);
                     mHovered = ImGui::IsItemHovered();
+
+                    if (mHovered &&
+                        ImGui::IsMouseClicked(ImGuiMouseButton_Left) &&
+                        mEntityPickCallback)
+                    {
+                        glm::vec3 rayOrigin;
+                        glm::vec3 rayDirection;
+                        float rayMaxDistance = 0.0f;
+
+                        if (CalculateDropPositionFromViewportRay(
+                                imageMin,
+                                avail,
+                                rayOrigin,
+                                rayDirection,
+                                rayMaxDistance))
+                        {
+                            mEntityPickCallback(
+                                rayOrigin,
+                                rayDirection,
+                                rayMaxDistance);
+                        }
+                    }
                     
                     if (ImGui::BeginDragDropTarget())
                     {
@@ -153,11 +186,13 @@ namespace XJ
                                 
                                     glm::vec3 rayOrigin;
                                     glm::vec3 rayDirection;
-                                    if (CalculateDropPositionFromViewportRay(imageMin, avail, rayOrigin, rayDirection))
+                                    float rayMaxDistance = 0.0f;
+                                    if (CalculateDropPositionFromViewportRay(imageMin, avail, rayOrigin, rayDirection, rayMaxDistance))
                                     {
                                         droppedPayload.HasViewportRay = true;
                                         droppedPayload.RayOrigin = rayOrigin;
                                         droppedPayload.RayDirection = rayDirection;
+                                        droppedPayload.RayMaxDistance = rayMaxDistance;
                                     }
                                 
                                     mAssetDropCallback(droppedPayload);

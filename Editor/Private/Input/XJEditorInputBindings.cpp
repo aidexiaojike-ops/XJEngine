@@ -83,6 +83,21 @@ namespace XJ
                         mImpl->Workspace
                             ->HandleSceneAssetDrop(payload);
                 });
+
+            preview->SetEntityPickCallback(
+                [this](
+                    const glm::vec3& rayOrigin,
+                    const glm::vec3& rayDirection,
+                    float maxDistance)
+                {
+                    if (mImpl->Workspace)
+                    {
+                        mImpl->Workspace->SelectEntityFromViewportRay(
+                            rayOrigin,
+                            rayDirection,
+                            maxDistance);
+                    }
+                });
         }
 
         mImpl->Initialized = true;
@@ -114,6 +129,7 @@ namespace XJ
                     mImpl->Viewports->GetScenePreview())
             {
                 preview->SetAssetDropCallback({});
+                preview->SetEntityPickCallback({});
             }
         }
 
