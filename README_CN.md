@@ -86,6 +86,7 @@ File -> Importer -> Asset (CPU) -> Factory -> Resource (GPU) -> Renderer
 - **场景系统**：`.xjscene` -> `XJSceneAssetSerializer` -> `XJSceneInstantiator` -> ECS 实体
 - **场景切换**：支持多个 `.xjscene` 文件，通过 ECS 生命周期创建/销毁实体
 - **注册表**：`XJAssetRegistry` 用于持久化资产句柄与元数据；运行时生成的句柄使用高位命名空间，与稳定的注册表句柄隔离，避免冲突
+- **资产元数据**：`.xjmeta` 旁置文件（`XJAssetMetadata`）存储每个资产的句柄/类型/导入器信息；`XJAssetMetadataSerializer` 负责读写；`XJPersistentAssetHandleGenerator` 确保唯一句柄生成
 - **Submesh 渲染**：`XJMesh` 通过 `XJSubmesh` 索引范围共享顶点/索引缓冲，提供 `Bind`/`Draw`/`DrawSubmesh`；`XJMaterialRenderItem` 携带 `SubmeshIndex`，使每个 primitive 使用各自材质槽绘制
 - **AABB 包围盒**：`XJBoundingBox`（Expand/Merge/Transformed）在 glTF 导入时逐 primitive 计算并存入 `XJMeshPrimitive`/`XJSubmesh`；`XJMesh` 通过 `GetBounds()` 暴露整体包围盒
 - **glTF 导入**：`XJModelImporter` 将 primitive 合并进共享顶点/索引缓冲，保存每个 primitive 的索引范围（`XJMeshPrimitive`），校验 accessor 与绘制模式（跳过非 TRIANGLES），数据无效时回滚

@@ -162,6 +162,7 @@ Swapchain
 #### **Asset System**
 - **Two-Layer Architecture**: Assets (CPU-side pure data) separate from Render Resources (GPU-side Vulkan objects)
 - **Asset Registry**: Handle-based asset database (`XJAssetRegistry`) with JSON persistence; runtime-generated handles use a high-bit namespace separate from stable registry handles
+- **Asset Metadata**: `.xjmeta` sidecar files (`XJAssetMetadata`) store per-asset handle/type/importer info; `XJAssetMetadataSerializer` reads/writes them; `XJPersistentAssetHandleGenerator` ensures unique handle generation
 - **Asset Registry Scanner**: `XJAssetRegistryScanner` auto-scans Resource directories by extension to register assets
 - **Atomic JSON IO**: `XJJsonIO` centralizes JSON read helpers (float/vec2/vec3/vec4/uint64) and atomic file writes (temp file + rename) across all asset serializers
 - **Scene Assets**: Disk-side scene data (`XJSceneAsset`) with entities, transforms, meshes, cameras, lights
@@ -350,6 +351,7 @@ XJEngine/
 │   │       ├── XJAsset.h
 │   │       ├── XJAssetRef.h
 │   │       ├── XJAssetRegistry.h
+│   │       ├── Metadata/      # 资产元数据（.xjmeta 文件、句柄生成器）
 │   │       ├── XJMeshAsset.h
 │   │       ├── XJTextureAsset.h
 │   │       ├── XJMaterialAsset.h
