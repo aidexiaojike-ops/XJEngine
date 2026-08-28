@@ -28,7 +28,7 @@ namespace XJ
             auto& layoutJson = j["layout"];
             layout.dockspace = layoutJson.value("dockspace", true);
             layout.saveImguiIni = layoutJson.value("saveImguiIni", true);
-            layout.imguiIniPath = layoutJson.value("imguiIniPath", "Resource/Config/imgui.ini");
+            layout.imguiIniPath = layoutJson.value("imguiIniPath", "Saved/Config/imgui.ini");
         }
 
         if(j.contains("panels"))// 读取面板配置

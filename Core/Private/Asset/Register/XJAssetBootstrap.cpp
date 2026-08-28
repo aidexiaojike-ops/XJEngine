@@ -13,7 +13,7 @@ namespace XJ
             mDefaultSceneHandle,
             XJ::XJAssetType::Scene,
             "DefaultScene",
-            "Resource/Scenes/Default.xjscene",
+            mDefaultScenePath,
             {}
         });
 
@@ -22,7 +22,7 @@ namespace XJ
             mMonkeyMeshHandle,
             XJ::XJAssetType::Mesh,
             "Monkey",
-            "Resource/Mesh/Monkey.glb",
+            mResourceRoot / "Mesh/Monkey.glb",
             {}
         });
 
@@ -38,19 +38,17 @@ namespace XJ
 
     void XJAssetBootstrap::LoadOrCreateAssetRegistry()
     {
-        const std::filesystem::path registryPath = "Resource/Config/AssetRegistry.json";
-
-        if(std::filesystem::exists(registryPath))
+        if(std::filesystem::exists(mRegistryPath))
         {
-            if(mAssetRegistry.Load(registryPath))
+            if(mAssetRegistry.Load(mRegistryPath))
             {
-                spdlog::info("Loaded asset registry from {}", registryPath.string());
+                spdlog::info("Loaded asset registry from {}", mRegistryPath.string());
                 RegisterBootstrapAssets();
-                mAssetRegistry.Save(registryPath);   
+                mAssetRegistry.Save(mRegistryPath);   
             }
             else
             {
-                spdlog::error("Failed to load asset registry from {}, starting with empty registry", registryPath.string());
+                spdlog::error("Failed to load asset registry from {}, starting with empty registry", mRegistryPath.string());
                 RegisterBootstrapAssets();
             }
         }
@@ -59,14 +57,14 @@ namespace XJ
             RegisterBootstrapAssets();
         }
 
-        int addedCount = XJAssetRegistryScanner::ScanResourceAssets(mAssetRegistry, "Resource");
+        int addedCount = XJAssetRegistryScanner::ScanResourceAssets(mAssetRegistry, mResourceRoot);
 
-        if (addedCount > 0 || !std::filesystem::exists(registryPath))
-            mAssetRegistry.Save(registryPath);
+        if (addedCount > 0 || !std::filesystem::exists(mRegistryPath))
+            mAssetRegistry.Save(mRegistryPath);
     }
     std::shared_ptr<XJ::XJSceneAsset> XJAssetBootstrap::LoadOrCreateDefaultSceneAsset()
     {
-        const std::filesystem::path scenePath = "Resource/Scenes/Default.xjscene";//读取场景json文件
+        const std::filesystem::path& scenePath = mDefaultScenePath;//项目源场景路径
         if (std::filesystem::exists(scenePath))
         {
             auto defaultScene = XJSceneAssetSerializer::LoadFromFile(scenePath);

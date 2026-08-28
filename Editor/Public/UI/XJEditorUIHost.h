@@ -23,8 +23,9 @@ namespace XJ
         XJEditorFrameRenderer* FrameRenderer = nullptr;
         XJEditorUIState* UIState = nullptr;
 
-        std::filesystem::path ConfigPath =
-            "Resource/Config/EditorUI.json";
+        std::filesystem::path ConfigPath;
+        std::filesystem::path ProjectResourceRoot;
+        std::filesystem::path ImGuiIniPath;
     };
 
     class XJEditorUIHost

@@ -25,7 +25,9 @@ namespace XJ
             XJEditorUILayer(XJEditorUIState& state);
             ~XJEditorUILayer();
 
-            void Init(const std::filesystem::path& configPath);
+            void Init(
+                const std::filesystem::path& configPath,
+                const std::filesystem::path& projectResourceRoot);
             void DrawUI();
             void SaveConfig();// 将当前 UI 配置保存到磁盘
             void Shutdown();
@@ -44,6 +46,7 @@ namespace XJ
             XJEditorUIState& mState;// 对编辑器 UI 状态的引用，允许在各个面板之间共享和修改状态
             XJEditorUIConfig mConfig;// 从 JSON 文件加载的 UI 配置，包含布局和面板设置
             std::filesystem::path mConfigPath;// UI 配置文件的路径
+            std::filesystem::path mProjectResourceRoot;//Content Browser 运行时绝对根目录
             // 面板实例
             std::unique_ptr<XJContentBrowserPanel> mContentBrowser;
             std::unique_ptr<XJHierarchyPanel> mHierarchy;

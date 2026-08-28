@@ -57,7 +57,7 @@ namespace XJ
     {
         bool dockspace = true;
         bool saveImguiIni = true;
-        std::string imguiIniPath = "Resource/Config/imgui.ini";
+        std::string imguiIniPath = "Saved/Config/imgui.ini";
     };
 
     struct XJEditorUIConfig//整个 UI 的配置项，包括布局和各个面板的配置

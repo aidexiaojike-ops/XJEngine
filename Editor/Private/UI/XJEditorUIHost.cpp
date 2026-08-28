@@ -28,7 +28,13 @@ namespace XJ
     {
         Shutdown();
 
-        if (!info.Window || !info.RenderContext || !info.FrameRenderer || !info.UIState)
+        if (!info.Window ||
+            !info.RenderContext ||
+            !info.FrameRenderer ||
+            !info.UIState ||
+            info.ConfigPath.empty() ||
+            info.ProjectResourceRoot.empty() ||
+            info.ImGuiIniPath.empty())
         {
             spdlog::error(
                 "Editor UI initialization failed: "
@@ -58,7 +64,9 @@ namespace XJ
         mRenderContext = info.RenderContext;
         mContext = std::make_unique<XJUIContext>();
 
-        if (!mContext->Init(info.Window->XJGetImplWindowPointer()))
+        if (!mContext->Init(
+                info.Window->XJGetImplWindowPointer(),
+                info.ImGuiIniPath))
         {
             spdlog::error("Editor ImGui context initialization failed.");
             Shutdown();
@@ -88,7 +96,9 @@ namespace XJ
         }
 
         mLayer = std::make_unique<XJEditorUILayer>(*info.UIState);
-        mLayer->Init(info.ConfigPath);
+        mLayer->Init(
+            info.ConfigPath,
+            info.ProjectResourceRoot);
 
         mInitialized = true;
         return true;

@@ -1,5 +1,9 @@
 #include "Runtime/XJEditorRuntime.h"
 
+#include "Asset/Metadata/XJAssetMetadataPath.h"
+#include "Asset/Metadata/XJAssetMetadataSerializer.h"
+#include "Asset/Metadata/XJPersistentAssetHandleGenerator.h"
+
 #include "Render/XJEditorFrameRenderer.h"
 #include "Workspace/XJEditorWorkspace.h"
 #include "Render/XJEditorRenderResources.h"
@@ -15,10 +19,145 @@
 
 #include <spdlog/spdlog.h>
 #include <utility>
+#include <unordered_set>
 #include <vector>
 
 namespace XJ
 {
+    namespace
+    {
+#ifndef NDEBUG
+        bool RunAssetMetadataSelfTest(
+            const std::filesystem::path& projectResourceRoot)
+        {
+            // 使用独立虚拟源路径，绝不覆盖 Monkey.glb 等真实资产的永久身份。
+            const std::filesystem::path testAssetPath =
+                projectResourceRoot / "Config/XJAssetMetadata.selftest";
+            const std::filesystem::path testMetadataPath =
+                BuildAssetMetadataPath(testAssetPath);
+
+            auto cleanup = [&]()
+            {
+                std::error_code ec;
+                std::filesystem::remove(testMetadataPath, ec);
+                if (ec)
+                {
+                    spdlog::warn(
+                        "Asset metadata self-test cleanup failed '{}': {}",
+                        testMetadataPath.string(),
+                        ec.message());
+                }
+            };
+
+            cleanup();
+
+            const XJAssetMetadataLoadResult missingResult =
+                XJAssetMetadataSerializer::Load(testAssetPath);
+            if (missingResult.Status != XJAssetMetadataLoadStatus::NotFound)
+            {
+                spdlog::error("Asset metadata self-test failed: missing file did not return NotFound.");
+                cleanup();
+                return false;
+            }
+
+            XJAssetMetadata expected;
+            expected.Handle = 0x123456789ull;
+            expected.Type = XJAssetType::Mesh;
+            expected.Importer = "SelfTestImporter";
+            expected.ImporterVersion = 7;
+
+            std::string saveError;
+            if (!XJAssetMetadataSerializer::Save(testAssetPath, expected, &saveError))
+            {
+                spdlog::error("Asset metadata self-test save failed: {}", saveError);
+                cleanup();
+                return false;
+            }
+
+            const XJAssetMetadataLoadResult loadedResult =
+                XJAssetMetadataSerializer::Load(testAssetPath);
+            if (!loadedResult.Succeeded())
+            {
+                spdlog::error("Asset metadata self-test load failed: {}", loadedResult.Error);
+                cleanup();
+                return false;
+            }
+
+            const XJAssetMetadata& actual = *loadedResult.Metadata;
+            const bool fieldsMatch =
+                actual.Version == expected.Version &&
+                actual.Handle == expected.Handle &&
+                actual.Type == expected.Type &&
+                actual.Importer == expected.Importer &&
+                actual.ImporterVersion == expected.ImporterVersion;
+
+            XJAssetMetadata invalidRuntimeMetadata = expected;
+            invalidRuntimeMetadata.Handle = XJAsset::RuntimeHandleBit | 99ull;
+            const bool rejectedRuntimeHandle =
+                !XJAssetMetadataSerializer::Save(testAssetPath, invalidRuntimeMetadata);
+
+            cleanup();
+
+            if (!fieldsMatch || !rejectedRuntimeHandle)
+            {
+                spdlog::error(
+                    "Asset metadata self-test failed: fieldsMatch={}, rejectedRuntimeHandle={}.",
+                    fieldsMatch,
+                    rejectedRuntimeHandle);
+                return false;
+            }
+
+            spdlog::debug("Asset metadata serializer self-test passed.");
+            return true;
+        }
+
+        bool RunPersistentAssetHandleSelfTest()
+        {
+            constexpr uint32_t sampleCount = 4096;
+            std::unordered_set<XJAssetHandle> generatedHandles;
+            generatedHandles.reserve(sampleCount);
+
+            for (uint32_t index = 0; index < sampleCount; ++index)
+            {
+                const XJAssetHandle handle =
+                    XJPersistentAssetHandleGenerator::GenerateCandidate();
+
+                if (handle == XJAsset::InvalidHandle || XJAsset::IsRuntimeHandle(handle))
+                {
+                    spdlog::error("Persistent handle self-test generated an invalid handle.");
+                    return false;
+                }
+
+                if (!generatedHandles.insert(handle).second)
+                {
+                    spdlog::error("Persistent handle self-test detected a duplicate.");
+                    return false;
+                }
+            }
+
+            uint32_t callbackCount = 0;
+            const auto uniqueHandle = XJPersistentAssetHandleGenerator::GenerateUnique(
+                [&callbackCount](XJAssetHandle)
+                {
+                    ++callbackCount;
+                    return callbackCount > 3;
+                },
+                8);
+
+            if (!uniqueHandle || callbackCount != 4)
+            {
+                spdlog::error("Persistent handle unique-generation self-test failed.");
+                return false;
+            }
+
+            spdlog::debug(
+                "Persistent asset handle self-test passed: {} unique samples.",
+                generatedHandles.size());
+            return true;
+        }
+#endif
+    }
+
     class XJEditorRuntime::Impl
     {
         public:
@@ -64,6 +203,23 @@ namespace XJ
         mImpl->RenderContext = info.RenderContext;
         mImpl->Config = info.Config;
 
+#ifndef NDEBUG
+        if (!RunAssetMetadataSelfTest(
+                mImpl->Config.Paths.ProjectResourceRoot))
+        {
+            spdlog::error("Editor runtime initialization failed: asset metadata self-test failed.");
+            Shutdown();
+            return false;
+        }
+
+        if (!RunPersistentAssetHandleSelfTest())
+        {
+            spdlog::error("Editor runtime initialization failed: persistent handle self-test failed.");
+            Shutdown();
+            return false;
+        }
+#endif
+
         // 默认纹理和 sampler 是 Workspace/Viewport 创建材质的基础资源。
         mImpl->Resources = std::make_unique<XJEditorRenderResources>();
         if (!mImpl->Resources->Init(*mImpl->RenderContext))
@@ -90,9 +246,9 @@ namespace XJ
         //
         mImpl->Workspace = std::make_unique<XJEditorWorkspace>();
         XJEditorWorkspaceInitInfo workspaceInfo{
-            .ResourceRoot = mImpl->Config.ResourceRoot,
-            .RegistryPath = mImpl->Config.RegistryPath,
-            .DefaultScenePath = mImpl->Config.DefaultScenePath,
+            .ResourceRoot = mImpl->Config.Paths.ProjectResourceRoot,
+            .RegistryPath = mImpl->Config.Paths.RegistryPath,
+            .DefaultScenePath = mImpl->Config.Paths.DefaultScenePath,
             .DefaultSceneHandle = mImpl->Config.DefaultSceneHandle,
             .InitialSceneMeshHandle = mImpl->Config.InitialSceneMeshHandle,
             .DefaultComponentMeshHandle = mImpl->Config.DefaultComponentMeshHandle
@@ -117,7 +273,9 @@ namespace XJ
             .RenderContext = mImpl->RenderContext,
             .FrameRenderer = mImpl->FrameRenderer.get(),
             .UIState = &mImpl->Workspace->GetUIState(),
-            .ConfigPath = mImpl->Config.UIConfigPath
+            .ConfigPath = mImpl->Config.Paths.UIConfigPath,
+            .ProjectResourceRoot = mImpl->Config.Paths.ProjectResourceRoot,
+            .ImGuiIniPath = mImpl->Config.Paths.ImGuiIniPath
         };      
 
         if (!mImpl->UI->Init(uiInfo))

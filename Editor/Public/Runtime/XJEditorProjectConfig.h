@@ -1,4 +1,3 @@
-//默认场景配置与加载
 #ifndef XJ_EDITOR_PROJECT_CONFIG_H
 #define XJ_EDITOR_PROJECT_CONFIG_H
 
@@ -9,24 +8,107 @@
 
 namespace XJ
 {
+    struct XJEditorProjectPaths
+    {
+        // 项目源码根目录，例如 E:/VSCode/XJEngine。
+        std::filesystem::path ProjectRoot;
+
+        // 可提交 Git 的源资产目录。
+        std::filesystem::path ProjectResourceRoot;
+
+        // exe 所在运行目录，例如 E:/VSCode/XJEngine/bin。
+        std::filesystem::path RuntimeRoot;
+
+        // 构建/打包后的运行时资源目录。
+        std::filesystem::path RuntimeResourceRoot;
+
+        // 以下文件由编辑器修改，应位于 ProjectResourceRoot。
+        std::filesystem::path RegistryPath;
+        std::filesystem::path UIConfigPath;
+        std::filesystem::path DefaultScenePath;
+
+        // ImGui ini 属于用户运行状态，放在 RuntimeResourceRoot。
+        std::filesystem::path ImGuiIniPath;
+
+        bool IsValid() const
+        {
+            return !ProjectRoot.empty() &&
+                   !ProjectResourceRoot.empty() &&
+                   !RuntimeRoot.empty() &&
+                   !RuntimeResourceRoot.empty() &&
+                   !RegistryPath.empty() &&
+                   !UIConfigPath.empty() &&
+                   !DefaultScenePath.empty() &&
+                   !ImGuiIniPath.empty();
+        }
+
+        static XJEditorProjectPaths FromRoots(
+            const std::filesystem::path& projectRoot,
+            const std::filesystem::path& runtimeRoot)
+        {
+            XJEditorProjectPaths paths;
+
+            paths.ProjectRoot =
+                projectRoot.lexically_normal();
+
+            paths.ProjectResourceRoot =
+                (paths.ProjectRoot / "Resource")
+                    .lexically_normal();
+
+            paths.RuntimeRoot =
+                runtimeRoot.lexically_normal();
+
+            paths.RuntimeResourceRoot =
+                (paths.RuntimeRoot / "Resource")
+                    .lexically_normal();
+
+            paths.RegistryPath =
+                (paths.ProjectResourceRoot /
+                 "Config/AssetRegistry.json")
+                    .lexically_normal();
+
+            paths.UIConfigPath =
+                (paths.ProjectResourceRoot /
+                 "Config/EditorUI.json")
+                    .lexically_normal();
+
+            paths.DefaultScenePath =
+                (paths.ProjectResourceRoot /
+                 "Scenes/Default.xjscene")
+                    .lexically_normal();
+
+            paths.ImGuiIniPath =
+                (paths.RuntimeRoot /
+                 "Saved/Config/imgui.ini")
+                    .lexically_normal();
+
+            return paths;
+        }
+    };
+
     struct XJEditorProjectConfig
     {
-        //资产
-        std::filesystem::path ResourceRoot = "Resource";
-        //资产注册表
-        std::filesystem::path RegistryPath = "Resource/Config/AssetRegistry.json";
-        //ui编辑器
-        std::filesystem::path UIConfigPath = "Resource/Config/EditorUI.json";
-        //默认场景
-        std::filesystem::path DefaultScenePath = "Resource/Scenes/Default.xjscene";
-        //默认场景
-        XJAssetHandle DefaultSceneHandle = 0x10000001ull;
-        // 首次创建默认场景时使用的 Mesh。
-        XJAssetHandle InitialSceneMeshHandle = 0x20000001ull;
-        // Inspector 添加 MeshRenderer 时使用的默认 Mesh。
-        XJAssetHandle DefaultComponentMeshHandle = 0x20000002ull;
-        //多重采样
-        VkSampleCountFlagBits SampleCount = VK_SAMPLE_COUNT_1_BIT;
+        XJEditorProjectPaths Paths;
+
+        XJAssetHandle DefaultSceneHandle =
+            0x10000001ull;
+
+        XJAssetHandle InitialSceneMeshHandle =
+            0x20000001ull;
+
+        XJAssetHandle DefaultComponentMeshHandle =
+            0x20000002ull;
+
+        VkSampleCountFlagBits SampleCount =
+            VK_SAMPLE_COUNT_1_BIT;
+
+        bool IsValid() const
+        {
+            return Paths.IsValid() &&
+                   DefaultSceneHandle != 0 &&
+                   InitialSceneMeshHandle != 0 &&
+                   DefaultComponentMeshHandle != 0;
+        }
     };
 }
 

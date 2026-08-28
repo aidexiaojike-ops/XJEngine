@@ -2,6 +2,7 @@
 #include "imgui.h"
 #include "imgui_impl_glfw.h"
 #include "imgui_impl_vulkan.h"
+#include <spdlog/spdlog.h>
 
 namespace XJ
 {
@@ -10,16 +11,33 @@ namespace XJ
         Shutdown();
     }
 
-    bool XJUIContext::Init(GLFWwindow* window)
+    bool XJUIContext::Init(GLFWwindow* window, const std::filesystem::path& iniPath)
     {
         Shutdown();
+
+        if (!window || iniPath.empty())
+            return false;
+
+        std::error_code ec;
+        if (iniPath.has_parent_path())
+        {
+            std::filesystem::create_directories(iniPath.parent_path(), ec);
+            if (ec)
+            {
+                spdlog::error(
+                    "Failed to create ImGui ini directory '{}': {}",
+                    iniPath.parent_path().string(),
+                    ec.message());
+                return false;
+            }
+        }
 
         IMGUI_CHECKVERSION();//防止链接错 ImGui 库
         ImGui::CreateContext();//创建 ImGui 上下文
 
         ImGuiIO& kIo = ImGui::GetIO();
-        //kIo.IniFilename = "imgui.ini"; //固定路径
-        kIo.IniFilename = "Resource/Config/imgui.ini";
+        mIniFilename = iniPath.lexically_normal().generic_string();
+        kIo.IniFilename = mIniFilename.c_str();
         kIo.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;       // Enable Keyboard Controls  键盘输入
         kIo.ConfigFlags |= ImGuiConfigFlags_DockingEnable;           // Enable Docking            停靠
         kIo.ConfigFlags |= ImGuiConfigFlags_ViewportsEnable;         // Enable Multi-Viewport / Platform Windows  多视口/平台窗口
@@ -29,6 +47,7 @@ namespace XJ
         if (!ImGui_ImplGlfw_InitForVulkan(window, true))//初始化 ImGui GLFW 后端，告诉它我们使用 Vulkan 渲染器
         {
             ImGui::DestroyContext();
+            mIniFilename.clear();
             return false;
         }
 
@@ -63,6 +82,7 @@ namespace XJ
 
         ImGui_ImplGlfw_Shutdown();
         ImGui::DestroyContext();
+        mIniFilename.clear();
         mInitialized = false;
     }
 

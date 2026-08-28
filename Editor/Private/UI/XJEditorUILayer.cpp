@@ -7,10 +7,102 @@
 #include "UI/XJEditorLog.h"
 
 #include <imgui.h>
+#include <spdlog/spdlog.h>
+#include <algorithm>
+#include <cctype>
 
 
 namespace XJ
 {
+    namespace
+    {
+        bool PathComponentEquals(
+            const std::filesystem::path& left,
+            const std::filesystem::path& right)
+        {
+            std::string leftText = left.generic_string();
+            std::string rightText = right.generic_string();
+
+#ifdef _WIN32
+            auto toLower = [](std::string& value)
+            {
+                std::transform(value.begin(), value.end(), value.begin(), [](unsigned char ch)
+                {
+                    return static_cast<char>(std::tolower(ch));
+                });
+            };
+            toLower(leftText);
+            toLower(rightText);
+#endif
+
+            return leftText == rightText;
+        }
+
+        bool IsPathInsideRoot(
+            const std::filesystem::path& candidate,
+            const std::filesystem::path& root)
+        {
+            const auto normalizedCandidate = candidate.lexically_normal();
+            const auto normalizedRoot = root.lexically_normal();
+            auto candidateIt = normalizedCandidate.begin();
+
+            for (auto rootIt = normalizedRoot.begin(); rootIt != normalizedRoot.end(); ++rootIt, ++candidateIt)
+            {
+                if (candidateIt == normalizedCandidate.end() ||
+                    !PathComponentEquals(*candidateIt, *rootIt))
+                {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        std::filesystem::path ResolveContentBrowserPath(
+            const std::filesystem::path& storedPath,
+            const std::filesystem::path& projectResourceRoot)
+        {
+            const auto root = projectResourceRoot.lexically_normal();
+            if (storedPath.empty())
+                return root;
+
+            if (storedPath.is_absolute())
+            {
+                const auto normalized = storedPath.lexically_normal();
+                return IsPathInsideRoot(normalized, root) ? normalized : root;
+            }
+
+            std::filesystem::path relative = storedPath.lexically_normal();
+            if (!relative.empty() && PathComponentEquals(*relative.begin(), "Resource"))
+            {
+                std::filesystem::path withoutResource;
+                auto it = relative.begin();
+                ++it;
+                for (; it != relative.end(); ++it)
+                    withoutResource /= *it;
+                relative = withoutResource;
+            }
+
+            const auto resolved = (root / relative).lexically_normal();
+            return IsPathInsideRoot(resolved, root) ? resolved : root;
+        }
+
+        std::filesystem::path MakePortableContentPath(
+            const std::filesystem::path& absolutePath,
+            const std::filesystem::path& projectResourceRoot)
+        {
+            if (!IsPathInsideRoot(absolutePath, projectResourceRoot))
+                return "Resource";
+
+            const auto relative = absolutePath.lexically_normal().lexically_relative(
+                projectResourceRoot.lexically_normal());
+
+            return relative.empty() || relative == "."
+                ? std::filesystem::path("Resource")
+                : std::filesystem::path("Resource") / relative;
+        }
+    }
+
     XJEditorUILayer::XJEditorUILayer(XJEditorUIState& state)
         : mState(state)
     {
@@ -21,14 +113,34 @@ namespace XJ
         Shutdown();
     }
 
-    void XJEditorUILayer::Init(const std::filesystem::path& configPath)
+    void XJEditorUILayer::Init(
+        const std::filesystem::path& configPath,
+        const std::filesystem::path& projectResourceRoot)
     {
+        Shutdown();
+
+        if (configPath.empty() || projectResourceRoot.empty())
+        {
+            spdlog::error("Editor UI Layer initialization failed: path is empty.");
+            return;
+        }
+
         // spdlog 已由 XJApplication 初始化。Editor 只追加一个内存 sink，
         // 不修改现有控制台和轮转文件 sink。
         XJEditorLog::XJGet().AttachToSpdlog();
 
-        mConfigPath = configPath;
+        mConfig = {};
+        mConfigPath = configPath.lexically_normal();
+        mProjectResourceRoot = projectResourceRoot.lexically_normal();
         mConfig.Load(mConfigPath);
+
+        const auto currentPath = ResolveContentBrowserPath(
+            mConfig.panels.contentBrowser.currentPath,
+            mProjectResourceRoot);
+
+        // Panel 运行时必须使用绝对项目路径；持久化时再转换回 Resource/...。
+        mConfig.panels.contentBrowser.rootPath = mProjectResourceRoot.generic_string();
+        mConfig.panels.contentBrowser.currentPath = currentPath.generic_string();
         // 根据配置设置初始状态
         mState.ShowContentBrowser = mConfig.panels.contentBrowser.visible;
         mState.ShowHierarchy = mConfig.panels.hierarchy.visible;
@@ -88,7 +200,18 @@ namespace XJ
         mConfig.panels.hierarchy.visible = mState.ShowHierarchy;    
         mConfig.panels.debugConsole.visible = mState.ShowDebugConsole;
 
-        mConfig.Save(mConfigPath);
+        if (mConfigPath.empty() || mProjectResourceRoot.empty())
+            return;
+
+        XJEditorUIConfig persistedConfig = mConfig;
+        persistedConfig.panels.contentBrowser.rootPath = "Resource";
+        persistedConfig.panels.contentBrowser.currentPath = MakePortableContentPath(
+            mConfig.panels.contentBrowser.currentPath,
+            mProjectResourceRoot).generic_string();
+        persistedConfig.layout.imguiIniPath = "Saved/Config/imgui.ini";
+
+        if (!persistedConfig.Save(mConfigPath))
+            spdlog::error("Failed to save Editor UI config '{}'.", mConfigPath.string());
     }
 
     void XJEditorUILayer::Shutdown()
@@ -100,6 +223,8 @@ namespace XJ
 
          // UI 面板销毁后不再收集日志，并避免重复创建 UI 时重复安装 sink。
         XJEditorLog::XJGet().DetachFromSpdlog();
+        mProjectResourceRoot.clear();
+        mConfigPath.clear();
     }
 
 

@@ -101,6 +101,18 @@ endif()
 add_executable(XJEngine ${ENGINE_SRC})#会打开cmd
 #add_executable(XJEngine WIN32 ${ENGINE_SRC})
 
+# 编辑器开发版本的默认项目根目录。
+# 后续命令行 --project 会覆盖这个值。
+file(TO_CMAKE_PATH
+    "${CMAKE_SOURCE_DIR}"
+    XJ_DEFAULT_PROJECT_ROOT_PATH
+)
+
+target_compile_definitions(XJEngine
+    PRIVATE
+        XJ_DEFAULT_PROJECT_ROOT="${XJ_DEFAULT_PROJECT_ROOT_PATH}"
+)
+
 target_link_libraries(XJEngine
     PRIVATE Platform
     PRIVATE Core # 如果 Core 模块存在，则链接它

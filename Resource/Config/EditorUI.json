@@ -1,43 +1,43 @@
 {
-  "version": 1,
   "layout": {
     "dockspace": true,
-    "saveImguiIni": true,
-    "imguiIniPath": "Resource/Config/imgui.ini"
+    "imguiIniPath": "Resource/Config/imgui.ini",
+    "saveImguiIni": true
   },
   "panels": {
     "contentBrowser": {
-      "visible": true,
-      "title": "Content Browser",
-      "rootPath": "Resource",
       "currentPath": "Resource/Mesh",
-      "showFolders": true,
+      "filter": "",
+      "rootPath": "Resource",
       "showAssetType": true,
+      "showFolders": true,
       "showHandle": true,
-      "filter": ""
-    },
-    "hierarchy": {
-      "visible": true,
-      "title": "World Outliner",
-      "showEntityId": true,
-      "showAssetSource": false
-    },
-    "inspector": {
-      "visible": true,
-      "title": "Details",
-      "showTransform": true,
-      "showMeshRenderer": true,
-      "showCamera": true,
-      "showAssetRefs": true
+      "title": "Content Browser",
+      "visible": true
     },
     "debugConsole": {
-      "visible": true,
-      "title": "Output Log",
+      "autoScroll": true,
       "maxLines": 1000,
+      "showError": true,
       "showInfo": true,
       "showWarning": true,
-      "showError": true,
-      "autoScroll": true
+      "title": "Output Log",
+      "visible": true
+    },
+    "hierarchy": {
+      "showAssetSource": false,
+      "showEntityId": true,
+      "title": "World Outliner",
+      "visible": true
+    },
+    "inspector": {
+      "showAssetRefs": true,
+      "showCamera": true,
+      "showMeshRenderer": true,
+      "showTransform": true,
+      "title": "Details",
+      "visible": true
     }
-  }
+  },
+  "version": 1
 }

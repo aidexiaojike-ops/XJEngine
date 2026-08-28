@@ -62,7 +62,14 @@ namespace XJ
             //==========================================================
             // 场景生命周期
             //==========================================================
-            bool LoadOrCreateDefaultScene(XJEditorUIState& uiState, XJAssetHandle defaultSceneHandle, XJAssetHandle defaultMeshHandle, const std::filesystem::path& scenePath);//加载默认场景
+            bool LoadOrCreateDefaultScene(
+                XJEditorUIState& uiState,
+                XJAssetHandle defaultSceneHandle,
+                XJAssetHandle defaultMeshHandle,
+                XJAssetHandle defaultComponentMeshHandle,
+                const std::filesystem::path& scenePath,
+                const std::filesystem::path& resourceRoot,
+                const std::filesystem::path& registryPath);//加载默认场景
             bool OpenSceneAsset( XJEditorUIState& uiState,const std::filesystem::path& scenePath,XJAssetHandle sceneHandle);//打开场景
 
             void MarkSceneDirty();/// 标记当前场景已被修改（设为脏状态）

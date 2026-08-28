@@ -70,14 +70,26 @@ namespace XJ
         mDefaultMeshHandle = handle;
     }
     
-    bool XJEditorSceneController::LoadOrCreateDefaultScene(XJEditorUIState& uiState, XJAssetHandle defaultSceneHandle, 
-                                                        XJAssetHandle defaultMeshHandle, const std::filesystem::path& scenePath)
+    bool XJEditorSceneController::LoadOrCreateDefaultScene(
+        XJEditorUIState& uiState,
+        XJAssetHandle defaultSceneHandle,
+        XJAssetHandle defaultMeshHandle,
+        XJAssetHandle defaultComponentMeshHandle,
+        const std::filesystem::path& scenePath,
+        const std::filesystem::path& resourceRoot,
+        const std::filesystem::path& registryPath)
     {
         if (!mScene || !mAssetRegistry)
             return false;
 
-        static constexpr XJAssetHandle TJCubeMeshHandle = 0x20000002ull;//来自代码的cube
-        XJAssetBootstrap bootstrap(*mAssetRegistry, defaultSceneHandle, defaultMeshHandle, TJCubeMeshHandle);
+        XJAssetBootstrap bootstrap(
+            *mAssetRegistry,
+            defaultSceneHandle,
+            defaultMeshHandle,
+            defaultComponentMeshHandle,
+            resourceRoot,
+            registryPath,
+            scenePath);
         bootstrap.LoadOrCreateAssetRegistry();
         
         auto sceneAsset  = bootstrap.LoadOrCreateDefaultSceneAsset();//获取默认场景

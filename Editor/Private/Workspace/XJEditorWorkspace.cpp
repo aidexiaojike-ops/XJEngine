@@ -77,17 +77,26 @@ namespace XJ
         mImpl->InitialSceneMeshHandle = info.InitialSceneMeshHandle;
         mImpl->DefaultComponentMeshHandle = info.DefaultComponentMeshHandle;
 
-        // 优先读取持久化 registry；不存在时扫描 Resource 并创建。
-        if (!mImpl->AssetRegistry.Load(mImpl->RegistryPath))
+        // 这里只加载已有 Registry，不在 Bootstrap 固定 Handle 注册前运行 Scanner。
+        // Registry 不存在时保持空表，AttachScene 中的 Bootstrap 会先注册
+        // DefaultScene/Monkey/TJCube，再让 Scanner 为其余资产生成永久 Handle。
+        std::error_code registryError;
+        const bool registryExists = std::filesystem::exists(mImpl->RegistryPath, registryError);
+        if (registryError)
         {
-            if (!XJEditorAssetService::RefreshRegistry(
-                    mImpl->AssetRegistry,
-                    mImpl->ResourceRoot,
-                    mImpl->RegistryPath))
-            {
-                spdlog::error("Editor workspace failed to initialize asset registry.");
-                return false;
-            }
+            spdlog::error(
+                "Editor workspace failed to inspect asset registry '{}': {}",
+                mImpl->RegistryPath.string(),
+                registryError.message());
+            return false;
+        }
+
+        if (registryExists && !mImpl->AssetRegistry.Load(mImpl->RegistryPath))
+        {
+            spdlog::error(
+                "Editor workspace failed to load existing asset registry '{}'.",
+                mImpl->RegistryPath.string());
+            return false;
         }
 
         mImpl->UIState.AssetRegistry = &mImpl->AssetRegistry;
@@ -124,7 +133,10 @@ namespace XJ
                 mImpl->UIState,
                 mImpl->DefaultSceneHandle,
                 mImpl->InitialSceneMeshHandle,
-                mImpl->DefaultScenePath))
+                mImpl->DefaultComponentMeshHandle,
+                mImpl->DefaultScenePath,
+                mImpl->ResourceRoot,
+                mImpl->RegistryPath))
         {
             spdlog::error(
                 "Editor default scene initialization failed.");
