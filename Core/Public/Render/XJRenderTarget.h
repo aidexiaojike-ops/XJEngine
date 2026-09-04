@@ -35,6 +35,10 @@ namespace XJ
             bool bSwapchainTarget = false; // 标志是否为交换链目标
             bool bBeginRenderTarget = false; // 标志是否已开始渲染目标
 
+            // 注入的场景：Game Preview 在 Play 态指向运行时克隆，
+            // 相机必须在自己的 Scene 中解析，而非全局编辑场景。
+            XJScene* mScene = nullptr;
+
             // 只保存摄像机实体 ID，不保存 XJEntity*。
              // 场景销毁或实体删除后，XJGetCamera() 会从当前 scene 查询，查不到就返回 nullptr。
             XJUUID mCameraId{0};

@@ -103,20 +103,21 @@ namespace XJ
         if(!mCameraId)
             return nullptr;
 
-        XJAppContext* appContext = XJApplication::XJGetAppContext();
-        if(!appContext || !appContext->scene)
-            return nullptr;
+        // 优先在自己的 Scene 中解析相机（Play 态下为运行时克隆）；
+        // 未显式注入 Scene 的旧 RenderTarget 回退到全局编辑场景。
+        XJScene* scene = mScene;
 
-        XJScene* scene = appContext->scene;
-
-        //从当前 scene 的实体表按 UUID 查询。实体已删除或 scene 已卸载时自然返回 nullptr。
-        for(const auto& [enttEntity, entity] : scene->GetEntities())
+        if (!scene)
         {
-            if(entity->XJGetUUID() == mCameraId)
-                return entity.get();
+            XJAppContext* appContext = XJApplication::XJGetAppContext();
+            scene = appContext ? appContext->scene : nullptr;
         }
 
-        return nullptr; // 没有找到对应的实体
+        if (!scene)
+            return nullptr;
+
+        // 从当前 scene 按 UUID 查询。实体已删除或 scene 已卸载时自然返回 nullptr。
+        return scene->FindEntityByUUID(mCameraId);
     }
 
     void XJRenderTarget::Init()
@@ -669,6 +670,8 @@ namespace XJ
 
     void XJRenderTarget::SetScene(XJScene* scene)
     {
+        mScene = scene;
+
         for(auto& system : mMaterialSystemList)
         {
             if (system)

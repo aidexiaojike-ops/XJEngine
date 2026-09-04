@@ -17,6 +17,7 @@
 #include "UI/Viewports/XJEditorViewportSystem.h"
 #include "UI/Viewports/XJGamePreview.h"
 #include "Input/XJEditorInputBindings.h"
+#include "Input/XJInput.h"
 
 #include "ECS/System/XJSystemScheduler.h"
 
@@ -241,6 +242,11 @@ namespace XJ
                     if (!mScene)
                         return;
 
+                    // 读通用输入轴：WASD / 方向键平移演示（Play 态下运行时系统消费 Input）。
+                    const auto& input = XJInput::XJGetInstance().GetInputState();
+                    const float horizontal = input.GetAxis(XJInputAxis::Horizontal);
+                    const float vertical   = input.GetAxis(XJInputAxis::Vertical);
+
                     for (const auto& [enttEntity, entity] : mScene->GetEntities())
                     {
                         if (!entity || entity->HasComponent<XJCameraComponent>())
@@ -251,7 +257,12 @@ namespace XJ
                             continue;
 
                         auto& transform = entity->GetComponent<XJTransformComponent>();
+
+                        // 旋转演示 + WASD/方向键平移演示。
                         transform.rotation.y += deltaTime * 45.0f;
+                        transform.position.x -= horizontal * deltaTime * 2.0f;
+                        transform.position.z += vertical   * deltaTime * 2.0f;
+
                         transform.UpdateModelMatrix();
                     }
                 }

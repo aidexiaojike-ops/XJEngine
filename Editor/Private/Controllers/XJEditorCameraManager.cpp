@@ -170,6 +170,10 @@ namespace XJ
     {
         return IsPreviewCamera(id);
     }
+    void XJEditorCameraManager::SetGameCameraLock(bool locked)
+    {
+        mGameCameraLocked = locked;
+    }
 
     void XJEditorCameraManager::ApplyCameraBindings()
     {
@@ -178,8 +182,8 @@ namespace XJ
 
         if (mScenePreview)
             mScenePreview->SetCamera(previewCamera);
-
-        if (mGamePreview)
+        // Play 态锁定：不覆盖 GamePreview 相机（由 RuntimeScene 的运行时相机管理）。
+        if (mGamePreview && !mGameCameraLocked)
             mGamePreview->SetCamera(gameCamera);
 
         if (mRenderTarget)

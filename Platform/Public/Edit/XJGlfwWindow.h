@@ -18,8 +18,12 @@ namespace XJ
     {
         public:
             using DropCallback = std::function<void(int count, const char** paths)>;
+            // 累积滚轮增量并清零（供每帧输入轮询消费）。
+            glm::vec2 XJConsumeScrollDelta();
 
         private:
+            double mScrollAccumX = 0.0;
+            double mScrollAccumY = 0.0;
             /* data */
             GLFWwindow* mGLFWwindow = nullptr;//窗口句柄
             DropCallback mDropCallback;

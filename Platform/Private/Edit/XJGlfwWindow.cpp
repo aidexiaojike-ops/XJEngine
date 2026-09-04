@@ -175,6 +175,9 @@ namespace XJ
             auto *kWindow = static_cast<XJGlfwWindow *>(glfwGetWindowUserPointer(window));
             if(kWindow)
             {
+                kWindow->mScrollAccumX += xoffset;
+                kWindow->mScrollAccumY += yoffset;
+
                 XJMouseScrollEvent mouseScrollEvent{ static_cast<float>(xoffset), static_cast<float>(yoffset) };
                 XJEventDispatcher::XJGetInstance()->DispatchEvent(mouseScrollEvent);
             }
@@ -239,5 +242,12 @@ namespace XJ
     void XJGlfwWindow::SetDropCallback(DropCallback callback)
     {
         mDropCallback = std::move(callback);
+    }
+    glm::vec2 XJGlfwWindow::XJConsumeScrollDelta()
+    {
+        glm::vec2 scrollDelta(static_cast<float>(mScrollAccumX), static_cast<float>(mScrollAccumY));
+        mScrollAccumX = 0.0;
+        mScrollAccumY = 0.0;
+        return scrollDelta;
     }
 }

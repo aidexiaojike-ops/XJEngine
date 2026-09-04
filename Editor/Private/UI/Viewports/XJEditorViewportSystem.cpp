@@ -17,21 +17,21 @@ namespace XJ
 {
     class XJEditorViewportSystem::Impl
     {
-    public:
-        XJGlfwWindow* Window = nullptr;
-        XJRenderContext* RenderContext = nullptr;
-        XJRenderTarget* MainRenderTarget = nullptr;
-        XJEditorRenderResources* Resources = nullptr;
-        XJScene* Scene = nullptr;
-
-        std::unique_ptr<XJScenePreview> ScenePreview;
-        std::unique_ptr<XJGamePreview> GamePreview;
-        std::unique_ptr<XJEditorCameraController>
-            CameraController;
-
-        XJEditorCameraManager CameraManager;
-
-        bool Initialized = false;
+        public:
+            XJGlfwWindow* Window = nullptr;
+            XJRenderContext* RenderContext = nullptr;
+            XJRenderTarget* MainRenderTarget = nullptr;
+            XJEditorRenderResources* Resources = nullptr;
+            XJScene* Scene = nullptr;
+        
+            std::unique_ptr<XJScenePreview> ScenePreview;
+            std::unique_ptr<XJGamePreview> GamePreview;
+            std::unique_ptr<XJEditorCameraController>
+                CameraController;
+        
+            XJEditorCameraManager CameraManager;
+        
+            bool Initialized = false;
     };
 
     XJEditorViewportSystem::XJEditorViewportSystem()
@@ -280,6 +280,8 @@ namespace XJ
 
         mImpl->GamePreview->SetScene(runtimeScene);
         mImpl->GamePreview->SetCamera(runtimeCamera);
+        // 锁定 game camera：Play 态相机管理器不得再用编辑器相机覆盖 GamePreview。
+        mImpl->CameraManager.SetGameCameraLock(true);
     }
 
     void XJEditorViewportSystem::EndPlay()
@@ -287,8 +289,10 @@ namespace XJ
         if (!mImpl->Initialized || !mImpl->GamePreview)
             return;
 
-        // 恢复编辑器场景与编辑器主相机
+        // 先恢复编辑器场景与编辑器相机，再解除锁定，让相机管理器恢复常态绑定。
         mImpl->GamePreview->SetScene(mImpl->Scene);
         mImpl->GamePreview->SetCamera(mImpl->CameraManager.GetGameCamera());
+
+        mImpl->CameraManager.SetGameCameraLock(false);
     }
 }

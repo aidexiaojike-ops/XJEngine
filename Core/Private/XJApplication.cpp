@@ -1,6 +1,7 @@
 #include "XJApplication.h"
 #include "Edit/SpdlogDebug.h"
 #include "ECS/XJScene.h"  // 新增：提供XJScene完整定义
+#include "Input/XJInput.h"
 
 #include <Windows.h>
 #include <filesystem>
@@ -40,7 +41,7 @@ namespace XJ
         OnConfiguration(&mAppSettings);
 
         mWindow = std::make_unique<XJGlfwWindow>(mAppSettings.windowWidth, mAppSettings.windowHeight, mAppSettings.title);
-       
+        XJInput::XJGetInstance().SetWindow(mWindow.get());
 
          // 创建渲染上下文（假设构造函数接受窗口指针）
         mRenderContext = std::make_unique<XJRenderContext>(mWindow.get());
@@ -105,11 +106,14 @@ namespace XJ
         {
             mWindow->PollEvents();
 
-            OnUIBegin(); // UI 渲染开始
-
             float deltaTime = std::chrono::duration<float>(std::chrono::steady_clock::now() - mLastTimePoint).count();
             mLastTimePoint = std::chrono::steady_clock::now();//记录上次更新时间点
             mFrameIndex++;
+
+            // 每帧轮询输入状态，供运行时系统在 OnUpdate/OnFixedUpdate 中查询。
+            XJInput::XJGetInstance().Update(deltaTime);
+
+            OnUIBegin(); // UI 渲染开始
             
             if(!bPaused)
             {

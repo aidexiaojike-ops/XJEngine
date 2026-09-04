@@ -30,6 +30,7 @@ namespace XJ
             void ValidateCameraPointers();  //验证摄像机
             void OnMouseScroll(float yOffset);  //控制
             void UpdatePreviewCameraControl(float deltaTime, XJGlfwWindow* window); //更新编辑器摄像机
+            void SetGameCameraLock(bool locked);   // Play 态锁定 GamePreview 相机，避免被编辑器相机覆盖
             
             XJEntity* GetPreviewCamera() const;//获取编辑器摄像机
             XJEntity* GetGameCamera() const;    //获取游戏摄像机
@@ -48,7 +49,8 @@ namespace XJ
             //摄像机ecs
             XJEditorEntityId mPreviewCameraId = XJ_INVALID_EDITOR_ENTITY_ID;
             XJEditorEntityId mGameCameraId = XJ_INVALID_EDITOR_ENTITY_ID;
-    };
+            bool mGameCameraLocked = false; // Play 态锁定 GamePreview 相机，避免被编辑器相机覆盖
+    }; 
 
 
 }
