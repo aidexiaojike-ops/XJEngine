@@ -3,6 +3,7 @@
 
 #include "Graphic/VulkanCommon.h"
 #include "UI/XJEditorSelection.h"
+#include "UI/XJEditorPlayMode.h"
 #include <vector>
 
 #include <memory>
@@ -13,6 +14,7 @@ namespace XJ
     class XJRenderContext;
     class XJRenderTarget;
     class XJScene;
+    class XJEntity;
     class XJScenePreview;
     class XJGamePreview;
     class XJEditorCameraController;
@@ -57,7 +59,11 @@ namespace XJ
             void RefreshSceneCameras();
 
             bool IsProtectedEditorEntity(XJEditorEntityId id) const;
-            
+
+            void SetPlayState(XJEditorPlayState state);
+            void BeginPlay(XJScene* runtimeScene, XJEntity* runtimeCamera);// Play 时 GamePreview 切到运行时克隆
+            void EndPlay();                                                  // Stop 时恢复编辑器场景与相机
+
         private:
             class Impl;
             std::unique_ptr<Impl> mImpl;

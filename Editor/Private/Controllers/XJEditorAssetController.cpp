@@ -162,11 +162,14 @@ namespace XJ
             bool importedAny = false;
             // 遍历所有源文件路径，逐个导入到目标目录
             for (const auto& sourcePath : request.SourcePaths)
-                importedAny |= XJEditorAssetService::ImportExternalFile(*mAssetRegistry, sourcePath, request.DestinationDirectory);
-            // 如果至少有一个文件导入成功，立即保存注册表
+                importedAny |= XJEditorAssetService::ImportExternalFile(
+                    *mAssetRegistry,
+                    sourcePath,
+                    request.DestinationDirectory,
+                    mRegistryPath);
+
             if (importedAny)
             {
-                mAssetRegistry->Save(mRegistryPath);
                 ++uiState.AssetDetailEpoch;                    
             }
         }

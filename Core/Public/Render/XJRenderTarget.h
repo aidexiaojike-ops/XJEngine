@@ -90,6 +90,9 @@ namespace XJ
                     item->OnRender(cmdBuffer, this);//渲染
                 }
             }
+            
+            //把 scene 注入该 RenderTarget 挂载的所有材质系统。
+            void SetScene(XJScene* scene);
 
             bool IsValid() const
             {
@@ -107,4 +110,5 @@ namespace XJ
 
     };
 }
+
 #endif

@@ -1,4 +1,5 @@
 #include "Asset/XJAssetRegistry.h"
+#include "Asset/XJAssetPathUtils.h"
 #include "Asset/Serialization/XJJsonIO.h"
 #include <fstream>
 #include <nlohmann/json.hpp>   
@@ -13,6 +14,67 @@ namespace XJ
         {
             return value >= static_cast<int>(XJAssetType::None) &&
                    value <= static_cast<int>(XJAssetType::Shader);
+        }
+
+        // builtin:// 等虚拟来源不是文件路径，序列化与解析都原样保留。
+        bool IsBuiltinSource(const std::string& raw)
+        {
+            return raw.rfind("builtin:", 0) == 0;
+        }
+
+        // 去掉相对路径可能带有的 "Resource/" 前缀，得到相对资源根目录的路径。
+        std::filesystem::path StripResourcePrefix(const std::filesystem::path& relative)
+        {
+            auto it = relative.begin();
+            if (it != relative.end() &&
+                (*it == "Resource" || *it == L"Resource"))
+            {
+                std::filesystem::path stripped;
+                ++it;
+                for (; it != relative.end(); ++it)
+                    stripped /= *it;
+                return stripped;
+            }
+            return relative;
+        }
+
+        // registry 落盘时，把绝对路径相对资源根目录存储，保证可移植。
+        std::string ToRegistryPath(const std::filesystem::path& path, const std::filesystem::path& resourceRoot)
+        {
+            const std::string raw = path.string();
+            if (raw.empty() || IsBuiltinSource(raw))
+                return raw;
+
+            // 相对路径（可能是 Resource/... 形式）先绝对化，再相对资源根目录。
+            std::error_code ec;
+            std::filesystem::path absolute = path.is_absolute()
+                ? path
+                : std::filesystem::absolute(path, ec);
+            if (ec)
+                absolute = path;
+
+            const std::filesystem::path relative =
+                std::filesystem::relative(absolute, resourceRoot, ec);
+            if (!ec && !relative.empty())
+                return relative.lexically_normal().generic_string();
+
+            // 无法相对化时（相对路径解析失败/不同盘符），退回原字符串。
+            return raw;
+        }
+
+        // registry 加载时，把相对路径解析回绝对路径；旧数据中的绝对路径保持原样。
+        std::filesystem::path FromRegistryPath(const std::string& raw, const std::filesystem::path& resourceRoot)
+        {
+            if (raw.empty() || IsBuiltinSource(raw))
+                return std::filesystem::path(raw);
+
+            const std::filesystem::path path(raw);
+            if (path.is_absolute())
+                return path.lexically_normal();
+
+            // 兼容旧数据中可能带有的 "Resource/" 前缀。
+            const std::filesystem::path stripped = StripResourcePrefix(path);
+            return (resourceRoot / stripped).lexically_normal();
         }
     }
 
@@ -51,9 +113,28 @@ namespace XJ
         std::scoped_lock lock(mMutex);
         return mMetas;
     }
+
+    bool XJAssetRegistry::ReplaceAssets(std::unordered_map<XJAssetHandle, XJAssetMeta> metas)
+    {
+        for (const auto& [handle, meta] : metas)
+        {
+            if (handle == XJAsset::InvalidHandle || meta.Handle != handle)
+                return false;
+        }
+
+        std::scoped_lock lock(mMutex);
+        mMetas = std::move(metas);
+        return true;
+    }
+
     //先复制快照，再写文件，避免持锁做 IO：
     bool XJAssetRegistry::Save(const std::filesystem::path& path) const
     {
+        // registry 约定位于 <资源根目录>/Config/ 下，据此反推资源根目录，
+        // 把绝对路径转成相对路径落盘，保证 registry 可跨机器/目录复用。
+        const std::filesystem::path resourceRoot =
+            path.parent_path().parent_path();
+
         const auto metas = XJGetAllMetas();
         nlohmann::json j;
         for(const auto& [h,m] : metas) j[std::to_string(h)] = 
@@ -61,8 +142,8 @@ namespace XJ
             {"handle", m.Handle},
             {"type", static_cast<int>(m.Type)},
             {"name", m.Name}, 
-            {"source", m.SourcePath.string()},
-            {"imported", m.ImportedPath.string()}
+            {"source", ToRegistryPath(m.SourcePath, resourceRoot)},
+            {"imported", ToRegistryPath(m.ImportedPath, resourceRoot)}
         };
         return WriteJsonFileAtomic(path, j);
     }
@@ -86,6 +167,11 @@ namespace XJ
             spdlog::error("Asset registry load failed: root must be a json object: {}", path.string());
             return false;
         }
+
+        // 与 Save 对称：从 registry 路径反推资源根目录，解析相对路径。
+        const std::filesystem::path resourceRoot =
+            path.parent_path().parent_path();
+
         std::unordered_map<XJAssetHandle, XJAssetMeta> loadedMetas;
         XJAssetHandle maxRuntimeHandle = 0;
 
@@ -116,8 +202,8 @@ namespace XJ
 
                 meta.Type = static_cast<XJAssetType>(typeValue);
                 meta.Name = value.at("name").get<std::string>();
-                meta.SourcePath = value.at("source").get<std::string>();
-                meta.ImportedPath = value.at("imported").get<std::string>();
+                meta.SourcePath = FromRegistryPath(value.at("source").get<std::string>(), resourceRoot);
+                meta.ImportedPath = FromRegistryPath(value.at("imported").get<std::string>(), resourceRoot);
 
                 if (meta.Handle == 0)
                 {
@@ -170,11 +256,6 @@ namespace XJ
 
         return true;
     }
-    static std::filesystem::path NormalizeAssetPath(const std::filesystem::path& path)//规范化路径，去除冗余的 "." 和 ".." 以及多余的分隔符，确保路径的一致性和可比较性
-    {
-        return path.lexically_normal().generic_string();
-    }
-
     bool XJAssetRegistry::ContainsSourcePath(const std::filesystem::path& sourcePath) const
     {
         return FindHandleBySourcePath(sourcePath) != 0;
@@ -182,12 +263,12 @@ namespace XJ
 
     XJAssetHandle XJAssetRegistry::FindHandleBySourcePath(const std::filesystem::path& sourcePath) const
     {
-        const auto metas = XJGetAllMetas();
-        const auto normalizedPath = NormalizeAssetPath(sourcePath);
+        const std::string normalizedPath = NormalizeAssetPathKey(sourcePath);
+        std::scoped_lock lock(mMutex);
         
-        for (const auto& [handle, meta] : metas)
+        for (const auto& [handle, meta] : mMetas)
         {
-            if (NormalizeAssetPath(meta.SourcePath) == normalizedPath)
+            if (NormalizeAssetPathKey(meta.SourcePath) == normalizedPath)
                 return handle;
         }
     

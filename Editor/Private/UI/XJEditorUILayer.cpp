@@ -176,11 +176,11 @@ namespace XJ
         // 文本框有自己的撤销栈，输入文字时不抢占 Ctrl+Z/Ctrl+Y。
         if (!ImGui::GetIO().WantTextInput)
         {
-            if (ImGui::Shortcut(ImGuiMod_Ctrl | ImGuiKey_Z))
+            if (ImGui::Shortcut(ImGuiMod_Ctrl | ImGuiKey_Z, ImGuiInputFlags_RouteGlobal))
                 mState.SceneRequests.RequestUndo = true;
 
-            if (ImGui::Shortcut(ImGuiMod_Ctrl | ImGuiKey_Y) ||
-                ImGui::Shortcut(ImGuiMod_Ctrl | ImGuiMod_Shift | ImGuiKey_Z))
+            if (ImGui::Shortcut(ImGuiMod_Ctrl | ImGuiKey_Y, ImGuiInputFlags_RouteGlobal) ||
+                ImGui::Shortcut(ImGuiMod_Ctrl | ImGuiMod_Shift | ImGuiKey_Z, ImGuiInputFlags_RouteGlobal))
             {
                 mState.SceneRequests.RequestRedo = true;
             }

@@ -64,6 +64,13 @@ namespace XJ
         }
         const char* title = mConfig ? mConfig->title.c_str() : "Content Browser";
 
+        if(mState.AssetDetailEpoch != mLastSeenAssetEpoch)
+        {
+            mLastSeenAssetEpoch = mState.AssetDetailEpoch;
+            mCachedMetasEpoch = UINT64_MAX; // 强制重建资产快照
+            InvalidateFolderCache();
+        }
+
         ImGui::Begin(title);
 
         ImVec2 windowMin = ImGui::GetWindowPos();
@@ -151,7 +158,8 @@ namespace XJ
         }
 
         // const auto& metas = registry->XJGetAllMetas();
-        const auto metas = registry->XJGetAllMetas();
+        //const auto metas = registry->XJGetAllMetas();
+        const auto& metas = GetCachedMetas();
         if (metas.empty())
         {
             ImGui::TextDisabled("No assets registered");
@@ -392,21 +400,29 @@ namespace XJ
 
     void XJContentBrowserPanel::DrawFolderNode(const std::filesystem::path& folderPath)
     {
-        bool hasChildren = false;
+        // 缓存优先：仅在缺失时遍历磁盘一次，避免每帧重复 directory_iterator。
+        const std::string key = folderPath.lexically_normal().generic_string();
 
-        std::error_code ec;
-        std::filesystem::directory_iterator it(folderPath, ec);
-        if (ec)
-            return;
-
-        for(const auto& entry : it)
+        auto cacheIt = mFolderChildrenCache.find(key);
+        if (cacheIt == mFolderChildrenCache.end())
         {
-            if(entry.is_directory())
+            std::vector<std::filesystem::path> children;
+
+            std::error_code ec;
+            for (const auto& entry : std::filesystem::directory_iterator(folderPath, ec))
             {
-                hasChildren = true;
-                break;
+                if (entry.is_directory())
+                    children.push_back(entry.path());
             }
+
+            if (ec)
+                return;
+
+            cacheIt = mFolderChildrenCache.emplace(key, std::move(children)).first;
         }
+
+        const std::vector<std::filesystem::path>& children = cacheIt->second;
+        const bool hasChildren = !children.empty();
 
         std::string folderName = folderPath.filename().string();
         if(folderName.empty())
@@ -471,14 +487,9 @@ namespace XJ
 
         if (opened)
         {
-            std::error_code ec;
-            for (const auto& entry : std::filesystem::directory_iterator(folderPath, ec))
-            {
-                if (entry.is_directory())
-                {
-                    DrawFolderNode(entry.path());
-                }
-            }
+            for (const auto& child : children)
+                DrawFolderNode(child);
+
             ImGui::TreePop();
         }
     }
@@ -584,6 +595,7 @@ namespace XJ
         if (!ec)
         {
             SetCurrentPath(newFolderPath);
+            InvalidateFolderCache();// 文件夹创建不经过 AssetDetailEpoch，手动失效子树缓存
         }
        
     }
@@ -662,5 +674,20 @@ namespace XJ
             mConfig->currentPath = mState.AssetRequests.CreateAsset.Directory.generic_string();
             mConfig->filter.clear();
         }
+    }
+
+    const std::unordered_map<XJAssetHandle, XJAssetMeta>& XJContentBrowserPanel::GetCachedMetas()
+    {
+        if(mCachedMetasEpoch != mState.AssetDetailEpoch)
+        {
+            mCachedMetas = mState.AssetRegistry->XJGetAllMetas();// 仅在失效时拷贝一次
+            mCachedMetasEpoch = mState.AssetDetailEpoch;
+        }
+        return mCachedMetas;
+    }
+
+    void XJContentBrowserPanel::InvalidateFolderCache()
+    {
+        mFolderChildrenCache.clear();
     }
 }

@@ -26,7 +26,7 @@ namespace XJ
                 const std::filesystem::path& rootPath,
                 const std::filesystem::path& registryPath,
                 std::string& outError);// 删除空目录并事务式清理目录下的注册表残留
-            static bool ImportExternalFile(XJAssetRegistry& assetRegistry, const std::filesystem::path& sourcePath, const std::filesystem::path& destinationDirectory);// 导入外部文件并注册
+            static bool ImportExternalFile(XJAssetRegistry& assetRegistry, const std::filesystem::path& sourcePath, const std::filesystem::path& destinationDirectory, const std::filesystem::path& registryPath);// 导入外部文件并注册
             static bool RefreshRegistry(XJAssetRegistry& assetRegistry, const std::filesystem::path& rootPath, const std::filesystem::path& registryPath);// 重新扫描资源目录
     };
 }

@@ -666,4 +666,13 @@ namespace XJ
         }
         
     }
+
+    void XJRenderTarget::SetScene(XJScene* scene)
+    {
+        for(auto& system : mMaterialSystemList)
+        {
+            if (system)
+                system->SetScene(scene);
+        }
+    }
 }

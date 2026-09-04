@@ -18,6 +18,9 @@ namespace XJ
     }
     XJScene *XJMaterialSystem::XJGetScene() const
     {
+        if(mScene)
+            return mScene;
+            
         XJAppContext *kAppContext = XJApplication::XJGetAppContext();
         if(kAppContext)
         {

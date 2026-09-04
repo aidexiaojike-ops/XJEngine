@@ -601,7 +601,7 @@ namespace XJ
         if (!DrawComponentFrame("Mesh Renderer", XJEditorComponentType::MeshRenderer, details))
             return;
 
-        ImGui::SeparatorText("Static Mesh");
+        ImGui::SeparatorText("Static Mesh##MeshSection");// "##" 后缀用于区分与下方 LabelText("Static Mesh") 的 ImGuiID，显示文本仍为 "Static Mesh"
 
         ImGui::LabelText("Static Mesh", "0x%016llX", static_cast<uint64_t>(details.Mesh.MeshAsset));//显示实体引用的网格资源的句柄，格式化为 16 位十六进制数
         ImGui::LabelText("Mesh URI", "%s", details.Mesh.MeshUri.c_str());//显示实体引用的网格资源的句柄，格式化为 16 位十六进制数

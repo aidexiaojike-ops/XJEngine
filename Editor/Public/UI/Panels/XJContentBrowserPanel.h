@@ -3,13 +3,22 @@
 #define XJ_CONTENT_BROWSER_PANEL_H
 
 #include "Asset/XJAsset.h"
+#include "Asset/XJAssetRegistry.h"
 #include "UI/XJEditorAssetRequests.h"
 #include "UI/XJEditorUIConfig.h"
 
 #include <imgui.h>
+#include <cstdint>
 #include <filesystem>
 #include <string>
+#include <unordered_map>
+#include <vector>
 #include "UI/XJEditorSelection.h"
+
+#include <unordered_map>
+#include <vector>
+#include <cstdint>
+#include "Asset/XJAssetRegistry.h"
 
 namespace XJ
 {
@@ -63,6 +72,14 @@ namespace XJ
             void HandleExternalFileDrop(const ImVec2& windowMin, const ImVec2& windowMax);
             std::filesystem::path GetCurrentAssetDirectory() const;
 
+            const std::unordered_map<XJAssetHandle, XJAssetMeta>& GetCachedMetas();// 资产列表快照，按 AssetDetailEpoch 失效
+            void InvalidateFolderCache();// 清空文件夹子树缓存
+
+            std::unordered_map<XJAssetHandle, XJAssetMeta> mCachedMetas;          // 资产列表快照
+            uint64_t mCachedMetasEpoch = UINT64_MAX;                              // 快照对应的资产版本号
+
+            std::unordered_map<std::string, std::vector<std::filesystem::path>> mFolderChildrenCache;// key=规范化路径 -> 子目录列表
+            uint64_t mLastSeenAssetEpoch = UINT64_MAX;                            // 用于检测资产变更，触发文件夹缓存失效
         
             
     };

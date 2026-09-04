@@ -1,0 +1,12 @@
+{
+  "parameters": {
+    "BaseColor": [
+      1.0,
+      1.0,
+      1.0,
+      1.0
+    ]
+  },
+  "shader": "Resource/Shader/Unlit.xjshader",
+  "version": 2
+}

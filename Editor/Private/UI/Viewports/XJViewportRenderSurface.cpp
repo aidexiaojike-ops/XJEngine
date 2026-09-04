@@ -144,6 +144,14 @@ namespace XJ
         }
     }
 
+    void XJViewportRenderSurface::SetScene(XJScene* scene)
+    {
+        if(mRenderTarget)
+        {
+            mRenderTarget->SetScene(scene);
+        }
+    }
+
     void XJViewportRenderSurface::CreateRenderPass(XJVulkanPhysicalDevices* physicalDevices)
     {
         VkFormat colorFormat = mDevice->XJGetSettings().surfaceFormat;

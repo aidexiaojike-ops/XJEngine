@@ -1,5 +1,10 @@
 #include "Services/XJEditorAssetService.h"
 
+#include "Asset/Metadata/XJAssetMetadata.h"
+#include "Asset/Metadata/XJAssetMetadataSerializer.h"
+#include "Asset/Metadata/XJPersistentAssetHandleGenerator.h"
+#include "Asset/Metadata/XJAssetMetadataPath.h"
+
 #include "Asset/XJAssetRegistry.h"
 #include "Asset/XJMaterialAsset.h"
 #include "Asset/XJSceneAsset.h"
@@ -15,9 +20,10 @@
 
 #include <algorithm>
 #include <cctype>
-#include <utility>
 #include <optional>                              
+#include <utility>
 #include <unordered_map> 
+#include <vector>
 
 #include <spdlog/spdlog.h>
 
@@ -32,7 +38,12 @@ namespace XJ
 
             for (const auto& [handle, meta] : metas)
             {
-                if (meta.SourcePath.empty())
+                const std::string source = meta.SourcePath.string();
+                if (source.empty())
+                    continue;
+
+                // builtin:// 等虚拟来源不是文件系统路径，跳过，避免误删内置资产（如 TJCube）。
+                if (source.rfind("builtin:", 0) == 0)
                     continue;
 
                 std::error_code ec;
@@ -160,6 +171,24 @@ namespace XJ
             return candidatePath.starts_with(directoryPath + "/");
         }
 
+        bool PathExists(const std::filesystem::path& path)
+        {
+            std::error_code ec;
+            const bool exists = std::filesystem::exists(path, ec);
+            return !ec && exists;
+        }
+
+        bool IsAssetPathAvailable(const XJAssetRegistry& assetRegistry, const std::filesystem::path& path)
+        {
+            std::error_code sourceError;
+            const bool sourceExists = std::filesystem::exists(path, sourceError);
+            std::error_code metadataError;
+            const bool metadataExists = std::filesystem::exists(BuildAssetMetadataPath(path), metadataError);
+            return !sourceError && !metadataError &&
+                   !sourceExists && !metadataExists &&
+                   !assetRegistry.ContainsSourcePath(path);
+        }
+
         std::filesystem::path BuildUniqueAssetPath(const XJAssetRegistry& assetRegistry, const std::filesystem::path& directory, const std::string& baseName, const std::string& extension)
         {
             std::filesystem::path targetDirectory = directory.empty() ? std::filesystem::path("Resource") : directory;
@@ -169,35 +198,77 @@ namespace XJ
                 ext = "." + ext;
 
             std::filesystem::path candidate = targetDirectory / (baseName + ext);
-            if (!std::filesystem::exists(candidate) && !assetRegistry.ContainsSourcePath(candidate))
+            if (IsAssetPathAvailable(assetRegistry, candidate))
                 return candidate;
 
             for (int index = 1; index < 1000; ++index)
             {
                 std::filesystem::path numbered = targetDirectory / (baseName + "_" + std::to_string(index) + ext);
-                if (!std::filesystem::exists(numbered) && !assetRegistry.ContainsSourcePath(numbered))
+                if (IsAssetPathAvailable(assetRegistry, numbered))
                     return numbered;
             }
 
             return {};
         }
 
-        XJAssetHandle BuildUniqueAssetHandle(const XJAssetRegistry& assetRegistry, const std::filesystem::path& path, XJAssetType type)
+        XJAssetHandle GeneratePersistentAssetHandle(const XJAssetRegistry& assetRegistry)
         {
-            uint32_t collisionSalt = 0;
-            XJAssetHandle handle = XJAssetRegistryScanner::GenerateStableHandle(path, type, collisionSalt);
+            const auto generated = XJPersistentAssetHandleGenerator::GenerateUnique(
+                [&assetRegistry](XJAssetHandle candidate)
+                {
+                    return !assetRegistry.Contains(candidate);
+                }
+            );
 
-            while (assetRegistry.Contains(handle))
-            {
-                ++collisionSalt;
-                handle = XJAssetRegistryScanner::GenerateStableHandle(path, type, collisionSalt);
-            }
-
-            return handle;
+            return generated.value_or(XJAsset::InvalidHandle);
         }
 
-        void RegisterCreatedAsset(XJAssetRegistry& assetRegistry, const std::filesystem::path& path, XJAssetType type, XJAssetHandle handle, const std::filesystem::path& registryPath)
+        const char* DefaultImporterNameForType(XJAssetType type)
         {
+            switch (type)
+            {
+                case XJAssetType::Mesh:     return "GltfImporter";
+                case XJAssetType::Texture:  return "TextureImporter";
+                case XJAssetType::Material: return "MaterialSerializer";
+                case XJAssetType::Scene:    return "SceneSerializer";
+                case XJAssetType::Shader:   return "ShaderSerializer";
+                default:                    return "";
+            }
+        }
+
+        bool RemoveFileForRollback(const std::filesystem::path& path)
+        {
+            if (path.empty())
+                return true;
+
+            std::error_code ec;
+            const bool removed = std::filesystem::remove(path, ec);
+            if (ec)
+            {
+                spdlog::critical("Asset transaction rollback failed to remove '{}': {}", path.string(), ec.message());
+                return false;
+            }
+
+            return removed || !PathExists(path);
+        }
+
+        bool RegisterCreatedAsset(XJAssetRegistry& assetRegistry, const std::filesystem::path& path, XJAssetType type, XJAssetHandle handle, const std::filesystem::path& registryPath)
+        {
+            XJAssetMetadata metadata;
+            metadata.Handle = handle;
+            metadata.Type = type;
+            metadata.Importer = DefaultImporterNameForType(type);
+            metadata.ImporterVersion = 1;
+
+            std::string metaError;
+            if (!XJAssetMetadataSerializer::Save(path, metadata, &metaError))
+            {
+                spdlog::error("Failed to write asset metadata '{}': {}", path.string(), metaError);
+                RemoveFileForRollback(path);
+                return false;
+            }
+
+
             XJAssetMeta meta;
             meta.Handle = handle;
             meta.Type = type;
@@ -205,13 +276,27 @@ namespace XJ
             meta.SourcePath = path.lexically_normal().generic_string();
             meta.ImportedPath = "";
 
-            assetRegistry.RegisterAsset(meta);
-            assetRegistry.Save(registryPath);
+            if (!assetRegistry.RegisterAsset(meta))
+            {
+                RemoveFileForRollback(BuildAssetMetadataPath(path));
+                RemoveFileForRollback(path);
+                return false;
+            }
+
+            if (assetRegistry.Save(registryPath))
+                return true;
+
+            // 创建事务失败：撤销内存注册并清理源文件与 sidecar。
+            if (!assetRegistry.RemoveAsset(handle))
+                spdlog::critical("Asset creation rollback failed to unregister handle {}.", handle);
+            RemoveFileForRollback(BuildAssetMetadataPath(path));
+            RemoveFileForRollback(path);
+            return false;
         }
 
-        std::filesystem::path BuildUniqueImportPath(const std::filesystem::path& desiredPath)
+        std::filesystem::path BuildUniqueImportPath(const XJAssetRegistry& assetRegistry, const std::filesystem::path& desiredPath)
         {
-            if (!std::filesystem::exists(desiredPath))
+            if (IsAssetPathAvailable(assetRegistry, desiredPath))
                 return desiredPath;
 
             const std::filesystem::path parent = desiredPath.parent_path();
@@ -221,7 +306,7 @@ namespace XJ
             for (int index = 1; index < 1000; ++index)
             {
                 std::filesystem::path candidate = parent / (stem + "_" + std::to_string(index) + extension);
-                if (!std::filesystem::exists(candidate))
+                if (IsAssetPathAvailable(assetRegistry, candidate))
                     return candidate;
             }
 
@@ -238,6 +323,47 @@ namespace XJ
             }
 
             return true;
+        }
+
+        bool RestoreRenamedAsset(
+            XJAssetRegistry& assetRegistry,
+            const XJAssetMeta& oldMeta,
+            const std::filesystem::path& oldPath,
+            const std::filesystem::path& newPath,
+            const std::filesystem::path& oldMetadataPath,
+            const std::filesystem::path& newMetadataPath,
+            bool generatedMetadata)
+        {
+            // 重命名事务回滚：先恢复文件，再恢复注册表快照。
+            bool restored = true;
+            if (PathExists(newPath))
+                restored = RenameFileNoThrow(newPath, oldPath) && restored;
+            if (PathExists(newMetadataPath))
+                restored = RenameFileNoThrow(newMetadataPath, oldMetadataPath) && restored;
+            if (generatedMetadata && restored && PathExists(oldMetadataPath))
+                restored = RemoveFileForRollback(oldMetadataPath) && restored;
+            restored = assetRegistry.RegisterAsset(oldMeta) && restored;
+
+            if (!restored)
+                spdlog::critical("Asset rename rollback was incomplete for handle {}.", oldMeta.Handle);
+            return restored;
+        }
+
+        struct TrashedAssetFile
+        {
+            std::filesystem::path OriginalPath;
+            std::filesystem::path TrashPath;
+        };
+
+        bool RestoreTrashedFiles(const std::vector<TrashedAssetFile>& files)
+        {
+            bool restored = true;
+            for (auto it = files.rbegin(); it != files.rend(); ++it)
+            {
+                if (PathExists(it->TrashPath))
+                    restored = RenameFileNoThrow(it->TrashPath, it->OriginalPath) && restored;
+            }
+            return restored;
         }
 
         constexpr size_t kAssetInspectorCacheMaxEntries = 256;
@@ -534,7 +660,7 @@ namespace XJ
         if (oldPath.generic_string() == newPath.generic_string())
             return false;
 
-        if (assetRegistry.ContainsSourcePath(newPath) || std::filesystem::exists(newPath))
+        if (!IsAssetPathAvailable(assetRegistry, newPath))
             return false;
 
         XJAssetMeta newMeta = oldMeta;
@@ -549,23 +675,66 @@ namespace XJ
             newMeta.ImportedPath = newPath.generic_string();
         }
 
-        // From here on, disk and registry must move together. If any later step fails,
-        // roll the file and in-memory registry back so RefreshRegistry cannot create a
-        // second handle for the renamed file.
-        if (!RenameFileNoThrow(oldPath, newPath))
+        const std::filesystem::path oldMetadataPath = BuildAssetMetadataPath(oldPath);
+        const std::filesystem::path newMetadataPath = BuildAssetMetadataPath(newPath);
+
+        std::error_code ec;
+        if (!std::filesystem::is_regular_file(oldPath, ec) || ec)
             return false;
+
+        bool generatedMetadata = false;
+        const auto metadataResult = XJAssetMetadataSerializer::Load(oldPath);
+        if (metadataResult.Status == XJAssetMetadataLoadStatus::NotFound)
+        {
+            XJAssetMetadata metadata;
+            metadata.Handle = oldMeta.Handle;
+            metadata.Type = oldMeta.Type;
+            metadata.Importer = DefaultImporterNameForType(oldMeta.Type);
+            metadata.ImporterVersion = 1;
+
+            std::string metadataError;
+            if (!XJAssetMetadataSerializer::Save(oldPath, metadata, &metadataError))
+            {
+                spdlog::error("Failed to create metadata before renaming '{}': {}", oldPath.string(), metadataError);
+                return false;
+            }
+            generatedMetadata = true;
+        }
+        else if (!metadataResult.Succeeded() ||
+                 metadataResult.Metadata->Handle != oldMeta.Handle ||
+                 metadataResult.Metadata->Type != oldMeta.Type)
+        {
+            spdlog::error("Asset rename rejected because metadata ownership conflicts with registry: {}", oldPath.string());
+            return false;
+        }
+
+        // 重命名事务开始：源文件与 sidecar 必须成对移动。
+        if (!RenameFileNoThrow(oldPath, newPath))
+        {
+            if (generatedMetadata)
+                RemoveFileForRollback(oldMetadataPath);
+            return false;
+        }
+
+        if (!RenameFileNoThrow(oldMetadataPath, newMetadataPath))
+        {
+            const bool sourceRestored = RenameFileNoThrow(newPath, oldPath);
+            if (generatedMetadata && sourceRestored)
+                RemoveFileForRollback(oldMetadataPath);
+            if (!sourceRestored)
+                spdlog::critical("Asset rename rollback was incomplete for handle {}.", oldMeta.Handle);
+            return false;
+        }
 
         if (!assetRegistry.RegisterAsset(newMeta))
         {
-            RenameFileNoThrow(newPath, oldPath);
-            assetRegistry.RegisterAsset(oldMeta);
+            RestoreRenamedAsset(assetRegistry, oldMeta, oldPath, newPath, oldMetadataPath, newMetadataPath, generatedMetadata);
             return false;
         }
 
         if (!assetRegistry.Save(registryPath))
         {
-            RenameFileNoThrow(newPath, oldPath);
-            assetRegistry.RegisterAsset(oldMeta);
+            RestoreRenamedAsset(assetRegistry, oldMeta, oldPath, newPath, oldMetadataPath, newMetadataPath, generatedMetadata);
             return false;
         }
 
@@ -578,8 +747,8 @@ namespace XJ
         if (path.empty())
             return 0;
 
-        XJAssetHandle handle = BuildUniqueAssetHandle(assetRegistry, path, XJAssetType::Material);
-        if (handle == 0)
+        XJAssetHandle handle = GeneratePersistentAssetHandle(assetRegistry);
+        if (handle == XJAsset::InvalidHandle)
             return 0;
 
         XJMaterialAsset material;
@@ -592,9 +761,14 @@ namespace XJ
         material.ParameterOverrides.clear();
 
         if (!XJMaterialAssetSerializer::SaveToFile(material, path))
+        {
+            RemoveFileForRollback(path);
+            return 0;
+        }
+
+        if (!RegisterCreatedAsset(assetRegistry, path, XJAssetType::Material, handle, registryPath))
             return 0;
 
-        RegisterCreatedAsset(assetRegistry, path, XJAssetType::Material, handle, registryPath);
         return handle;
     }
 
@@ -604,8 +778,8 @@ namespace XJ
         if (path.empty())
             return 0;
 
-        XJAssetHandle handle = BuildUniqueAssetHandle(assetRegistry, path, XJAssetType::Scene);
-        if (handle == 0)
+        XJAssetHandle handle = GeneratePersistentAssetHandle(assetRegistry);
+        if (handle == XJAsset::InvalidHandle)
             return 0;
 
         XJSceneAsset scene;
@@ -615,9 +789,14 @@ namespace XJ
         scene.Entities.clear();
 
         if (!XJSceneAssetSerializer::SaveToFile(scene, path))
+        {
+            RemoveFileForRollback(path);
+            return 0;
+        }
+
+        if (!RegisterCreatedAsset(assetRegistry, path, XJAssetType::Scene, handle, registryPath))
             return 0;
 
-        RegisterCreatedAsset(assetRegistry, path, XJAssetType::Scene, handle, registryPath);
         return handle;
     }
 
@@ -627,51 +806,97 @@ namespace XJ
         if (!meta)
             return false;
 
-        std::error_code ec;
-
-        auto removeFileIfPresent = [&](const std::filesystem::path& path)
+        std::vector<std::filesystem::path> paths;
+        auto addPath = [&paths](const std::filesystem::path& path)
         {
-            if (path.empty())
-                return true;
+            if (path.empty() || path.generic_string().starts_with("builtin:"))
+                return;
 
-            if (!std::filesystem::exists(path, ec))
+            const auto normalized = path.lexically_normal();
+            const auto duplicate = std::find_if(paths.begin(), paths.end(), [&normalized](const auto& existing)
             {
-                ec.clear();
-                return true;
-            }
-
-            if (!std::filesystem::is_regular_file(path, ec))
-            {
-                ec.clear();
-                spdlog::warn("Skip deleting non-file asset path: {}", path.string());
-                return true;
-            }
-
-            if (!std::filesystem::remove(path, ec))
-            {
-                spdlog::error("Failed to delete asset file '{}': {}", path.string(), ec.message());
-                ec.clear();
-                return false;
-            }
-
-            return true;
+                return existing.lexically_normal() == normalized;
+            });
+            if (duplicate == paths.end())
+                paths.push_back(normalized);
         };
 
-        // Delete files before removing registry entry. If file deletion fails,
-        // keep the registry intact so RefreshRegistry cannot silently resurrect state.
-        if (!removeFileIfPresent(meta->SourcePath))
-            return false;
+        addPath(meta->SourcePath);
+        addPath(meta->ImportedPath);
+        addPath(BuildAssetMetadataPath(meta->SourcePath));
 
-        if (meta->ImportedPath != meta->SourcePath)
+        std::vector<std::filesystem::path> existingPaths;
+        for (const auto& path : paths)
         {
-            if (!removeFileIfPresent(meta->ImportedPath))
+            std::error_code ec;
+            const bool exists = std::filesystem::exists(path, ec);
+            if (ec)
                 return false;
+            if (!exists)
+                continue;
+            if (!std::filesystem::is_regular_file(path, ec) || ec)
+            {
+                spdlog::error("Asset deletion rejected for non-file path: {}", path.string());
+                return false;
+            }
+            existingPaths.push_back(path);
         }
 
-        if (!assetRegistry.RemoveAsset(handle))
+        const std::filesystem::path trashParent = registryPath.parent_path().empty()
+            ? std::filesystem::current_path()
+            : registryPath.parent_path();
+        std::filesystem::path trashPath;
+        for (uint32_t attempt = 0; attempt < 128; ++attempt)
+        {
+            const XJAssetHandle suffix = XJPersistentAssetHandleGenerator::GenerateCandidate();
+            const auto candidate = trashParent / (".xjtrash-" + std::to_string(handle) + "-" + std::to_string(suffix));
+            if (!PathExists(candidate))
+            {
+                trashPath = candidate;
+                break;
+            }
+        }
+        if (trashPath.empty())
             return false;
 
-        return assetRegistry.Save(registryPath);
+        std::error_code ec;
+        if (!std::filesystem::create_directories(trashPath, ec) || ec)
+            return false;
+
+        // 删除事务开始：先将所有资产文件移入同盘临时回收目录。
+        std::vector<TrashedAssetFile> trashedFiles;
+        for (size_t index = 0; index < existingPaths.size(); ++index)
+        {
+            TrashedAssetFile file;
+            file.OriginalPath = existingPaths[index];
+            file.TrashPath = trashPath / (std::to_string(index) + "-" + existingPaths[index].filename().string());
+            if (!RenameFileNoThrow(file.OriginalPath, file.TrashPath))
+            {
+                RestoreTrashedFiles(trashedFiles);
+                std::filesystem::remove_all(trashPath, ec);
+                return false;
+            }
+            trashedFiles.push_back(std::move(file));
+        }
+
+        if (!assetRegistry.RemoveAsset(handle) || !assetRegistry.Save(registryPath))
+        {
+            assetRegistry.RegisterAsset(*meta);
+            if (!RestoreTrashedFiles(trashedFiles))
+                spdlog::critical("Asset deletion rollback was incomplete for handle {}.", handle);
+            ec.clear();
+            std::filesystem::remove_all(trashPath, ec);
+            return false;
+        }
+
+        ec.clear();
+        std::filesystem::remove_all(trashPath, ec);
+        if (ec)
+        {
+            // 注册表已提交，保留回收目录供后续人工恢复，避免半清理后伪造可回滚状态。
+            spdlog::error("Asset deleted but temporary trash cleanup failed '{}': {}", trashPath.string(), ec.message());
+        }
+        return true;
     }
 
     bool XJEditorAssetService::DeleteEmptyFolder(
@@ -762,7 +987,7 @@ namespace XJ
         return false;
     }
 
-    bool XJEditorAssetService::ImportExternalFile(XJAssetRegistry& assetRegistry, const std::filesystem::path& sourcePath, const std::filesystem::path& destinationDirectory)
+    bool XJEditorAssetService::ImportExternalFile(XJAssetRegistry& assetRegistry, const std::filesystem::path& sourcePath, const std::filesystem::path& destinationDirectory, const std::filesystem::path& registryPath)
     {
         if (!std::filesystem::exists(sourcePath) || !std::filesystem::is_regular_file(sourcePath))
             return false;
@@ -773,7 +998,7 @@ namespace XJ
 
         std::filesystem::path targetDirectory = destinationDirectory.empty() ? std::filesystem::path("Resource") : destinationDirectory;
         std::filesystem::path desiredPath = targetDirectory / sourcePath.filename();
-        std::filesystem::path destinationPath = BuildUniqueImportPath(desiredPath);
+        std::filesystem::path destinationPath = BuildUniqueImportPath(assetRegistry, desiredPath);
         if (destinationPath.empty())
             return false;
 
@@ -782,30 +1007,34 @@ namespace XJ
         if (ec)
             return false;
 
-        if (assetRegistry.ContainsSourcePath(destinationPath))
-            return false;
-
         std::filesystem::copy_file(sourcePath, destinationPath, std::filesystem::copy_options::none, ec);
         if (ec)
             return false;
 
-        XJAssetMeta meta;
-        meta.Type = type;
-        meta.Name = XJAssetRegistryScanner::GetAssetNameFromPath(destinationPath);
-        meta.SourcePath = destinationPath.lexically_normal().generic_string();
-        meta.ImportedPath = "";
-        meta.Handle = BuildUniqueAssetHandle(assetRegistry, destinationPath, type);
-
-        if (meta.Handle == 0)
+        const XJAssetHandle handle = GeneratePersistentAssetHandle(assetRegistry);
+        if (handle == XJAsset::InvalidHandle)
+        {
+            RemoveFileForRollback(destinationPath);
             return false;
+        }
 
-        return assetRegistry.RegisterAsset(meta);
+        // 导入事务提交：写入 sidecar、注册内存并原子保存 registry。
+        return RegisterCreatedAsset(assetRegistry, destinationPath, type, handle, registryPath);
     }
 
     bool XJEditorAssetService::RefreshRegistry(XJAssetRegistry& assetRegistry, const std::filesystem::path& rootPath, const std::filesystem::path& registryPath)
     {
-        RemoveMissingSourceAssets(assetRegistry);
-        XJAssetRegistryScanner::ScanResourceAssets(assetRegistry, rootPath);
-        return assetRegistry.Save(registryPath);
+        // Detailed scanner 自己构造完整快照并移除缺失项；文件系统错误时不会替换活动 Registry。
+        const auto registryBeforeScan = assetRegistry.XJGetAllMetas();
+        const XJAssetRegistryScanReport report =
+            XJAssetRegistryScanner::ScanResourceAssetsDetailed(assetRegistry, rootPath);
+
+        if (report.FilesystemErrors > 0)
+            return false;
+
+        const bool saved = assetRegistry.Save(registryPath);
+        if (!saved && !assetRegistry.ReplaceAssets(registryBeforeScan))
+            spdlog::critical("Failed to restore registry snapshot after refresh save failure.");
+        return saved && report.Succeeded();
     }
 }

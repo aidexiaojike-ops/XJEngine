@@ -11,12 +11,13 @@ namespace XJ
 
     class XJSystem
     {
-    public:
-        virtual ~XJSystem() = default;
+        public:
+            virtual ~XJSystem() = default;
 
-        virtual void OnUpdate(float deltaTime)
-        {
-        }
+            virtual void OnCreate() {}
+            virtual void OnUpdate(float deltaTime){}
+            virtual void OnFixedUpdate(float fixedDeltaTime) {}
+            virtual void OnDestroy() {}
     };
 }
 

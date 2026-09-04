@@ -22,6 +22,7 @@ namespace XJ
             std::filesystem::path mResourceRoot;
             std::filesystem::path mRegistryPath;
             std::filesystem::path mDefaultScenePath;
+            bool mBootstrapAssetsValid = true;
             
         public:
             XJAssetBootstrap(
@@ -42,7 +43,7 @@ namespace XJ
             {}
 
             void RegisterBootstrapAssets();
-            void LoadOrCreateAssetRegistry();
+            bool LoadOrCreateAssetRegistry();
             std::shared_ptr<XJSceneAsset> LoadOrCreateDefaultSceneAsset();
        
     };

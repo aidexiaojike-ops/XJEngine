@@ -10,6 +10,7 @@
 namespace XJ
 {
     class XJEntity;
+    class XJScene;
 
     class XJScenePreview : public XJViewport
     {
@@ -30,6 +31,11 @@ namespace XJ
             void SetCamera(XJEntity* camera)
             {
                 mPreviewCamera = camera;
+            }
+            void SetScene(XJScene* scene)
+            {
+                mScene = scene;
+                mSurface.SetScene(scene);
             }
 
             using AssetDropCallback = std::function<void(const XJAssetDragPayload&)>;
@@ -68,6 +74,7 @@ namespace XJ
         private:
             XJViewportRenderSurface mSurface;
             XJEntity* mPreviewCamera = nullptr;//用于预览的摄像机实体
+            XJScene* mScene = nullptr;//当前预览的场景
 
             bool CalculateDropPositionFromViewportRay(const ImVec2& imageMin, const ImVec2& imageSize, glm::vec3& outOrigin, glm::vec3& outDirection, float& outMaxDistance) const;//根据鼠标在视口中的位置计算拖放物体在世界空间中的位置
             AssetDropCallback mAssetDropCallback;

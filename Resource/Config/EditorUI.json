@@ -1,12 +1,12 @@
 {
   "layout": {
     "dockspace": true,
-    "imguiIniPath": "Resource/Config/imgui.ini",
+    "imguiIniPath": "Saved/Config/imgui.ini",
     "saveImguiIni": true
   },
   "panels": {
     "contentBrowser": {
-      "currentPath": "Resource/Mesh",
+      "currentPath": "Resource/Material",
       "filter": "",
       "rootPath": "Resource",
       "showAssetType": true,

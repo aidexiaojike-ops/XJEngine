@@ -15,10 +15,13 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 # ------------------------------------------------------------
 # 【★ 核心】统一运行期输出目录（引擎级约定）
 # 所有配置（Debug / Release）都输出到 bin/
+#
+# 开发阶段：源 Resource 是唯一资产真相，编辑器与运行时都直接读取
+# ${CMAKE_SOURCE_DIR}/Resource，不再维护 bin/Resource 副本。
+# 最终 Export/Package 阶段才把资产整理进游戏目录（后续实现）。
 # ------------------------------------------------------------
 set(XJ_RUNTIME_DIR        ${CMAKE_SOURCE_DIR}/bin)
-set(XJ_RESOURCE_DIR       ${XJ_RUNTIME_DIR}/Resource)
-set(XJ_SHADER_OUTPUT_DIR  ${XJ_RESOURCE_DIR}/Shader)
+set(XJ_SHADER_OUTPUT_DIR  ${CMAKE_SOURCE_DIR}/Resource/Shader)
 
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${XJ_RUNTIME_DIR})
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_DEBUG ${XJ_RUNTIME_DIR})
@@ -26,12 +29,10 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_RELEASE ${XJ_RUNTIME_DIR})
 
 # ------------------------------------------------------------
 # 【★ 运行期目录准备】
-# 这是“资源阶段”的根，不只是 Shader
+# exe 与日志输出目录。
 # ------------------------------------------------------------
 add_custom_target(PrepareRuntimeDirs
     COMMAND ${CMAKE_COMMAND} -E make_directory ${XJ_RUNTIME_DIR}
-    COMMAND ${CMAKE_COMMAND} -E make_directory ${XJ_RESOURCE_DIR}
-    COMMAND ${CMAKE_COMMAND} -E make_directory ${XJ_SHADER_OUTPUT_DIR}
     COMMAND ${CMAKE_COMMAND} -E make_directory ${XJ_RUNTIME_DIR}/log
 )
 
@@ -121,7 +122,7 @@ target_link_libraries(XJEngine
 
 # ------------------------------------------------------------
 # 【★ Shader 编译（不进 exe）】
-# 构建期资源 → bin/Resource/Shader
+# 构建期资源 → 源项目 Resource/Shader（.spv 与 .xjshader 同源）
 # ------------------------------------------------------------
 spirv_compile(
     TARGET CompileShaders
@@ -143,48 +144,8 @@ copy_vulkan_runtime_dlls(
 )
 
 # ------------------------------------------------------------
-# 【★ 非 Shader 资源复制】
-# 注意：Shader 已由 glslc 生成，这里不应覆盖
-# ------------------------------------------------------------
-add_custom_command(TARGET XJEngine POST_BUILD
-    COMMAND ${CMAKE_COMMAND} -E copy_directory
-        ${CMAKE_SOURCE_DIR}/Resource/Texture
-        ${XJ_RESOURCE_DIR}/Texture
-)#贴图
-
-add_custom_command(TARGET XJEngine POST_BUILD
-    COMMAND ${CMAKE_COMMAND} -E copy_directory
-        ${CMAKE_SOURCE_DIR}/Resource/Mesh
-        ${XJ_RESOURCE_DIR}/Mesh
-)#模型
-
-add_custom_command(TARGET XJEngine POST_BUILD
-    COMMAND ${CMAKE_COMMAND} -E copy_directory
-        ${CMAKE_SOURCE_DIR}/Resource/Material
-        ${XJ_RESOURCE_DIR}/Material
-)#材质
-
-add_custom_command(TARGET XJEngine POST_BUILD
-    COMMAND ${CMAKE_COMMAND} -E copy_directory
-        ${CMAKE_SOURCE_DIR}/Resource/Shader
-        ${XJ_RESOURCE_DIR}/Shader
-)#shader
-
-
-add_custom_command(TARGET XJEngine POST_BUILD
-    COMMAND ${CMAKE_COMMAND} -E copy_directory
-        ${CMAKE_SOURCE_DIR}/Resource/Scenes
-        ${XJ_RESOURCE_DIR}/Scenes
-)#场景
-
-add_custom_command(TARGET XJEngine POST_BUILD
-    COMMAND ${CMAKE_COMMAND} -E copy_directory
-        ${CMAKE_SOURCE_DIR}/Resource/Config
-        ${XJ_RESOURCE_DIR}/Config
-)#配置文件
-
-# ------------------------------------------------------------
-# 工程状态提示（可选，但对调试很有用）
+# 开发阶段不复制源资产到 bin：编辑器与运行时都直读源 Resource。
+# 最终 Export/Package 步骤（后续实现）才把资产整理进游戏目录。
 # ------------------------------------------------------------
 message(STATUS "XJEngine runtime dir  : ${XJ_RUNTIME_DIR}")
 message(STATUS "XJEngine shader output: ${XJ_SHADER_OUTPUT_DIR}")

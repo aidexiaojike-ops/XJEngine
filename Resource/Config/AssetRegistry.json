@@ -1,30 +1,79 @@
 {
+  "110848427300053725": {
+    "handle": 110848427300053725,
+    "imported": "",
+    "name": "TestSwitchScene",
+    "source": "Scenes/TestSwitchScene.xjscene",
+    "type": 4
+  },
+  "112231601533046109": {
+    "handle": 112231601533046109,
+    "imported": "",
+    "name": "Cube",
+    "source": "Mesh/Cube.glb",
+    "type": 1
+  },
+  "2358456653288204257": {
+    "handle": 2358456653288204257,
+    "imported": "",
+    "name": "R-C",
+    "source": "Texture/R-C.jpeg",
+    "type": 2
+  },
   "268435457": {
     "handle": 268435457,
-    "type": 4,
-    "name": "DefaultScene",
-    "source": "Resource/Scenes/Default.xjscene",
-    "imported": ""
+    "imported": "",
+    "name": "Default",
+    "source": "Scenes/Default.xjscene",
+    "type": 4
+  },
+  "2790402419954539420": {
+    "handle": 2790402419954539420,
+    "imported": "",
+    "name": "R",
+    "source": "Texture/R.png",
+    "type": 2
   },
   "536870913": {
     "handle": 536870913,
-    "type": 1,
+    "imported": "",
     "name": "Monkey",
-    "source": "Resource/Mesh/Monkey.glb",
-    "imported": ""
+    "source": "Mesh/Monkey.glb",
+    "type": 1
   },
   "536870914": {
     "handle": 536870914,
-    "type": 1,
+    "imported": "",
     "name": "TJCube",
     "source": "builtin://mesh/TJCube",
-    "imported": ""
+    "type": 1
   },
-  "556870913": {
-    "handle": 556870913,
-    "type": 3,
-    "name": "UnlitMat",
-    "source": "Resource/Material/UnlitMat.xjmat",
-    "imported": ""
+  "6009562244236087423": {
+    "handle": 6009562244236087423,
+    "imported": "",
+    "name": "Plane",
+    "source": "Mesh/Plane.glb",
+    "type": 1
+  },
+  "7949313787214589732": {
+    "handle": 7949313787214589732,
+    "imported": "",
+    "name": "Unlit",
+    "source": "Shader/Unlit.xjshader",
+    "type": 5
+  },
+  "8557768953746195919": {
+    "handle": 8557768953746195919,
+    "imported": "",
+    "name": "NewMaterial",
+    "source": "Material/NewMaterial.xjmat",
+    "type": 3
+  },
+  "878030584296088097": {
+    "handle": 878030584296088097,
+    "imported": "",
+    "name": "Plane",
+    "source": "Material/Plane.xjmat",
+    "type": 3
   }
 }

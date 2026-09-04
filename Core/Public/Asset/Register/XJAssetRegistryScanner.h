@@ -18,6 +18,7 @@ namespace XJ
         uint32_t MetadataCreated = 0;
         uint32_t Skipped = 0;
         uint32_t Errors = 0;
+        uint32_t FilesystemErrors = 0;
 
         bool Succeeded() const
         {

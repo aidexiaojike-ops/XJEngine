@@ -4,6 +4,8 @@
 
 #include <Windows.h>
 #include <filesystem>
+#include <string>
+#include <string_view>
 #include <thread>
 
 namespace XJ
@@ -18,6 +20,15 @@ namespace XJ
     void XJApplication::Start(int argc, char** argv)
     {
         mStopped = false;
+
+        std::error_code launchDirectoryError;
+        mLaunchWorkingDirectory = std::filesystem::current_path(launchDirectoryError);
+        if (launchDirectoryError)
+            mLaunchWorkingDirectory.clear();
+
+        // 先解析命令行（--project），再据此确定工作目录，
+        // 让所有 Resource/... 相对路径都解析到正确的项目根。
+        ParseArgs(argc, argv);
         ConfigureWorkingDirectory();
 
         // 在这里可以添加应用程序启动时的初始化代码
@@ -26,7 +37,6 @@ namespace XJ
 
         sAppContext.renderThreadId = std::this_thread::get_id();
         
-        ParseArgs(argc, argv);
         OnConfiguration(&mAppSettings);
 
         mWindow = std::make_unique<XJGlfwWindow>(mAppSettings.windowWidth, mAppSettings.windowHeight, mAppSettings.title);
@@ -115,40 +125,69 @@ namespace XJ
 
     void XJApplication::ConfigureWorkingDirectory()
     {
-        char exePath[MAX_PATH] = {};
-        const DWORD length = GetModuleFileNameA(nullptr, exePath, MAX_PATH);
-
-        if (length == 0 || length >= MAX_PATH)
+        // 优先使用 --project 指定的项目根；否则退回 exe 所在目录。
+        std::filesystem::path targetDir;
+        if (!mProjectPath.empty())
         {
-            spdlog::error("Failed to resolve executable path; current working directory is unchanged.");
-            return;
+            targetDir = mProjectPath;
         }
-
-        const std::filesystem::path exeDir = std::filesystem::path(exePath).parent_path();
-        if (exeDir.empty())
+        else
         {
-            spdlog::error("Failed to resolve executable directory; current working directory is unchanged.");
-            return;
+            char exePath[MAX_PATH] = {};
+            const DWORD length = GetModuleFileNameA(nullptr, exePath, MAX_PATH);
+
+            if (length == 0 || length >= MAX_PATH)
+            {
+                spdlog::error("Failed to resolve executable path; current working directory is unchanged.");
+                return;
+            }
+
+            targetDir = std::filesystem::path(exePath).parent_path();
+            if (targetDir.empty())
+            {
+                spdlog::error("Failed to resolve executable directory; current working directory is unchanged.");
+                return;
+            }
         }
 
         std::error_code ec;
-        std::filesystem::current_path(exeDir, ec);
+        std::filesystem::current_path(targetDir, ec);
         if (ec)
         {
             spdlog::error(
                 "Failed to set working directory to '{}': {}",
-                exeDir.string(),
+                targetDir.string(),
                 ec.message());
             return;
         }
 
-        spdlog::debug("Working directory set to '{}'", exeDir.string());
+        spdlog::debug("Working directory set to '{}'", targetDir.string());
     }
 
     void XJApplication::ParseArgs(int argc, char** argv)
     {
-         // 此处可以实现对命令行参数的解析，例如设置应用的一些特性
-        // TODO: 在此函数中实现相关的逻辑
+        for (int i = 1; i < argc; ++i)
+        {
+            const std::string arg = argv[i];
+
+            if (arg == "--project" && i + 1 < argc)
+            {
+                mProjectPath = argv[++i];
+                if (mProjectPath.is_relative() && !mLaunchWorkingDirectory.empty())
+                    mProjectPath = mLaunchWorkingDirectory / mProjectPath;
+                mProjectPath = mProjectPath.lexically_normal();
+                continue;
+            }
+
+            constexpr std::string_view kPrefix = "--project=";
+            if (arg.rfind(kPrefix, 0) == 0)
+            {
+                mProjectPath = arg.substr(kPrefix.size());
+                if (mProjectPath.is_relative() && !mLaunchWorkingDirectory.empty())
+                    mProjectPath = mLaunchWorkingDirectory / mProjectPath;
+                mProjectPath = mProjectPath.lexically_normal();
+            }
+        }
     }
 
     bool XJApplication::LoadScene(const std::string &filePath)//是否加载场景，加载场景 文件夹

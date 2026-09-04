@@ -24,10 +24,15 @@ namespace XJ
 
         // 以下文件由编辑器修改，应位于 ProjectResourceRoot。
         std::filesystem::path RegistryPath;
-        std::filesystem::path UIConfigPath;
         std::filesystem::path DefaultScenePath;
 
-        // ImGui ini 属于用户运行状态，放在 RuntimeResourceRoot。
+        // 编辑器 UI 初始模板（提交进 Git），位于 ProjectResourceRoot。
+        std::filesystem::path InitialUIConfigPath;
+
+        // 编辑器 UI 运行状态，属于用户数据，放在 RuntimeRoot/Saved。
+        std::filesystem::path UIConfigPath;
+
+        // ImGui ini 属于用户运行状态，放在 RuntimeRoot/Saved。
         std::filesystem::path ImGuiIniPath;
 
         bool IsValid() const
@@ -37,6 +42,7 @@ namespace XJ
                    !RuntimeRoot.empty() &&
                    !RuntimeResourceRoot.empty() &&
                    !RegistryPath.empty() &&
+                   !InitialUIConfigPath.empty() &&
                    !UIConfigPath.empty() &&
                    !DefaultScenePath.empty() &&
                    !ImGuiIniPath.empty();
@@ -67,9 +73,14 @@ namespace XJ
                  "Config/AssetRegistry.json")
                     .lexically_normal();
 
-            paths.UIConfigPath =
+            paths.InitialUIConfigPath =
                 (paths.ProjectResourceRoot /
                  "Config/EditorUI.json")
+                    .lexically_normal();
+
+            paths.UIConfigPath =
+                (paths.RuntimeRoot /
+                 "Saved/Config/EditorUI.json")
                     .lexically_normal();
 
             paths.DefaultScenePath =

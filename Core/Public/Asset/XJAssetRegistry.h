@@ -34,7 +34,10 @@ namespace XJ
             bool Save(const std::filesystem::path& path) const;//将整个注册表的元数据序列化到文件（例如保存为 JSON 或二进制），用于持久化
             bool Load(const std::filesystem::path& path);//从文件反序列化恢复注册表状态
 
-             // 返回快照，不返回内部 map 引用。否则调用方遍历时 registry 被修改仍会数据竞争。
+            // 原子替换完整快照，供扫描器完成全部校验后一次提交。
+            bool ReplaceAssets(std::unordered_map<XJAssetHandle, XJAssetMeta> metas);
+
+            // 返回快照，不返回内部 map 引用。否则调用方遍历时 registry 被修改仍会数据竞争。
             std::unordered_map<XJAssetHandle, XJAssetMeta> XJGetAllMetas() const;//获取注册表中所有资产的元数据，供场景加载或编辑器 UI 使用
         private:
             mutable std::mutex mMutex;

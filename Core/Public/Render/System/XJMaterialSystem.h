@@ -25,12 +25,17 @@ namespace XJ
             virtual void OnRender(XJVulkanCommandBuffer cmdBuffer, XJRenderTarget* renderTarget) = 0;
             virtual void OnDestroy() = 0;
 
+            // 注入渲染场景：ScenePreview 用编辑器场景，GamePreview 在 Play 时用运行时克隆。
+            void SetScene(XJScene* scene){mScene = scene;}
+
         protected:
             XJApplication *XJGetApp() const;
             XJScene *XJGetScene() const;
             XJVulkanDevice *XJGetDevice() const;
             const glm::mat4 XJGetProjMat(XJRenderTarget *renderTarget) const;
             const glm::mat4 XJGetViewMat(XJRenderTarget *renderTarget) const;
+
+            XJScene* mScene = nullptr;   // 注入的场景；为空时回退全局场景
 
     };
 }

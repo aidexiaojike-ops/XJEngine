@@ -90,7 +90,11 @@ namespace XJ
             resourceRoot,
             registryPath,
             scenePath);
-        bootstrap.LoadOrCreateAssetRegistry();
+        if (!bootstrap.LoadOrCreateAssetRegistry())
+        {
+            spdlog::error("Default scene bootstrap failed.");
+            return false;
+        }
         
         auto sceneAsset  = bootstrap.LoadOrCreateDefaultSceneAsset();//获取默认场景
         if (!sceneAsset)

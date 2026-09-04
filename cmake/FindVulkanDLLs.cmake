@@ -31,11 +31,17 @@ function(copy_vulkan_runtime_dlls)
     # bin/Vulkan/
     # ---------------------------------------------
     set(VULKAN_RUNTIME_DIR ${VK_OUTPUT_DIR}/Vulkan)
+
+    # 清理历史遗留：旧版本可能把 DLL 拷成了名为 Vulkan 的文件。
+    if(EXISTS ${VULKAN_RUNTIME_DIR} AND NOT IS_DIRECTORY ${VULKAN_RUNTIME_DIR})
+        file(REMOVE ${VULKAN_RUNTIME_DIR})
+    endif()
     file(MAKE_DIRECTORY ${VULKAN_RUNTIME_DIR})
 
     add_custom_command(
         TARGET ${VK_TARGET}
         POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E make_directory ${VULKAN_RUNTIME_DIR}
         COMMAND ${CMAKE_COMMAND} -E copy_if_different
             ${VULKAN_DLL}
             ${VULKAN_RUNTIME_DIR}

@@ -1,101 +1,155 @@
 {
-  "version": 2,
   "asset": {
-    "handle": "268435458",
-    "type": "Scene",
-    "name": "TestSwitchScene"
+    "handle": "110848427300053725",
+    "name": "TestSwitchScene",
+    "type": "Scene"
   },
   "objects": [
     {
-      "uuid": "805306401",
-      "type": "Entity",
-      "name": "SwitchSceneCamera",
-      "parent": null,
       "children": [],
       "components": {
-        "transform": {
-          "uuid": "0xc100001",
-          "type": "TransformComponent",
-          "pos": [2.5, 2.0, 5.0],
-          "rot": [-70.0, 20.0, 0.0],
-          "scale": [1.0, 1.0, 1.0]
-        },
-        "camera": {
-          "uuid": "0xc100002",
-          "type": "CameraComponent",
-          "enabled": true,
-          "fov": 60.0,
-          "near": 0.1,
-          "far": 150.0,
-          "primary": true
-        }
-      }
-    },
-    {
-      "uuid": "805306402",
-      "type": "Entity",
-      "name": "CenterMonkey",
-      "parent": null,
-      "children": [],
-      "components": {
-        "transform": {
-          "uuid": "0xc100003",
-          "type": "TransformComponent",
-          "pos": [0.0, 0.0, 0.0],
-          "rot": [0.0, 25.0, 0.0],
-          "scale": [1.2, 1.2, 1.2]
-        },
         "meshRenderer": {
-          "uuid": "0xc100004",
+          "materials": [
+            ""
+          ],
+          "mesh": "asset://1/536870913",
           "type": "MeshRendererComponent",
-          "mesh": "asset://536870913",
-          "materials": []
-        }
-      }
-    },
-    {
-      "uuid": "805306403",
-      "type": "Entity",
-      "name": "LeftMonkey",
-      "parent": null,
-      "children": [],
-      "components": {
-        "transform": {
-          "uuid": "0xc100005",
-          "type": "TransformComponent",
-          "pos": [-2.0, 0.0, 0.0],
-          "rot": [0.0, -35.0, 0.0],
-          "scale": [0.8, 0.8, 0.8]
+          "uuid": "202375176"
         },
-        "meshRenderer": {
-          "uuid": "0xc100006",
-          "type": "MeshRendererComponent",
-          "mesh": "asset://536870913",
-          "materials": []
+        "transform": {
+          "pos": [
+            2.0,
+            0.0,
+            0.0
+          ],
+          "rot": [
+            0.0,
+            35.0,
+            0.0
+          ],
+          "scale": [
+            0.800000011920929,
+            0.800000011920929,
+            0.800000011920929
+          ],
+          "type": "TransformComponent",
+          "uuid": "202375175"
         }
-      }
-    },
-    {
-      "uuid": "805306404",
-      "type": "Entity",
+      },
       "name": "RightMonkey",
       "parent": null,
+      "type": "Entity",
+      "uuid": "805306404"
+    },
+    {
       "children": [],
       "components": {
-        "transform": {
-          "uuid": "0xc100007",
-          "type": "TransformComponent",
-          "pos": [2.0, 0.0, 0.0],
-          "rot": [0.0, 35.0, 0.0],
-          "scale": [0.8, 0.8, 0.8]
-        },
         "meshRenderer": {
-          "uuid": "0xc100008",
+          "materials": [
+            "asset://3/878030584296088097"
+          ],
+          "mesh": "asset://1/536870913",
           "type": "MeshRendererComponent",
-          "mesh": "asset://536870913",
-          "materials": []
+          "uuid": "202375174"
+        },
+        "transform": {
+          "pos": [
+            -2.0,
+            0.0,
+            0.0
+          ],
+          "rot": [
+            0.0,
+            -35.0,
+            0.0
+          ],
+          "scale": [
+            0.800000011920929,
+            0.800000011920929,
+            0.800000011920929
+          ],
+          "type": "TransformComponent",
+          "uuid": "202375173"
         }
-      }
+      },
+      "name": "LeftMonkey",
+      "parent": null,
+      "type": "Entity",
+      "uuid": "805306403"
+    },
+    {
+      "children": [],
+      "components": {
+        "meshRenderer": {
+          "materials": [
+            "asset://3/8557768953746195919"
+          ],
+          "mesh": "asset://1/536870913",
+          "type": "MeshRendererComponent",
+          "uuid": "202375172"
+        },
+        "transform": {
+          "pos": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "rot": [
+            0.0,
+            25.0,
+            0.0
+          ],
+          "scale": [
+            1.2000000476837158,
+            1.2000000476837158,
+            1.2000000476837158
+          ],
+          "type": "TransformComponent",
+          "uuid": "202375171"
+        }
+      },
+      "name": "CenterMonkey",
+      "parent": null,
+      "type": "Entity",
+      "uuid": "805306402"
+    },
+    {
+      "children": [],
+      "components": {
+        "camera": {
+          "enabled": true,
+          "far": 150.0,
+          "fov": 60.0,
+          "near": 0.10000000149011612,
+          "primary": false,
+          "type": "CameraComponent",
+          "uuid": "202375170"
+        },
+        "transform": {
+          "pos": [
+            2.5,
+            0.0,
+            6.800000190734863
+          ],
+          "rot": [
+            -111.0,
+            9.0,
+            0.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "type": "TransformComponent",
+          "uuid": "202375169"
+        }
+      },
+      "name": "SwitchSceneCamera",
+      "parent": null,
+      "type": "Entity",
+      "uuid": "805306401"
     }
-  ]
+  ],
+  "version": 2
 }

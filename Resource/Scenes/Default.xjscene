@@ -1,82 +1,156 @@
 {
-  "version": 2,
   "asset": {
     "handle": "268435457",
-    "type": "Scene",
-    "name": "DefaultScene"
+    "name": "Default",
+    "type": "Scene"
   },
   "objects": [
     {
-      "uuid": "805306369",
-      "type": "Entity",
-      "name": "PreviewCamera",
-      "parent": null,
       "children": [],
       "components": {
-        "transform": {
-          "uuid": "0xc000001",
-          "type": "TransformComponent",
-          "pos": [0.0, 1.5, 3.0],
-          "rot": [-90.0, 0.0, 0.0],
-          "scale": [1.0, 1.0, 1.0]
+        "meshRenderer": {
+          "materials": [
+            "asset://3/8557768953746195919",
+            "asset://3/878030584296088097"
+          ],
+          "mesh": "asset://1/6009562244236087423",
+          "type": "MeshRendererComponent",
+          "uuid": "11576796818196053511"
         },
-        "camera": {
-          "uuid": "0xc000002",
-          "type": "CameraComponent",
-          "enabled": true,
-          "fov": 65.0,
-          "near": 0.1,
-          "far": 100.0,
-          "primary": false
+        "transform": {
+          "pos": [
+            -0.38376903533935547,
+            0.391321063041687,
+            0.901562511920929
+          ],
+          "rot": [
+            90.0,
+            0.0,
+            0.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "type": "TransformComponent",
+          "uuid": "6886926082213296651"
         }
-      }
+      },
+      "name": "Plane",
+      "parent": null,
+      "type": "Entity",
+      "uuid": "4927998369279968349"
     },
     {
-      "uuid": "805306370",
-      "type": "Entity",
-      "name": "GameCamera",
-      "parent": null,
       "children": [],
       "components": {
-        "transform": {
-          "uuid": "0xc000003",
-          "type": "TransformComponent",
-          "pos": [0.0, 1.0, 3.0],
-          "rot": [-90.0, 0.0, 0.0],
-          "scale": [1.0, 1.0, 1.0]
+        "meshRenderer": {
+          "materials": [
+            ""
+          ],
+          "mesh": "asset://1/536870913",
+          "type": "MeshRendererComponent",
+          "uuid": "201326598"
         },
-        "camera": {
-          "uuid": "0xc000004",
-          "type": "CameraComponent",
-          "enabled": true,
-          "fov": 65.0,
-          "near": 0.1,
-          "far": 100.0,
-          "primary": true
+        "transform": {
+          "pos": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "rot": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "type": "TransformComponent",
+          "uuid": "201326597"
         }
-      }
-    },
-    {
-      "uuid": "805306371",
-      "type": "Entity",
+      },
       "name": "Monkey",
       "parent": null,
+      "type": "Entity",
+      "uuid": "805306371"
+    },
+    {
       "children": [],
       "components": {
-        "transform": {
-          "uuid": "0xc000005",
-          "type": "TransformComponent",
-          "pos": [0.0, 0.0, 0.0],
-          "rot": [0.0, 0.0, 0.0],
-          "scale": [1.0, 1.0, 1.0]
+        "camera": {
+          "enabled": true,
+          "far": 100.0,
+          "fov": 65.0,
+          "near": 0.10000000149011612,
+          "primary": false,
+          "type": "CameraComponent",
+          "uuid": "201326596"
         },
-        "meshRenderer": {
-          "uuid": "0xc000006",
-          "type": "MeshRendererComponent",
-          "mesh": "asset://536870913",
-          "materials": []
+        "transform": {
+          "pos": [
+            0.6000000238418579,
+            5.599999904632568,
+            4.599999904632568
+          ],
+          "rot": [
+            -90.0,
+            -43.0,
+            0.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "type": "TransformComponent",
+          "uuid": "201326595"
         }
-      }
+      },
+      "name": "GameCamera",
+      "parent": null,
+      "type": "Entity",
+      "uuid": "805306370"
+    },
+    {
+      "children": [],
+      "components": {
+        "meshRenderer": {
+          "materials": [
+            ""
+          ],
+          "mesh": "asset://1/112231601533046109",
+          "type": "MeshRendererComponent",
+          "uuid": "3627269125057395425"
+        },
+        "transform": {
+          "pos": [
+            0.9510647654533386,
+            0.5489276051521301,
+            0.9015620350837708
+          ],
+          "rot": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "type": "TransformComponent",
+          "uuid": "17444455862876442265"
+        }
+      },
+      "name": "Cube",
+      "parent": null,
+      "type": "Entity",
+      "uuid": "7710609837335484851"
     }
-  ]
+  ],
+  "version": 2
 }

@@ -1,18 +1,20 @@
 #ifndef XJ_GAME_PREVIEW_H
 #define XJ_GAME_PREVIEW_H
 
-
 #include "UI/Viewports/XJViewport.h"
 #include "UI/Viewports/XJViewportRenderSurface.h"
-
+#include "UI/XJEditorPlayMode.h"
+#include <functional>
 
 namespace XJ
 {
     class XJEntity;
+    class XJScene;
 
     class XJGamePreview : public XJViewport
     {
         public:
+            using PlayStateChangeCallback = std::function<void(XJEditorPlayState requested)>;
 
             bool Init(XJRenderContext* renderContext);
             void Shutdown();
@@ -27,15 +29,36 @@ namespace XJ
             }
             
 
-             void SetCamera(XJEntity* camera)
-             {
-                 mGameCamera  = camera;
-             }
+            void SetCamera(XJEntity* camera)
+            {
+                mGameCamera  = camera;
+            }
+
+            void SetScene(XJScene* scene)
+            {
+                mScene = scene;
+                mSurface.SetScene(scene);
+            }
+
+            void SetPlayState(XJEditorPlayState state)
+            {
+                mPlayState = state;
+            }
+            XJEditorPlayState GetPlayState() const { return mPlayState; }
+            void SetPlayStateChangeCallback(PlayStateChangeCallback callback)
+            {
+                mPlayStateChangeCallback = std::move(callback);
+            }
+            void DrawUI() override;
 
         private:
+            void DrawPlayControls();
 
             XJViewportRenderSurface mSurface;
-            XJEntity* mGameCamera  = nullptr;
+            XJEntity* mGameCamera = nullptr;
+            XJScene* mScene = nullptr;
+            XJEditorPlayState mPlayState = XJEditorPlayState::Edit;
+            PlayStateChangeCallback mPlayStateChangeCallback;
              
         protected:
             ImTextureID GetViewportTextureID() const override;

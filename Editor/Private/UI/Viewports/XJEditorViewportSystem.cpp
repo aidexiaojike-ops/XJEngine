@@ -124,6 +124,9 @@ namespace XJ
             return false;
 
         mImpl->Scene = &scene;
+            // 编辑态：两个视口都渲染编辑器场景；Play 时 GamePreview 再切到运行时克隆。
+        mImpl->ScenePreview->SetScene(&scene);
+        mImpl->GamePreview ->SetScene(&scene);
 
         mImpl->CameraManager.SetupCamerasForScene(
             &scene,
@@ -141,6 +144,10 @@ namespace XJ
             return;
 
         mImpl->CameraManager.ClearAllCameraReferences();
+
+        // 清空注入的场景指针，避免悬垂。
+        mImpl->ScenePreview->SetScene(nullptr);
+        mImpl->GamePreview->SetScene(nullptr);
         mImpl->Scene = nullptr;
     }
 
@@ -237,6 +244,9 @@ namespace XJ
 
         mImpl->Scene = &scene;
 
+        mImpl->ScenePreview->SetScene(&scene);
+        mImpl->GamePreview->SetScene(&scene);
+
         mImpl->CameraManager.SetupCamerasForScene(
             &scene,
             XJ_PREVIEW_CAMERA_UUID);
@@ -255,5 +265,30 @@ namespace XJ
     bool XJEditorViewportSystem::IsProtectedEditorEntity(XJEditorEntityId id) const
     {
         return mImpl->Initialized && mImpl->CameraManager.IsProtectedEditorCamera(id);
+    }
+
+    void XJEditorViewportSystem::SetPlayState(XJEditorPlayState state)
+    {
+        if (mImpl->GamePreview)
+            mImpl->GamePreview->SetPlayState(state);
+    }
+
+    void XJEditorViewportSystem::BeginPlay(XJScene* runtimeScene, XJEntity* runtimeCamera)
+    {
+        if (!mImpl->Initialized || !mImpl->GamePreview)
+            return;
+
+        mImpl->GamePreview->SetScene(runtimeScene);
+        mImpl->GamePreview->SetCamera(runtimeCamera);
+    }
+
+    void XJEditorViewportSystem::EndPlay()
+    {
+        if (!mImpl->Initialized || !mImpl->GamePreview)
+            return;
+
+        // 恢复编辑器场景与编辑器主相机
+        mImpl->GamePreview->SetScene(mImpl->Scene);
+        mImpl->GamePreview->SetCamera(mImpl->CameraManager.GetGameCamera());
     }
 }

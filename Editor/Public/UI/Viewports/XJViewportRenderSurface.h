@@ -16,6 +16,7 @@ namespace XJ
     class XJVulkanDevice;
     class XJVulkanPhysicalDevices;
     class XJVulkanRenderPass;
+    class XJScene;
 
     class XJViewportRenderSurface
     {
@@ -33,6 +34,7 @@ namespace XJ
             void EndRender(VkCommandBuffer cmd);
             void RenderMaterialSystem(VkCommandBuffer cmd);
             void SetCamera(XJEntity* camera);
+            void SetScene(XJScene* scene);
 
             ImTextureID GetTextureID() const { return reinterpret_cast<ImTextureID>(mDescriptorSet); }
             bool IsTextureReady() const { return !mPendingResize && mDescriptorSet != VK_NULL_HANDLE; }
