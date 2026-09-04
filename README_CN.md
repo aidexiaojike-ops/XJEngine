@@ -103,6 +103,7 @@ File -> Importer -> Asset (CPU) -> Factory -> Resource (GPU) -> Renderer
 ### 编辑器架构（MVVM）
 
 - **编辑器运行时**：`XJEditorRuntime`（pimpl 封装）统一管理编辑器生命周期——项目配置（`XJEditorProjectConfig`）、工作区、视口系统、帧渲染、输入绑定与 UI Host，由 `Src/XJEditorApplication` 驱动
+- **编辑器 Play Mode**：`XJEditorPlayMode` 状态机（`Edit`/`Playing`/`Paused`）支持编辑器内游戏模拟
 - **工作区**：`XJEditorWorkspace` 管理引擎内项目工作区（资源根目录、资产注册表、场景接线），支持 `SelectEntityFromViewportRay` 射线选择实体
 - **帧渲染**：`XJEditorFrameRenderer` + `XJEditorRenderResources` 负责 ImGui/Vulkan 帧渲染与共享编辑器渲染资源；`XJEditorUIHost` 承载 UI 层
 - **输入绑定**：`XJEditorInputBindings` 集中编辑器输入映射（摄像机、视口、操作）
@@ -121,7 +122,7 @@ File -> Importer -> Asset (CPU) -> Factory -> Resource (GPU) -> Renderer
 - **材质系统**：`XJBaseMaterialSystem`、`XJUnlitMaterialSystem`、`XJMaterialRenderSystemBase`、`XJMaterialParameterBlock`/`Builder`/`Writer`
 - **摄像机系统**：`XJCameraController`（Core/Camera）、`XJCameraMath`（数学工具）、`XJCameraSystem`（ECS 适配）
 - **资产系统**：`XJModelImporter`、`XJTextureImporter`、`XJAssetRegistry`、`XJAssetRegistryScanner`、`XJAssetBootstrap`、`XJSceneRuntimeUtil`、`XJMeshAssetLoader`、`XJJsonIO`
-- **ECS 基础**：`XJEntity` 通过场景生命周期 token 校验避免悬垂访问；`XJReservedUUID` 定义引擎/编辑器保留 UUID 区间，用户 UUID 生成自动避开
+- **ECS 基础**：`XJEntity` 通过场景生命周期 token 校验避免悬垂访问；`XJReservedUUID` 定义引擎/编辑器保留 UUID 区间，用户 UUID 生成自动避开；`XJSystemScheduler` 管理系统生命周期（Start/Stop），驱动 `OnUpdate` + 固定步进 `OnFixedUpdate`
 - **编辑器系统**：`XJEditorSceneController`、`XJEditorCameraManager`、`XJEditorSceneService`、`XJUIContext`、`XJEditorRenderer`、`XJEditorUILayer`、编辑器面板
 - **Vulkan 平台层**：`XJSwapchainAcquireResult`/`XJSwapchainPresentResult` 区分成功、重建和设备丢失状态；`XJVulkanInstance` 自动选择最高支持到 Vulkan 1.3 的 API 版本；`XJVulkanSurface`、`XJGlfwWindow`、`XJVulkanTextureSampler` 增加句柄校验、生命周期顺序和 RAII 释放
 
@@ -154,6 +155,7 @@ make -j$(nproc)
 ```text
 XJEngine/
 ├── Core/                    # 引擎核心：ECS、渲染、资产、摄像机
+│   ├── Public/ECS/          # 实体组件系统（Entity、Component、System、SystemScheduler）
 │   ├── Public/Camera/       # 摄像机模块（独立于 ECS）
 │   ├── Public/Geometry/     # 几何工具（AABB 包围盒、射线相交检测）
 │   ├── Public/Asset/        # Asset 层（CPU）
@@ -161,6 +163,7 @@ XJEngine/
 │   │   ├── Loader/          # 资产加载器
 │   │   ├── Serialization/   # 场景/材质/Shader 序列化（XJJsonIO 原子写入）
 │   │   ├── Instantiation/   # 场景实例化器
+│   │   ├── Metadata/        # 资产元数据（.xjmeta、句柄生成器）
 │   │   └── Register/        # 资产引导注册/扫描
 │   ├── Public/Render/       # 渲染接口
 │   │   ├── System/          # 渲染系统（材质系统 + RenderSystemBase）

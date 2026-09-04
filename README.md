@@ -139,6 +139,7 @@ Swapchain
 - **Reserved UUID Range**: Engine/editor-owned UUIDs live in a reserved range (`XJReservedUUID`), and user UUID generation skips it to avoid collisions
 - **Component Storage**: Dense array storage for optimal cache performance
 - **System Scheduling**: Flexible system registration and execution order
+- **System Scheduler**: `XJSystemScheduler` manages system lifecycle (Start/Stop), drives `OnUpdate` + fixed-step `OnFixedUpdate` with configurable tick rate and max delta-time clamping
 - **XJMaterialSystem Base Class**: Dedicated base class for material systems with helper methods for device, scene, and camera matrix access
 - **Query System**: Efficient entity queries based on component composition
 
@@ -183,6 +184,7 @@ Swapchain
 
 #### **Editor UI System**
 - **Editor Runtime**: `XJEditorRuntime` (pimpl) owns the full editor lifecycle — project config (`XJEditorProjectConfig`), workspace, viewport system, frame renderer, input bindings, and UI host — driven by `XJEditorApplication` in `Src/`
+- **Editor Play Mode**: `XJEditorPlayMode` state machine (`Edit`/`Playing`/`Paused`) for in-editor game simulation
 - **Editor Workspace**: `XJEditorWorkspace` manages the in-engine project workspace (resource root, asset registry, scene wiring)
 - **Frame Renderer**: `XJEditorFrameRenderer` + `XJEditorRenderResources` own ImGui/Vulkan frame rendering and shared editor render resources; `XJEditorUIHost` hosts the UI layer
 - **Input Bindings**: `XJEditorInputBindings` centralizes editor input mapping (camera, viewport, actions)
@@ -309,6 +311,8 @@ XJEngine/
 │   │   │   ├── XJComponent.h       # 组件基类
 │   │   │   ├── XJSystem.h          # 系统基类
 │   │   │   ├── XJReservedUUID.h    # 引擎/编辑器保留 UUID 区间
+│   │   │   ├── System/             # 系统调度
+│   │   │   │   └── XJSystemScheduler.h  # 系统调度器（Start/Stop + 固定步进）
 │   │   │   ├── Component/          # 具体组件
 │   │   │   │   ├── XJCameraComponent.h
 │   │   │   │   ├── XJTransformComponent.h
