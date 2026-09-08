@@ -3,7 +3,7 @@
 
 #include "Graphic/VulkanCommon.h"
 #include "UI/XJEditorSelection.h"
-#include "UI/XJEditorPlayMode.h"
+#include "Runtime/XJEditorPlayState.h"
 #include <vector>
 
 #include <memory>

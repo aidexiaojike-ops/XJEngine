@@ -2,6 +2,7 @@
 #define XJ_EDITOR_WORKSPACE_H
 
 #include "UI/XJEditorSelection.h"
+#include "Workspace/XJEditorWorkspaceMode.h"
 
 #include <filesystem>
 #include <functional>
@@ -59,6 +60,9 @@ namespace XJ
 
             void Update();
             void Shutdown();
+            void SetMode(XJEditorWorkspaceMode mode);
+            XJEditorWorkspaceMode GetMode() const;
+            bool CanMutateScene() const;
 
             XJEditorUIState& GetUIState();
             const XJEditorUIState& GetUIState() const;

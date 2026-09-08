@@ -28,6 +28,7 @@ namespace XJ
             void DrawTransformComponent(const XJEditorEntityDetailsView& details);//显示 Transform 组件的 UI，允许用户修改位置、旋转、缩放等属性
             void DrawMeshRendererComponent(const XJEditorEntityDetailsView& details);//显示 MeshRenderer 组件的 UI，允许用户查看和修改网格资源、材质等属性
             void DrawCameraComponent(const XJEditorEntityDetailsView& details);//显示 Camera 组件的 UI，允许用户查看和修改摄像机的 FOV、近远裁剪面等属性
+            void DrawLightComponent(const XJEditorEntityDetailsView& details);//显示 Light 组件 UI，允许修改类型/启用/颜色/强度
             void DrawAssetRefComponent(const XJEditorEntityDetailsView& details);//显示 AssetRef 组件的 UI，允许用户查看和修改实体引用的资产（如场景、网格等）
             void DrawAssetDetails(XJAssetHandle handle);//显示资产的详细信息，如类型、来源路径等
             void DrawMeshBoundsView(const XJEditorMeshBoundsView& bounds);//显示网格资产的包围盒（整体 + 各 submesh）

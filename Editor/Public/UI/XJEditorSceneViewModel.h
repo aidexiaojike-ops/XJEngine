@@ -21,6 +21,7 @@ namespace XJ
         bool HasMesh = false;
         bool HasCamera = false;
         bool HasSceneRef = false;
+        bool HasLight = false;
 
         XJAssetHandle MeshAsset = 0;
         std::string SourceSceneUri;
@@ -50,6 +51,16 @@ namespace XJ
         float FarPlane = 100.0f;
         std::string ModeName;
     };
+
+    struct XJEditorLightView//灯光窗口
+    {
+        bool Valid = false;
+        int Type = 0;                 // 0方向/1点/2聚光
+        bool Enabled = true;
+        glm::vec3 Color{1.0f, 1.0f, 1.0f};
+        float Intensity = 1.0f;
+    };
+
 
     struct XJEditorMaterialParameterView//材质参数窗口
     {
@@ -96,7 +107,6 @@ namespace XJ
         uint64_t SourceEntity = 0;
     };
 
-
     struct XJEditorEntityDetailsView//所有的组件  id 名字  状态
     {
         bool Valid = false;
@@ -108,6 +118,7 @@ namespace XJ
         XJEditorCameraView Camera;
         XJEditorMeshAssetRefView Mesh;
         XJEditorSceneAssetRefView SceneRef;
+        XJEditorLightView Light;   
     };
 
 }

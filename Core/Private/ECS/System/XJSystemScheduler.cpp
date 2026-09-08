@@ -4,8 +4,9 @@
 
 namespace XJ
 {
+  
     XJSystemScheduler::XJSystemScheduler(float fixedDeltaTime, float maxDeltaTime)
-        : mFixedDeltaTime(fixedDeltaTime), mMaxDeltaTime(maxDeltaTime)
+        : mFixedDeltaTime(std::max(fixedDeltaTime, 0.0001f)), mMaxDeltaTime(std::max(maxDeltaTime, 0.0001f))
     {
     }
 

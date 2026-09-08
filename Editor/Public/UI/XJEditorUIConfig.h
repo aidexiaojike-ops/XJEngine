@@ -34,6 +34,7 @@ namespace XJ
         bool showTransform = true;
         bool showMeshRenderer = true;
         bool showCamera = true;
+        bool showLight = true;
         bool showAssetRefs = true;
     };
     struct XJEditorPanelConfig_DebugConsole//调试控制台面板的配置项

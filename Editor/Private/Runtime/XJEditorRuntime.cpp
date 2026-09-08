@@ -1,4 +1,5 @@
 #include "Runtime/XJEditorRuntime.h"
+#include "Runtime/XJEditorPlayController.h"
 
 #include "Asset/Metadata/XJAssetMetadataPath.h"
 #include "Asset/Metadata/XJAssetMetadataSerializer.h"
@@ -17,15 +18,13 @@
 #include "UI/Viewports/XJEditorViewportSystem.h"
 #include "UI/Viewports/XJGamePreview.h"
 #include "Input/XJEditorInputBindings.h"
-#include "Input/XJInput.h"
 
-#include "ECS/System/XJSystemScheduler.h"
-
-#include "UI/XJEditorPlayMode.h"
+#include "Runtime/XJEditorPlayState.h"
 #include "UI/XJEditorUIState.h"
-#include "Asset/Serialization/XJSceneAssetSerializer.h"
-#include "Asset/Instantiation/XJSceneInstantiator.h"
-#include "Asset/XJSceneRuntimeUtil.h"
+
+#include "Input/XJInput.h"
+#include "ECS/XJSystem.h"
+#include "ECS/XJEntity.h"
 #include "ECS/Component/XJCameraComponent.h"
 #include "ECS/Component/XJTransformComponent.h"
 #include "ECS/Component/Material/XJUnlitMaterialComponent.h"
@@ -169,67 +168,12 @@ namespace XJ
             return true;
         }
 
-        bool RunSystemSchedulerSelfTest()
-        {
-            struct TestSystem final : public XJSystem
-            {
-                int CreateCount = 0;
-                int UpdateCount = 0;
-                int FixedUpdateCount = 0;
-                int DestroyCount = 0;
-
-                void OnCreate() override { ++CreateCount; }
-                void OnUpdate(float) override { ++UpdateCount; }
-                void OnFixedUpdate(float) override { ++FixedUpdateCount; }
-                void OnDestroy() override { ++DestroyCount; }
-            };
-
-            auto test = std::make_shared<TestSystem>();
-
-            XJSystemScheduler scheduler(0.1f, 1.0f);
-            scheduler.AddSystem(test);
-            scheduler.Start();
-
-            if (test->CreateCount != 1)
-            {
-                spdlog::error("System scheduler self-test failed: OnCreate count = {}.", test->CreateCount);
-                return false;
-            }
-
-            scheduler.Update(0.35f);
-
-            if (test->UpdateCount != 1 || test->FixedUpdateCount != 3)
-            {
-                spdlog::error(
-                    "System scheduler self-test failed: OnUpdate = {}, OnFixedUpdate = {}.",
-                    test->UpdateCount,
-                    test->FixedUpdateCount);
-                return false;
-            }
-
-            scheduler.Update(0.0f);
-            if (test->UpdateCount != 2 || test->FixedUpdateCount != 3)
-            {
-                spdlog::error("System scheduler self-test failed: zero delta advanced fixed update.");
-                return false;
-            }
-
-            scheduler.Stop();
-            if (test->DestroyCount != 1)
-            {
-                spdlog::error("System scheduler self-test failed: OnDestroy count = {}.", test->DestroyCount);
-                return false;
-            }
-
-            spdlog::debug("System scheduler self-test passed.");
-            return true;
-        }
 #endif
     }
 
     // ★★★ XJ_MARKER_PLAYMODE_SPIN_SYSTEM_20260903 ★★★
-    // Play Mode 示例系统：让运行时克隆中带 Mesh 的实体绕 Y 轴旋转。
-    // 仅作用于非相机实体，直观验证游戏逻辑调度（OnUpdate/固定步进）正在运行。
+    // Play Mode 演示系统：让运行时克隆中带 Mesh 的实体绕 Y 轴旋转，
+    // 并用通用输入轴（WASD/方向键）平移，直观验证调度与 Input 可用。
     namespace
     {
         class SpinSystem final : public XJSystem
@@ -242,7 +186,6 @@ namespace XJ
                     if (!mScene)
                         return;
 
-                    // 读通用输入轴：WASD / 方向键平移演示（Play 态下运行时系统消费 Input）。
                     const auto& input = XJInput::XJGetInstance().GetInputState();
                     const float horizontal = input.GetAxis(XJInputAxis::Horizontal);
                     const float vertical   = input.GetAxis(XJInputAxis::Vertical);
@@ -258,7 +201,6 @@ namespace XJ
 
                         auto& transform = entity->GetComponent<XJTransformComponent>();
 
-                        // 旋转演示 + WASD/方向键平移演示。
                         transform.rotation.y += deltaTime * 45.0f;
                         transform.position.x -= horizontal * deltaTime * 2.0f;
                         transform.position.z += vertical   * deltaTime * 2.0f;
@@ -286,112 +228,76 @@ namespace XJ
             std::unique_ptr<XJEditorUIHost> UI;
             std::unique_ptr<XJEditorViewportSystem> Viewports;
             std::unique_ptr<XJEditorInputBindings> Input;
-            std::unique_ptr<XJSystemScheduler> SystemScheduler;
-
-            // Play Mode 状态：运行时克隆场景 + 状态机。
-            std::unique_ptr<XJScene> RuntimeScene;
-            XJEditorPlayState PlayState = XJEditorPlayState::Edit;
+            std::unique_ptr<XJEditorPlayController> PlayController;
             bool HasPendingPlayRequest = false;
             XJEditorPlayState PendingPlayState = XJEditorPlayState::Edit;
 
-            // 进入 Play：克隆编辑器场景为运行时场景，并启动游戏逻辑调度。
-            void BeginPlay()
+            bool BeginPlay()
             {
-                // 已运行：仅用于 Resume。
-                if (PlayState == XJEditorPlayState::Playing)
-                    return;
+                if (!PlayController || !Scene || !Workspace || !Viewports || !Resources)
+                    return false;
 
-                if (PlayState == XJEditorPlayState::Paused)
-                {
-                    PlayState = XJEditorPlayState::Playing;
-                    return;
-                }
+                if (PlayController->GetState() == XJEditorPlayState::Playing)
+                    return true;
 
-                if (!Scene || !Workspace || !Viewports ||
-                    !SystemScheduler || !Resources)
+                if (PlayController->GetState() == XJEditorPlayState::Paused)
                 {
-                    spdlog::error("Play failed: editor subsystem is incomplete.");
-                    return;
+                    if (!PlayController->Resume())
+                        return false;
+                    Workspace->SetMode(XJEditorWorkspaceMode::PlayReadOnly);
+                    Viewports->SetPlayState(XJEditorPlayState::Playing);
+                    return true;
                 }
 
                 XJAssetRegistry* registry = Workspace->GetUIState().AssetRegistry;
-                if (!registry)
+                if (!registry || !PlayController->Start(
+                        *Scene,
+                        *registry,
+                        Resources->GetDefaultTexture(),
+                        Resources->GetDefaultSampler()))
                 {
-                    spdlog::error("Play failed: asset registry is unavailable.");
-                    return;
+                    // GamePreview 不再乐观改变状态；失败时显式保持权威 Edit 状态。
+                    Workspace->SetMode(XJEditorWorkspaceMode::Edit);
+                    Viewports->SetPlayState(XJEditorPlayState::Edit);
+                    spdlog::error("Play mode failed to start.");
+                    return false;
                 }
 
-                // 1) 从编辑器场景构建资产，并实例化为独立的运行时克隆。
-                std::shared_ptr<XJSceneAsset> sceneAsset =
-                    XJSceneAssetSerializer::BuildFromScene(*Scene);
-                if (!sceneAsset)
-                {
-                    spdlog::error("Play failed: failed to snapshot editor scene.");
-                    return;
-                }
-
-                auto runtimeScene = std::make_unique<XJScene>();
-
-                XJSceneInstantiateContext context;
-                context.Registry = registry;
-                context.DefaultTexture = Resources->GetDefaultTexture();
-                context.DefaultSampler = Resources->GetDefaultSampler();
-                context.SourceScene = {}; // 运行时克隆不标记来源场景
-
-                XJSceneInstantiator::Instantiate(*sceneAsset, *runtimeScene, &context);
-
-                // 2) 确保克隆中有摄像机。
-                XJEntity* runtimeCamera =
-                    XJSceneRuntimeUtil::FindPrimaryCameraEntity(*runtimeScene);
-                if (!runtimeCamera)
-                {
-                    runtimeCamera = runtimeScene->CreateEntityWithTransform("GameCamera");
-                    if (runtimeCamera)
-                    {
-                        auto& camera = runtimeCamera->AddComponent<XJCameraComponent>();
-                        camera.XJSetFov(60.0f);
-                        camera.XJSetNear(0.1f);
-                        camera.XJSetFar(100.0f);
-                    }
-                }
-
-                RuntimeScene = std::move(runtimeScene);
-
-                // 3) Game 视口切到运行时克隆。
-                Viewports->BeginPlay(RuntimeScene.get(), runtimeCamera);
+                Viewports->BeginPlay(
+                    PlayController->GetRuntimeScene(),
+                    PlayController->GetRuntimeCamera());
+                Workspace->SetMode(XJEditorWorkspaceMode::PlayReadOnly);
                 Viewports->SetPlayState(XJEditorPlayState::Playing);
-
-                // 4) 注入示例系统并启动游戏逻辑调度。
-                SystemScheduler->Clear();
-                SystemScheduler->AddSystem(
-                    std::make_shared<SpinSystem>(RuntimeScene.get()));
-                SystemScheduler->Start();
-
-                PlayState = XJEditorPlayState::Playing;
                 spdlog::info("Play mode started.");
+                return true;
             }
 
-            // 退出 Play：停止调度、销毁运行时克隆、Game 视口恢复编辑器场景。
+            bool PausePlay()
+            {
+                if (!PlayController || !PlayController->Pause())
+                    return false;
+                if (Workspace)
+                    Workspace->SetMode(XJEditorWorkspaceMode::PlayReadOnly);
+                if (Viewports)
+                    Viewports->SetPlayState(XJEditorPlayState::Paused);
+                return true;
+            }
+
             void StopPlay()
             {
-                if (PlayState == XJEditorPlayState::Edit)
+                if (!PlayController || PlayController->GetState() == XJEditorPlayState::Edit)
                     return;
 
-                if (SystemScheduler)
-                {
-                    SystemScheduler->Stop();
-                    SystemScheduler->Clear();
-                }
-
-                RuntimeScene.reset();
-
+                // 必须先解除 Viewport 的 RuntimeScene/Camera 引用，再销毁克隆。
                 if (Viewports)
                 {
                     Viewports->EndPlay();
                     Viewports->SetPlayState(XJEditorPlayState::Edit);
                 }
 
-                PlayState = XJEditorPlayState::Edit;
+                PlayController->Stop();
+                if (Workspace)
+                    Workspace->SetMode(XJEditorWorkspaceMode::Edit);
                 spdlog::info("Play mode stopped.");
             }
 
@@ -441,12 +347,6 @@ namespace XJ
             return false;
         }
 
-        if (!RunSystemSchedulerSelfTest())
-        {
-            spdlog::error("Editor runtime initialization failed: system scheduler self-test failed.");
-            Shutdown();
-            return false;
-        }
 #endif
 
         // 默认纹理和 sampler 是 Workspace/Viewport 创建材质的基础资源。
@@ -616,8 +516,14 @@ namespace XJ
             return false;
         }
         
-        // 游戏逻辑调度器：阶段 B 空跑，阶段 C 在 Play 时 Start/Stop 并注入运行时系统。
-        mImpl->SystemScheduler = std::make_unique<XJSystemScheduler>();
+        mImpl->PlayController = std::make_unique<XJEditorPlayController>();
+
+        // 注册 Play Mode 演示系统：旋转 + WASD 平移。
+        mImpl->PlayController->RegisterSystemFactory(
+            [](XJScene& scene) -> std::shared_ptr<XJSystem>
+            {
+                return std::make_shared<SpinSystem>(&scene);
+            });
 
         // Game 窗口 Play/Pause/Stop 按钮回调：只记请求，Update 里统一处理。
         if (mImpl->Viewports && mImpl->Viewports->GetGamePreview())
@@ -669,7 +575,8 @@ namespace XJ
             return;
 
         // 场景即将卸载：若仍在 Play，先退出并让 Game 视口切回编辑器场景。
-        if (mImpl->PlayState != XJEditorPlayState::Edit)
+        if (mImpl->PlayController &&
+            mImpl->PlayController->GetState() != XJEditorPlayState::Edit)
             mImpl->StopPlay();
 
         // 先确认销毁的是当前 scene，再解除 viewport 和 workspace 绑定。
@@ -715,8 +622,8 @@ namespace XJ
                     break;
 
                 case XJEditorPlayState::Paused:
-                    if (mImpl->PlayState == XJEditorPlayState::Playing)
-                        mImpl->PlayState = XJEditorPlayState::Paused;
+                    if (!mImpl->PausePlay() && mImpl->Viewports && mImpl->PlayController)
+                        mImpl->Viewports->SetPlayState(mImpl->PlayController->GetState());
                     break;
 
                 case XJEditorPlayState::Edit:
@@ -725,12 +632,8 @@ namespace XJ
             }
         }
 
-        // 仅运行态推进游戏逻辑调度（固定步进）；暂停/编辑态不推进。
-        if (mImpl->SystemScheduler &&
-            mImpl->PlayState == XJEditorPlayState::Playing)
-        {
-            mImpl->SystemScheduler->Update(deltaTime);
-        }
+        if (mImpl->PlayController)
+            mImpl->PlayController->Update(deltaTime);
 
         if (mImpl->Input)
             mImpl->Input->EndUIFrame();
@@ -827,7 +730,8 @@ namespace XJ
             return;
 
         // 先退出 Play Mode，确保 Game 视口切回编辑器场景（此时 Viewports 仍存活）。
-        if (mImpl->PlayState != XJEditorPlayState::Edit)
+        if (mImpl->PlayController &&
+            mImpl->PlayController->GetState() != XJEditorPlayState::Edit)
             mImpl->StopPlay();
 
             // FrameRenderer 持有 Vulkan 资源，必须在 RenderContext
@@ -835,10 +739,10 @@ namespace XJ
         ShutdownUI();
         DetachScene(nullptr);
 
-        if (mImpl->SystemScheduler)
+        if (mImpl->PlayController)
         {
-            mImpl->SystemScheduler->Stop();
-            mImpl->SystemScheduler.reset();
+            mImpl->PlayController->Stop();
+            mImpl->PlayController.reset();
         }
 
         if (mImpl->Workspace)

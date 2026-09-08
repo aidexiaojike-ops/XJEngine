@@ -66,6 +66,15 @@ namespace XJ
         float FarPlane = 100.0f;
     };
 
+    struct XJEditorUpdateLightRequest//更新灯光组件参数请求
+    {
+        XJEditorEntityId EntityId = XJ_INVALID_EDITOR_ENTITY_ID;
+        int Type = 0;                 // 0方向/1点/2聚光
+        bool Enabled = true;
+        glm::vec3 Color{1.0f};
+        float Intensity = 1.0f;
+    };
+
     struct XJEditorSetMeshRendererMeshRequest//设置渲染mesh 
     {
         XJEditorEntityId EntityId = XJ_INVALID_EDITOR_ENTITY_ID;
@@ -124,6 +133,9 @@ namespace XJ
 
         bool RequestUpdateCamera = false;// 是否请求更新摄像机参数
         XJEditorUpdateCameraRequest UpdateCamera;//参数
+
+        bool RequestUpdateLight = false;// 是否请求更新灯光参数
+        XJEditorUpdateLightRequest UpdateLight;//参数
 
         bool RequestCreateEmptyEntity = false;//是否请求创建一个空实体
         XJEditorCreateEmptyEntityRequest CreateEmptyEntity;

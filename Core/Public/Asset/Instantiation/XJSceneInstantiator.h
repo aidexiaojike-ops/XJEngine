@@ -35,6 +35,7 @@ namespace XJ
             static void ApplyMeshRenderer(const XJSceneEntityData& data, XJEntity& entity, XJSceneInstantiateContext& context);//   将场景实体数据中的网格渲染信息应用到运行时实体的网格渲染组件上，包括加载网格资源和设置材质
             static void ApplyCamera(const XJSceneEntityData& data, XJEntity& entity);//将场景实体数据中的摄像机信息应用到运行时实体的摄像机组件上
             static void ApplyHierarchy(const XJSceneAsset& asset, XJSceneInstantiateContext& context);//根据场景资产中的父子关系数据，建立运行时实体之间的层级关系
+            static void ApplyLight(const XJSceneEntityData& data, XJEntity& entity);//将场景实体数据中的灯光信息应用到运行时实体的灯光组件上
     };
 }
 

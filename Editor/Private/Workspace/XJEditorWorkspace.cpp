@@ -37,6 +37,7 @@ namespace XJ
             std::filesystem::path RegistryPath;
         
             bool Initialized = false;
+            XJEditorWorkspaceMode Mode = XJEditorWorkspaceMode::Edit;
             std::filesystem::path DefaultScenePath;
 
             XJAssetHandle DefaultSceneHandle = 0;
@@ -176,6 +177,15 @@ namespace XJ
         if (!mImpl->Initialized || !mImpl->Scene)
             return;
 
+        if (mImpl->Mode != XJEditorWorkspaceMode::Edit)
+        {
+            // 只读期间丢弃请求，防止 Stop 后一次性执行 Play 期间积压的编辑操作。
+            mImpl->UIState.SceneRequests = {};
+            mImpl->UIState.AssetRequests = {};
+            mImpl->SceneController.RefreshViewModels(mImpl->UIState);
+            return;
+        }
+
         if (mImpl->UIState.SceneRequests.RequestOpenScene)
         {
            const std::filesystem::path scenePath =
@@ -218,6 +228,31 @@ namespace XJ
         return mImpl->UIState;
     }
 
+    void XJEditorWorkspace::SetMode(XJEditorWorkspaceMode mode)
+    {
+        if (!mImpl)
+            return;
+
+        mImpl->Mode = mode;
+        mImpl->UIState.WorkspaceReadOnly = mode != XJEditorWorkspaceMode::Edit;
+
+        if (mImpl->UIState.WorkspaceReadOnly)
+        {
+            mImpl->UIState.SceneRequests = {};
+            mImpl->UIState.AssetRequests = {};
+        }
+    }
+
+    XJEditorWorkspaceMode XJEditorWorkspace::GetMode() const
+    {
+        return mImpl ? mImpl->Mode : XJEditorWorkspaceMode::Edit;
+    }
+
+    bool XJEditorWorkspace::CanMutateScene() const
+    {
+        return mImpl && mImpl->Mode == XJEditorWorkspaceMode::Edit;
+    }
+
     void XJEditorWorkspace::Shutdown()
     {
         
@@ -237,6 +272,8 @@ namespace XJ
         mImpl->InitialSceneMeshHandle = 0;
         mImpl->DefaultComponentMeshHandle = 0;
         mImpl->Initialized = false;
+        mImpl->Mode = XJEditorWorkspaceMode::Edit;
+        mImpl->UIState.WorkspaceReadOnly = false;
         mImpl->DefaultSampler.reset();
         mImpl->DefaultTexture.reset();
     }

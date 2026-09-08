@@ -61,8 +61,7 @@ namespace XJ
 
         auto request = [this](XJEditorPlayState state)
         {
-            // 乐观更新显示，Runtime 处理失败时会再纠正。
-            mPlayState = state;
+            // 只发送请求；实际状态由 Runtime/PlayController 成功处理后回写。
             if (mPlayStateChangeCallback)
                 mPlayStateChangeCallback(state);
         };

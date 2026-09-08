@@ -7,6 +7,7 @@
 #include "ECS/Component/XJCameraComponent.h"
 #include "ECS/Component/XJSceneAssetComponents.h"
 #include "ECS/Component/XJTransformComponent.h"
+#include "ECS/Component/XJLightComponent.h"
 #include "ECS/XJEntity.h"
 #include "ECS/XJScene.h"
 #include "Render/Resource/XJMaterialFactory.h"
@@ -144,10 +145,11 @@ namespace XJ
         if(data.HasCamera)    
             ApplyCamera(data, *entity);
 
+
         if (data.HasLight)
         {
-            // 资产层已经保留 light 数据；runtime LightComponent 添加后，在这里接 ApplyLight。
-            spdlog::debug("Scene instantiate skipped light component: runtime light component is not implemented yet.");
+            // ApplyLight。
+            ApplyLight(data, *entity);
         }
 
         return entity;
@@ -300,5 +302,17 @@ namespace XJ
     {
         auto it = ctx.EntityMap.find(id);
         return (it != ctx.EntityMap.end()) ? it->second : nullptr;
+    }
+
+    void XJSceneInstantiator::ApplyLight(const XJSceneEntityData& data, XJEntity& entity)
+    {
+        auto& light = entity.AddComponent<XJLightComponent>();
+        if (data.Light.UUID != 0)
+            light.XJSetUUID(data.Light.UUID);
+
+        light.XJSetEnable(data.Light.Enabled);
+        light.XJSetLightType(static_cast<XJLightType>(data.Light.Type));
+        light.XJSetColor(data.Light.Color);
+        light.XJSetIntensity(data.Light.Intensity);
     }
 }

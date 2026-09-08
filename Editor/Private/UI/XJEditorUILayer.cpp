@@ -174,7 +174,7 @@ namespace XJ
         DrawMainMenuBar();
 
         // 文本框有自己的撤销栈，输入文字时不抢占 Ctrl+Z/Ctrl+Y。
-        if (!ImGui::GetIO().WantTextInput)
+        if (!mState.WorkspaceReadOnly && !ImGui::GetIO().WantTextInput)
         {
             if (ImGui::Shortcut(ImGuiMod_Ctrl | ImGuiKey_Z, ImGuiInputFlags_RouteGlobal))
                 mState.SceneRequests.RequestUndo = true;
@@ -186,9 +186,16 @@ namespace XJ
             }
         }
 
+        if (mState.WorkspaceReadOnly)
+            ImGui::BeginDisabled();
+
         if (mContentBrowser) mContentBrowser->DrawUI();
         if (mHierarchy)      mHierarchy->DrawUI();
         if (mInspector)      mInspector->DrawUI();
+
+        if (mState.WorkspaceReadOnly)
+            ImGui::EndDisabled();
+
         if (mDebugConsole)   mDebugConsole->DrawUI();
     }
 

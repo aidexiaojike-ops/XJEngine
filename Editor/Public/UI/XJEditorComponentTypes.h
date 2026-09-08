@@ -11,6 +11,7 @@ namespace XJ
         Camera,
         MeshRenderer,
         SceneAssetRef,
+        Light,
     };
 }
 

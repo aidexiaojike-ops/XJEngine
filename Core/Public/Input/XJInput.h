@@ -32,7 +32,6 @@ namespace XJ
             bool IsMouseButtonReleased(MouseButton button) const;
 
             glm::vec2 MousePosition = glm::vec2(0.0f, 0.0f);// 鼠标位置，左上角为(0,0)，右下角为窗口大小
-            glm::vec2 MouseScrollOffset = glm::vec2(0.0f, 0.0f);// 鼠标滚轮偏移量，垂直滚轮为Y，水平滚轮为X
             glm::vec2 MouseDelta{0.0f};      // 本帧相对上一帧的位移
             glm::vec2 ScrollDelta{0.0f};     // 本帧滚轮增量
 

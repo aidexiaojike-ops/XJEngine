@@ -150,6 +150,7 @@ namespace XJ
         bool showTransform = !mConfig || mConfig->showTransform;
         bool showMeshRenderer = !mConfig || mConfig->showMeshRenderer;
         bool showCamera = !mConfig || mConfig->showCamera;
+        bool showLight = !mConfig || mConfig->showLight;
         bool showAssetRefs = !mConfig || mConfig->showAssetRefs;
 
         if (showTransform && details.Transform.Valid)
@@ -163,6 +164,9 @@ namespace XJ
 
         if (showAssetRefs && details.SceneRef.Valid)
             DrawAssetRefComponent(details);
+
+        if (showLight && details.Light.Valid)
+            DrawLightComponent(details);
 
         DrawAddComponentButton(details);
     }
@@ -372,6 +376,13 @@ namespace XJ
                     RequestAddComponent(details, XJEditorComponentType::SceneAssetRef);
             }
 
+            if (!details.Light.Valid)
+            {
+                hasAnyAvailable = true;
+                if (ImGui::MenuItem("Light"))
+                    RequestAddComponent(details, XJEditorComponentType::Light);
+            }
+
             if (!hasAnyAvailable)
                 ImGui::TextDisabled("No components available");
 
@@ -507,6 +518,21 @@ namespace XJ
                 return buffer;
             }
 
+            case XJEditorComponentType::Light:
+            {
+                std::snprintf(
+                    buffer,
+                    sizeof(buffer),
+                    "Light\nType: %d\nEnabled: %d\nColor: %.3f %.3f %.3f\nIntensity: %.3f",
+                    details.Light.Type,
+                    details.Light.Enabled ? 1 : 0,
+                    details.Light.Color.x,
+                    details.Light.Color.y,
+                    details.Light.Color.z,
+                    details.Light.Intensity);
+                return buffer;
+            }
+
             default:
                 return "Unknown Component";
         }
@@ -538,6 +564,15 @@ namespace XJ
                 break;
             }
 
+            case XJEditorComponentType::Light:
+            {
+                mState.ComponentClipboard.LightType = details.Light.Type;
+                mState.ComponentClipboard.LightEnabled = details.Light.Enabled;
+                mState.ComponentClipboard.LightColor = details.Light.Color;
+                mState.ComponentClipboard.LightIntensity = details.Light.Intensity;
+                break;
+            }
+
             default:
                 break;
         }
@@ -552,7 +587,8 @@ namespace XJ
             return false;
 
         return componentType == XJEditorComponentType::Transform ||
-               componentType == XJEditorComponentType::Camera;
+               componentType == XJEditorComponentType::Camera ||
+               componentType == XJEditorComponentType::Light;
     }
 
     void XJInspectorPanel::PasteComponent(const XJEditorEntityDetailsView& details, XJEditorComponentType componentType)
@@ -588,6 +624,20 @@ namespace XJ
                 mState.SceneRequests.UpdateCamera.Fov = mState.ComponentClipboard.Fov;
                 mState.SceneRequests.UpdateCamera.NearPlane = mState.ComponentClipboard.NearPlane;
                 mState.SceneRequests.UpdateCamera.FarPlane = mState.ComponentClipboard.FarPlane;
+                break;
+            }
+
+            case XJEditorComponentType::Light:
+            {
+                if (!details.Light.Valid)
+                    return;
+
+                mState.SceneRequests.RequestUpdateLight = true;
+                mState.SceneRequests.UpdateLight.EntityId = details.Id;
+                mState.SceneRequests.UpdateLight.Type = mState.ComponentClipboard.LightType;
+                mState.SceneRequests.UpdateLight.Enabled = mState.ComponentClipboard.LightEnabled;
+                mState.SceneRequests.UpdateLight.Color = mState.ComponentClipboard.LightColor;
+                mState.SceneRequests.UpdateLight.Intensity = mState.ComponentClipboard.LightIntensity;
                 break;
             }
 
@@ -1173,5 +1223,50 @@ namespace XJ
             ImGui::Unindent();
             ImGui::PopID();
         }
+    }
+
+    void XJInspectorPanel::DrawLightComponent(const XJEditorEntityDetailsView& details)
+    {
+        if (!DrawComponentFrame("Light", XJEditorComponentType::Light, details))
+            return;
+
+        int type = details.Light.Type;
+        bool enabled = details.Light.Enabled;
+        glm::vec3 color = details.Light.Color;
+        float intensity = details.Light.Intensity;
+
+        static const char* kLightTypeNames[] = { "Directional", "Point", "Spot" };
+
+        bool changed = false;
+
+        if (ImGui::BeginCombo("Type", kLightTypeNames[type >= 0 && type < 3 ? type : 0]))
+        {
+            for (int i = 0; i < 3; ++i)
+            {
+                const bool selected = (type == i);
+                if (ImGui::Selectable(kLightTypeNames[i], selected))
+                {
+                    type = i;
+                    changed = true;
+                }
+            }
+            ImGui::EndCombo();
+        }
+
+        changed |= ImGui::Checkbox("Enabled", &enabled);
+        changed |= ImGui::ColorEdit3("Color", &color[0]);
+        changed |= ImGui::DragFloat("Intensity", &intensity, 0.05f, 0.0f, 1000.0f, "%.2f");
+
+        if (changed)
+        {
+            mState.SceneRequests.RequestUpdateLight = true;
+            mState.SceneRequests.UpdateLight.EntityId = details.Id;
+            mState.SceneRequests.UpdateLight.Type = type;
+            mState.SceneRequests.UpdateLight.Enabled = enabled;
+            mState.SceneRequests.UpdateLight.Color = color;
+            mState.SceneRequests.UpdateLight.Intensity = intensity;
+        }
+
+        ImGui::TreePop();
     }
 }

@@ -44,6 +44,7 @@ namespace XJ
             static void RenameEntity(XJScene& scene, XJEditorEntityId entityId, const std::string& name);//通过ID修改名字
             static void UpdateTransform(XJScene& scene, const XJEditorUpdateTransformRequest& request);//更改位置
             static void UpdateCamera(XJScene& scene, const XJEditorUpdateCameraRequest& request);//更新摄像机
+            static void UpdateLight(XJScene& scene, const XJEditorUpdateLightRequest& request);//更新灯光
 
             static XJEditorEntityId CreateEmptyEntity(XJScene& scene, const std::string& name, XJEditorEntityId parentId);//创建一个空的实体
             static bool AddComponent(XJScene& scene, XJEditorEntityId entityId, XJEditorComponentType componentType, const XJAssetRef& sourceScene);//添加组件

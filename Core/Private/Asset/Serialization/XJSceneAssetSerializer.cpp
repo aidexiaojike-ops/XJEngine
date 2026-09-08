@@ -4,6 +4,7 @@
 #include "ECS/Component/XJCameraComponent.h"
 #include "ECS/Component/XJSceneAssetComponents.h"
 #include "ECS/Component/XJTransformComponent.h"
+#include "ECS/Component/XJLightComponent.h"
 #include "ECS/XJEntity.h"
 #include "ECS/XJScene.h"
 #include "Asset/Serialization/XJJsonIO.h"
@@ -362,6 +363,17 @@ namespace XJ
             data.Camera.Fov = c.XJGetFov();
             data.Camera.NearClip = c.XJGetNear();
             data.Camera.FarClip = c.XJGetFar();
+        }
+
+        if(entity.HasComponent<XJLightComponent>())
+        {
+            auto& l = entity.GetComponent<XJLightComponent>();
+            data.HasLight = true;
+            data.Light.UUID = l.XJGetUUID();
+            data.Light.Enabled = l.XJGetEnable();
+            data.Light.Type = static_cast<int>(l.XJGetLightType());
+            data.Light.Color = l.XJGetColor();
+            data.Light.Intensity = l.XJGetIntensity();
         }
 
         return data;

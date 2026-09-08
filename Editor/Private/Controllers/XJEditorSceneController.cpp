@@ -468,6 +468,7 @@ namespace XJ
             uiState.SceneRequests.RequestRenameEntity ||
             uiState.SceneRequests.RequestUpdateTransform ||
             uiState.SceneRequests.RequestUpdateCamera ||
+            uiState.SceneRequests.RequestUpdateLight ||
             !uiState.SceneRequests.RequestDeleteEntities.empty();
 
         std::vector<XJAssetHandle> changedMaterialHandles;
@@ -717,6 +718,17 @@ namespace XJ
 
            NotifyAfterMutation();
         }
+
+        if (uiState.SceneRequests.RequestUpdateLight)
+        {
+            auto request = uiState.SceneRequests.UpdateLight;
+            uiState.SceneRequests.RequestUpdateLight = false;
+            uiState.SceneRequests.UpdateLight = {};
+
+            XJ::XJEditorSceneService::UpdateLight(*mScene, request);
+
+            NotifyAfterMutation();
+        }
         //通过ID删除资产
         if (!uiState.SceneRequests.RequestDeleteEntities.empty())
         {
@@ -797,6 +809,9 @@ namespace XJ
         uiState.SceneRequests.RenameEntity = {};
         uiState.SceneRequests.UpdateTransform = {};
         uiState.SceneRequests.UpdateCamera = {};
+        //灯光
+        uiState.SceneRequests.RequestUpdateLight = false;
+        uiState.SceneRequests.UpdateLight = {};
 
         uiState.SceneRequests.RequestCreateEmptyEntity = false;
         uiState.SceneRequests.CreateEmptyEntity = {};

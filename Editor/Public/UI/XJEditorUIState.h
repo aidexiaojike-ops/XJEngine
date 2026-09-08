@@ -27,6 +27,11 @@ namespace XJ
         float Fov = 60.0f;
         float NearPlane = 0.1f;
         float FarPlane = 100.0f;
+
+        int LightType = 0;
+        bool LightEnabled = true;
+        glm::vec3 LightColor{1.0f};
+        float LightIntensity = 1.0f;
     };
 
     struct XJEditorUIState//编辑器 UI 全局状态
@@ -48,6 +53,7 @@ namespace XJ
         bool ShowHierarchy = true;
         bool ShowInspector = true;
         bool ShowDebugConsole = true;
+        bool WorkspaceReadOnly = false;//Play/Pause 第一版只允许查看 EditorScene
         // ---------- 外部文件拖放支持 ----------
         std::vector<std::filesystem::path> PendingExternalDroppedFiles; // 待处理的外部拖入文件路径列表
         glm::vec2 PendingExternalDropMousePos{0.0f};// 拖放发生时鼠标在编辑器窗口内的坐标

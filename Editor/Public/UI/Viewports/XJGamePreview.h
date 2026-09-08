@@ -3,7 +3,7 @@
 
 #include "UI/Viewports/XJViewport.h"
 #include "UI/Viewports/XJViewportRenderSurface.h"
-#include "UI/XJEditorPlayMode.h"
+#include "Runtime/XJEditorPlayState.h"
 #include <functional>
 
 namespace XJ

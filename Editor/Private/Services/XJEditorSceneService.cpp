@@ -10,6 +10,7 @@
 #include "ECS/Component/XJTransformComponent.h"
 #include "ECS/Component/Material/XJUnlitMaterialComponent.h"
 #include "ECS/Component/XJSceneAssetComponents.h"
+#include "ECS/Component/XJLightComponent.h"
 
 #include "Asset/Loader/XJMeshAssetLoader.h"
 #include "Asset/XJAssetRegistry.h"
@@ -190,6 +191,7 @@ namespace XJ
             //获取所有组件
             view.HasTransform = entity->HasComponent<XJTransformComponent>();
             view.HasMesh = entity->HasComponent<XJMeshAssetRefComponent>();
+            view.HasLight = entity->HasComponent<XJLightComponent>();
             view.HasCamera = entity->HasComponent<XJCameraComponent>();
             view.HasSceneRef = entity->HasComponent<XJSceneAssetRefComponent>();
             //查看信息
@@ -716,6 +718,16 @@ namespace XJ
             details.SceneRef.SourceEntity = static_cast<uint64_t>(sceneRef.SourceEntity);
         }
 
+        if (entity->HasComponent<XJLightComponent>())
+        {
+            const auto& light = entity->GetComponent<XJLightComponent>();
+            details.Light.Valid = true;
+            details.Light.Type = static_cast<int>(light.XJGetLightType());
+            details.Light.Enabled = light.XJGetEnable();
+            details.Light.Color = light.XJGetColor();
+            details.Light.Intensity = light.XJGetIntensity();
+        }
+
         return details;
     }
 
@@ -739,6 +751,19 @@ namespace XJ
         transform.rotation = request.Rotation;
         transform.scale = request.Scale;
         transform.UpdateModelMatrix();
+    }
+
+    void XJEditorSceneService::UpdateLight(XJScene& scene, const XJEditorUpdateLightRequest& request)
+    {
+        XJEntity* entity = FindEntityById(scene, request.EntityId);
+        if (!entity || !entity->IsValid() || !entity->HasComponent<XJLightComponent>())
+            return;
+
+        auto& light = entity->GetComponent<XJLightComponent>();
+        light.XJSetLightType(static_cast<XJLightType>(request.Type));
+        light.XJSetEnable(request.Enabled);
+        light.XJSetColor(request.Color);
+        light.XJSetIntensity(request.Intensity);
     }
 
     void XJEditorSceneService::UpdateCamera(XJScene& scene, const XJEditorUpdateCameraRequest& request)
@@ -823,6 +848,23 @@ namespace XJ
                 return true;
             }
 
+            case XJEditorComponentType::Light://添加灯光也要添加transform
+            {
+                if(entity->HasComponent<XJLightComponent>())
+                    return false;
+
+                if(!entity->HasComponent<XJTransformComponent>())
+                {
+                    auto& transform = entity->AddComponent<XJTransformComponent>();
+                    transform.position = glm::vec3(0.0f);
+                    transform.rotation = glm::vec3(0.0f);
+                    transform.scale = glm::vec3(1.0f);
+                    transform.UpdateModelMatrix();
+                }
+                entity->AddComponent<XJLightComponent>();
+                return true;
+            }
+
             default:
                 return false;
         }
@@ -883,6 +925,14 @@ namespace XJ
                     return false;
 
                 entity->RemoveComponent<XJSceneAssetRefComponent>();
+                    return true;
+            }
+            case XJEditorComponentType::Light:
+            {
+                if(!entity->HasComponent<XJLightComponent>())
+                    return false;
+
+                entity->RemoveComponent<XJLightComponent>();
                     return true;
             }
 
