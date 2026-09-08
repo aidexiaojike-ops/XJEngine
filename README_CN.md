@@ -24,7 +24,7 @@ XJEngine 是一个基于 Vulkan 和 ECS 架构的轻量级现代游戏引擎，�
 | **事件驱动系统** | 完整的窗口、鼠标、键盘事件处理 |
 | **模块化材质系统** | 可扩展的纹理、采样器、UBO 管线 |
 | **Shader Schema 系统** | JSON 定义着色器参数，Schema 验证、绑定解析、描述符布局构建、SPIR-V 反射、材质资产序列化 |
-| **Unlit 材质系统** | Frame UBO、材质参数 UBO、纹理混合与动态描述符池扩容 |
+| **Surface 材质系统** | Schema 驱动的 Surface 管线，共享 Frame/Light UBO、材质参数块、纹理绑定与动态描述符池扩容 |
 | **运行时材质生成** | 支持程序化创建材质、随机颜色、纹理和 UV 变换 |
 | **程序化纹理** | 从像素数据直接生成纹理，无需外部文件 |
 | **摄像机系统** | 独立 Camera 模块，轨道/自由模式，编辑器摄像机管理器，ECS 摄像机系统 |
@@ -95,7 +95,10 @@ File -> Importer -> Asset (CPU) -> Factory -> Resource (GPU) -> Renderer
 - **运行时工具**：`XJSceneRuntimeUtil` 提供主摄像机查找等运行时辅助功能
 
 - **Shader Schema 系统**：JSON 定义的着色器参数，`XJShaderSchemaValidator` 验证 + `XJShaderSchemaBindingResolver` 绑定解析 + `XJShaderDescriptorLayoutBuilder` 描述符布局构建
-- **Shader 运行时布局**：`XJMaterialShaderRuntimeLayout`/`Builder`、`XJMaterialPipelineRuntime`/`Builder`/`Cache`/`Descriptor`、`XJMaterialRuntimeUploader` — 运行时 Shader-材质绑定、管线缓存、GPU 上传
+- **Surface 材质系统**：`XJSurfaceMaterialSystem` 渲染 `XJSurfaceMaterialComponent`，按 frame slot 分别跟踪材质参数和资源上传状态
+- **共享 Frame/Light 数据**：`XJFrameUbo` 提供投影/视图矩阵、分辨率、帧号/时间与摄像机位置；`XJLightUbo` 使用 std140 布局支持 1 个方向光、最多 8 个点光和 8 个聚光灯
+- **场景灯光收集**：`XJLightSceneUtils` 从场景中的 `XJLightComponent` 与 Transform 构建每帧灯光 UBO
+- **Shader 运行时布局**：`XJMaterialShaderRuntimeLayout`/`Builder`、`XJMaterialPipelineRuntime`/`Builder`/`Cache`/`Descriptor`、`XJMaterialRuntimeUploader`、`XJSurfaceMaterialBindingUtils` — 运行时 Shader-材质绑定、管线缓存、GPU 上传
 - **材质序列化**：`XJMaterialAssetSerializer`、`XJShaderAssetSerializer`、`XJShaderSchemaSerializer`
 - **材质工厂缓存**：`XJMaterialFactory` 按资产/默认材质键缓存材质（弱引用）、复用已加载纹理，并提供 `ClearExpiredMaterials`/`ClearCaches` 配合场景生命周期管理
 - **Inspector 材质编辑**：通过 `XJEditorMaterialParameterType` 编辑 Float、Color3、Texture2D 等参数
@@ -119,10 +122,10 @@ File -> Importer -> Asset (CPU) -> Factory -> Resource (GPU) -> Renderer
 
 ### 主要模块
 
-- **材质系统**：`XJBaseMaterialSystem`、`XJUnlitMaterialSystem`、`XJMaterialRenderSystemBase`、`XJMaterialParameterBlock`/`Builder`/`Writer`
+- **材质系统**：`XJBaseMaterialSystem`、`XJSurfaceMaterialSystem`、`XJMaterialRenderSystemBase`、`XJSurfaceMaterialComponent`、`XJMaterialParameterBlock`/`Builder`/`Writer`
 - **摄像机系统**：`XJCameraController`（Core/Camera）、`XJCameraMath`（数学工具）、`XJCameraSystem`（ECS 适配）
 - **资产系统**：`XJModelImporter`、`XJTextureImporter`、`XJAssetRegistry`、`XJAssetRegistryScanner`、`XJAssetBootstrap`、`XJSceneRuntimeUtil`、`XJMeshAssetLoader`、`XJJsonIO`
-- **ECS 基础**：`XJEntity` 通过场景生命周期 token 校验避免悬垂访问；`XJReservedUUID` 定义引擎/编辑器保留 UUID 区间，用户 UUID 生成自动避开；`XJSystemScheduler` 管理系统生命周期（Start/Stop），驱动 `OnUpdate` + 固定步进 `OnFixedUpdate`；`XJInput` 输入单例每帧轮询 GLFW，提供键盘/鼠标按住/按下/释放查询、鼠标位置/增量/滚轮、WASD 轴向合成；`XJLightComponent` 支持 Directional/Point/Spot 灯光（开关、颜色、强度）
+- **ECS 基础**：`XJEntity` 通过场景生命周期 token 校验避免悬垂访问；`XJReservedUUID` 定义引擎/编辑器保留 UUID 区间，用户 UUID 生成自动避开；`XJSystemScheduler` 管理系统生命周期（Start/Stop），驱动 `OnUpdate` + 固定步进 `OnFixedUpdate`；`XJInput` 输入单例每帧轮询 GLFW，提供键盘/鼠标按住/按下/释放查询、鼠标位置/增量/滚轮、WASD 轴向合成；`XJLightComponent` 支持 Directional/Point/Spot 灯光（开关、颜色、强度、范围及聚光灯内外锥角）
 - **编辑器系统**：`XJEditorSceneController`、`XJEditorCameraManager`、`XJEditorSceneService`、`XJUIContext`、`XJEditorRenderer`、`XJEditorUILayer`、编辑器面板
 - **Vulkan 平台层**：`XJSwapchainAcquireResult`/`XJSwapchainPresentResult` 区分成功、重建和设备丢失状态；`XJVulkanInstance` 自动选择最高支持到 Vulkan 1.3 的 API 版本；`XJVulkanSurface`、`XJGlfwWindow`、`XJVulkanTextureSampler` 增加句柄校验、生命周期顺序和 RAII 释放
 
@@ -184,13 +187,14 @@ XJEngine/
 
 ## 🎮 使用
 
-### Unlit 材质示例
+### Surface 材质示例
 
 ```cpp
-XJ::XJUnlitMaterial* unlitMat = XJ::XJMaterialFactory::GetInstance()->CreateMaterial<XJ::XJUnlitMaterial>();
-unlitMat->XJSetBaseColorA(glm::vec3(1.0f, 0.0f, 0.0f));
-unlitMat->XJSetBaseColorB(glm::vec3(0.0f, 0.0f, 1.0f));
-unlitMat->XJSetMixValue(0.5f);
+auto surfaceMat = XJ::XJMaterialFactory::GetInstance()->CreateMaterial<XJ::XJSurfaceMaterial>();
+surfaceMat->SetBaseColor(glm::vec4(1.0f, 0.0f, 0.0f, 1.0f));
+
+auto& surfaceComp = entity->AddComponent<XJ::XJSurfaceMaterialComponent>();
+surfaceComp.AddMesh(mesh, surfaceMat);
 ```
 
 ### 编辑器 UI 集成

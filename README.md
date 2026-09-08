@@ -24,7 +24,7 @@ XJEngine is a lightweight modern game engine built with Vulkan and ECS architect
 | **Event Driven System** | Complete input handling for window, mouse, keyboard events |
 | **Modular Material System** | Extensible material pipeline with textures, samplers and uniform buffers |
 | **Shader Schema System** | JSON-defined shader parameters, schema validation, binding resolution, descriptor layout builder, SPIR-V reflection, material asset serialization |
-| **Unlit Material System** | Complete unlit pipeline with Frame UBO, material parameter UBO, texture blending, and dynamic descriptor pool expansion |
+| **Surface Material System** | Schema-driven surface pipeline with shared Frame/Light UBOs, material parameter blocks, texture bindings, and dynamic descriptor pool expansion |
 | **Runtime Material Generation** | Programmatic material creation with random colors, textures, and UV transforms at runtime |
 | **Procedural Textures** | Generate textures from pixel data (single color or multi-pixel arrays) without external files |
 | **Dynamic Instancing** | Support for large-scale entity rendering with dynamic uniform buffers |
@@ -138,7 +138,7 @@ Swapchain
 - **Entity Management**: Lightweight entity handles with automatic lifetime tracking and scene lifetime-token validation (`XJEntity::GetSceneChecked`) to guard against dangling scene access
 - **Reserved UUID Range**: Engine/editor-owned UUIDs live in a reserved range (`XJReservedUUID`), and user UUID generation skips it to avoid collisions
 - **Component Storage**: Dense array storage for optimal cache performance
-- **Light Component**: `XJLightComponent` supports Directional/Point/Spot lights with enable toggle, color, and intensity
+- **Light Component**: `XJLightComponent` supports Directional/Point/Spot lights with enable toggle, color, intensity, range, and validated spot inner/outer cone angles
 - **System Scheduling**: Flexible system registration and execution order
 - **System Scheduler**: `XJSystemScheduler` manages system lifecycle (Start/Stop), drives `OnUpdate` + fixed-step `OnFixedUpdate` with configurable tick rate and max delta-time clamping
 - **Input Singleton**: `XJInput` polls GLFW every frame via `Update()`, exposing a read-only `XJInputState` snapshot with keyboard/mouse held/pressed/released queries, mouse position/delta/scroll, and WASD axis synthesis (`GetAxis(Horizontal|Vertical)`)
@@ -150,14 +150,16 @@ Swapchain
 - **Material Parameter System**: `XJMaterialParameterBlock`/`Layout`/`Builder`/`Writer` — build from shader schema, write to GPU buffers
 - **Base Material System**: Dynamic uniform buffer instancing with global/per-instance UBOs
 - **Material Render System**: `XJMaterialRenderSystemBase` — base class for material-driven render systems, `XJMaterialRenderItem` — render item abstraction
-- **Unlit Material System**: Complete unlit pipeline with Frame UBO (proj/view/resolution/time), material parameter UBO (colors, mix, texture params), and combined image samplers
+- **Surface Material System**: `XJSurfaceMaterialSystem` renders `XJSurfaceMaterialComponent` items through schema-driven pipeline runtimes, tracking parameter/resource uploads independently for each frame slot
+- **Shared Frame/Light Data**: `XJFrameUbo` provides projection, view, resolution, frame/time, and camera position; `XJLightUbo` provides one directional light plus up to eight point and eight spot lights using std140-compatible layouts
+- **Scene Light Collection**: `XJLightSceneUtils` gathers enabled `XJLightComponent` instances and transforms into the per-frame light UBO
 - **DescriptorSetWriter**: Utility class providing static helpers for descriptor buffer/image info creation and descriptor set writes
 - **Dynamic Descriptor Pool**: Automatic expansion of material descriptor sets on demand (up to 2048)
 - **Texture Management**: Per-material texture views with sampler state, UV transform support
 - **Push Constants**: `ModelPC` struct for per-draw model and normal matrix updates
 - **Shader Pipeline**: SPIR-V shader compilation and pipeline state management
 - **Shader Schema System**: JSON-defined parameters (Unlit.schema), schema validation via `XJShaderSchemaValidator`, binding resolution via `XJShaderSchemaBindingResolver`, descriptor layout via `XJShaderDescriptorLayoutBuilder`
-- **Shader Runtime Layout**: `XJMaterialShaderRuntimeLayout`/`Builder`, `XJMaterialPipelineRuntime`/`Builder`/`Cache`/`Descriptor`, `XJMaterialRuntimeUploader`, `XJUnlitMaterialBindingUtils` — runtime shader-material binding, descriptor set wiring, pipeline caching, GPU upload
+- **Shader Runtime Layout**: `XJMaterialShaderRuntimeLayout`/`Builder`, `XJMaterialPipelineRuntime`/`Builder`/`Cache`/`Descriptor`, `XJMaterialRuntimeUploader`, `XJSurfaceMaterialBindingUtils` — runtime shader-material binding, descriptor set wiring, pipeline caching, and GPU upload
 - **Material Serializers**: `XJMaterialAssetSerializer`, `XJShaderAssetSerializer`, `XJShaderSchemaSerializer`
 - **Material Factory Cache**: `XJMaterialFactory` caches materials by asset/default key (weak refs), reuses loaded textures, and provides `ClearExpiredMaterials`/`ClearCaches` for scene lifetime management
 - **Inspector Material Editing**: Parameter editing with `XJEditorMaterialParameterType` (Float, Color3, Texture2D, etc.)
@@ -321,7 +323,7 @@ XJEngine/
 │   │   │   │   ├── XJLightComponent.h       # 灯光组件（Directional/Point/Spot）
 │   │   │   │   └── Material/       # 材质组件
 │   │   │   │       ├── XJBaseMaterialComponent.h
-│   │   │   │       └── XJUnlitMaterialComponent.h
+│   │   │   │       └── XJSurfaceMaterialComponent.h
 │   │   │   └── System/             # 具体系统
 │   │   │       └── XJCameraSystem.h
 │   │   ├── Camera/          # 摄像机模块（独立于 ECS）
@@ -339,14 +341,14 @@ XJEngine/
 │   │       ├── System/      # 渲染系统（材质系统）
 │   │       │   ├── XJMaterialSystem.h
 │   │       │   ├── XJBaseMaterialSystem.h
-│   │       │   ├── XJUnlitMaterialSystem.h
+│   │       │   ├── XJSurfaceMaterialSystem.h
 │   │       │   └── XJMaterialRenderSystemBase.h
 │   │       ├── Material/    # 材质参数与管线运行时
 │   │       │   ├── XJMaterialParameterBlock.h / Layout / Builder / Writer
 │   │       │   ├── XJMaterialPipelineRuntime.h / Builder / Cache / Descriptor
 │   │       │   ├── XJMaterialShaderRuntimeLayout.h / Builder
 │   │       │   ├── XJMaterialRenderItem.h / RuntimeUploader
-│   │       │   └── XJUnlitMaterialBindingUtils / RenderItemBuilder
+│   │       │   └── XJSurfaceMaterialBindingUtils / RenderItemBuilder
 │   │       ├── Resource/    # GPU 渲染资源
 │   │       │   ├── XJMesh.h / XJMeshFactory.h
 │   │       │   ├── XJTexture.h / XJTextureFactory.h
@@ -472,21 +474,19 @@ transform.scale = glm::vec3(1.0f, 1.0f, 1.0f);
 transform.UpdateModelMatrix();
 ```
 
-### Using Unlit Materials
+### Using Surface Materials
 ```cpp
-// Create unlit material with custom parameters
-XJ::XJUnlitMaterial* unlitMat = XJ::XJMaterialFactory::GetInstance()->CreateMaterial<XJ::XJUnlitMaterial>();
-unlitMat->XJSetBaseColorA(glm::vec3(1.0f, 0.0f, 0.0f));
-unlitMat->XJSetBaseColorB(glm::vec3(0.0f, 0.0f, 1.0f));
-unlitMat->XJSetMixValue(0.5f);
+// Create a surface material with custom parameters
+auto surfaceMat = XJ::XJMaterialFactory::GetInstance()->CreateMaterial<XJ::XJSurfaceMaterial>();
+surfaceMat->SetBaseColor(glm::vec4(1.0f, 0.0f, 0.0f, 1.0f));
 
 // Set texture
-unlitMat->SetTextureView(XJ::UNLIT_MAT_BASE_COLOR_A, texture, sampler);
-unlitMat->UpdateTextureViewEnable(XJ::UNLIT_MAT_BASE_COLOR_A, true);
+surfaceMat->SetTextureView(XJ::SURFACE_MAT_BASE_COLOR, texture, sampler);
+surfaceMat->UpdateTextureViewEnable(XJ::SURFACE_MAT_BASE_COLOR, true);
 
 // Add to entity
-auto& unlitComp = entity->AddComponent<XJ::XJUnlitMaterialComponent>();
-unlitComp.AddMesh(mesh, unlitMat);
+auto& surfaceComp = entity->AddComponent<XJ::XJSurfaceMaterialComponent>();
+surfaceComp.AddMesh(mesh, surfaceMat);
 ```
 
 ### Using Procedural Textures
