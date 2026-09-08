@@ -1,13 +1,14 @@
 #include "Render/Material/XJMaterialRuntimeUploader.h"
 
-#include "ECS/Component/Material/XJUnlitMaterialComponent.h"
+#include "ECS/Component/Material/XJSurfaceMaterialComponent.h"
 #include "Graphic/XJVulkanBuffer.h"
 #include "Graphic/XJVulkanDescriptorSet.h"
 #include "Graphic/XJVulkanDevice.h"
 #include "Graphic/XJVulkanImageView.h"
 #include "Render/Material/XJMaterialPipelineRuntimeDescriptor.h"
-#include "Render/Material/XJUnlitMaterialBindingUtils.h"
+#include "Render/Material/XJSurfaceMaterialBindingUtils.h"
 #include "Render/Resource/XJMaterial.h"
+#include "Render/XJFrameUbo.h"
 
 
 namespace XJ
@@ -32,13 +33,14 @@ namespace XJ
             return false;
         }
 
-        FrameUbo frameUbo =
+        XJFrameUbo frameUbo =
         {
             .projMat = context.ProjMat,
             .viewMat = context.ViewMat,
             .resolution = context.Resolution,
             .frameId = context.FrameId,
-            .time = context.Time
+            .time = context.Time,
+            .cameraPosition = glm::vec4(context.CameraPosition, 1.0f)
         };
 
         // Descriptor set was written once during runtime creation; each frame only updates its own UBO buffer.
@@ -66,7 +68,7 @@ namespace XJ
             return false;
         }
 
-        const TextureView* texture = material->GetTextureView(UNLIT_MAT_BASE_COLOR);
+        const TextureView* texture = material->GetTextureView(SURFACE_MAT_BASE_COLOR);
         if (texture)
         {
             TextureParam texParam{};
@@ -216,7 +218,7 @@ namespace XJ
                 material->GetSamplerTextureView(textureBinding.SamplerName);
 
             if (!textureView)
-                textureView = GetUnlitTextureViewForBinding(*material, textureBinding);
+                textureView = GetSurfaceTextureViewForBinding(*material, textureBinding);
 
             if (!addTextureWrite(textureBinding.Binding, textureView))
             {
@@ -248,6 +250,24 @@ namespace XJ
             device->XJGetDevice(),
             writes);
 
+        return true;
+    }
+
+    bool XJMaterialRuntimeUploader::UpdateLightUboDescSet(
+        const XJMaterialRuntimeUploadContext& context,
+        XJMaterialPipelineRuntime& runtime)
+    {
+        if(!context.LightData||!runtime.ShaderLayout.HasLightSet())
+        {
+            spdlog::warn("Skip light UBO update: no light data or shader runtime layout has no light set.");
+            return false;
+        }
+
+        const uint32_t frameSlot = context.FrameSlot % RENDERER_NUM_BUFFER;
+        if (!runtime.LightUboBuffers[frameSlot])
+            return false;
+
+        runtime.LightUboBuffers[frameSlot]->WriteData(context.LightData);
         return true;
     }
 }

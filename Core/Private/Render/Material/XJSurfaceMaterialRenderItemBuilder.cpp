@@ -1,27 +1,27 @@
-#include "Render/Material/XJUnlitMaterialRenderItemBuilder.h"
+#include "Render/Material/XJSurfaceMaterialRenderItemBuilder.h"
 
 #include "ECS/XJScene.h"
 #include "ECS/Component/XJTransformComponent.h"
-#include "ECS/Component/Material/XJUnlitMaterialComponent.h"
+#include "ECS/Component/Material/XJSurfaceMaterialComponent.h"
 #include "Render/Resource/XJMesh.h"
 
 namespace XJ
 {
-    std::vector<XJMaterialRenderItem> XJUnlitMaterialRenderItemBuilder::Build(XJScene& scene)
+    std::vector<XJMaterialRenderItem> XJSurfaceMaterialRenderItemBuilder::Build(XJScene& scene)
     {
         std::vector<XJMaterialRenderItem> items;
         Build(scene, items);
         return items;
     }
     
-    void XJUnlitMaterialRenderItemBuilder::Build(XJScene& scene, std::vector<XJMaterialRenderItem>& outItems)
+    void XJSurfaceMaterialRenderItemBuilder::Build(XJScene& scene, std::vector<XJMaterialRenderItem>& outItems)
     {
         outItems.clear();
 
         const auto& registry = scene.XJGetEcsRegistry();
-        auto view = registry.view<XJTransformComponent, XJUnlitMaterialComponent>();
+        auto view = registry.view<XJTransformComponent, XJSurfaceMaterialComponent>();
 
-        view.each([&outItems](const auto& entity, const XJTransformComponent& transComp, const XJUnlitMaterialComponent& matComp)
+        view.each([&outItems](const auto& entity, const XJTransformComponent& transComp, const XJSurfaceMaterialComponent& matComp)
         {
             (void)entity;
 
@@ -30,7 +30,7 @@ namespace XJ
                 if (!slot.Mesh || !slot.Material)
                     continue;
             
-                XJUnlitMaterial* material = slot.Material.get();
+                XJSurfaceMaterial* material = slot.Material.get();
                 if (material->XJGetIndex() < 0)
                     continue;
             

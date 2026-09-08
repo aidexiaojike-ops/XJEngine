@@ -32,6 +32,9 @@ namespace XJ
         bool LightEnabled = true;
         glm::vec3 LightColor{1.0f};
         float LightIntensity = 1.0f;
+        float LightRange = 10.0f;
+        float LightInnerAngleDegrees = 20.0f;
+        float LightOuterAngleDegrees = 30.0f;
     };
 
     struct XJEditorUIState//编辑器 UI 全局状态

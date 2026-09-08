@@ -5,6 +5,8 @@
 #include "Render/Resource/XJMaterial.h"
 #include "Render/XJRenderTarget.h"
 #include "XJApplication.h"
+#include "ECS/Component/XJTransformComponent.h"
+#include "ECS/XJEntity.h"
 
 namespace XJ
 {
@@ -78,6 +80,10 @@ namespace XJ
                     static_cast<int>(frameBuffer->XJGetHeight())
                 };
             }
+
+            XJEntity* camera = renderTarget->XJGetCamera();
+            if (camera && camera->HasComponent<XJTransformComponent>())
+                context.CameraPosition = camera->GetComponent<XJTransformComponent>().position;
         }
 
         if (XJApplication* app = XJGetApp())

@@ -27,7 +27,7 @@
 #include "ECS/XJEntity.h"
 #include "ECS/Component/XJCameraComponent.h"
 #include "ECS/Component/XJTransformComponent.h"
-#include "ECS/Component/Material/XJUnlitMaterialComponent.h"
+#include "ECS/Component/Material/XJSurfaceMaterialComponent.h"
 
 #include <spdlog/spdlog.h>
 #include <utility>
@@ -196,7 +196,7 @@ namespace XJ
                             continue;
 
                         if (!entity->HasComponent<XJTransformComponent>() ||
-                            !entity->HasComponent<XJUnlitMaterialComponent>())
+                            !entity->HasComponent<XJSurfaceMaterialComponent>())
                             continue;
 
                         auto& transform = entity->GetComponent<XJTransformComponent>();

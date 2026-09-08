@@ -28,6 +28,7 @@ layout(set = 0, binding = 0, std140) uniform FrameUbo
     ivec2 resolution;
     uint frameId;
     float time;
+    vec4 cameraPosition;
 } frameUbo;
 
 layout(set = 1, binding = 0, std140) uniform MaterialUbo

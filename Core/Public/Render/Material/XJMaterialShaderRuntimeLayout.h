@@ -40,6 +40,13 @@ namespace XJ
         uint32_t PrimaryMaterialUboBinding = 0;
         uint32_t PrimaryMaterialUboSize = 0;
         std::vector<XJMaterialUboLayout> MaterialUboLayouts;
+        // ---------- 灯光 set（可选，只有 Lit shader 有） ----------
+        uint32_t LightSet = 3;
+        std::vector<VkDescriptorSetLayoutBinding> LightBindings;
+        std::string PrimaryLightUboName;
+        uint32_t PrimaryLightUboSet = 3;
+        uint32_t PrimaryLightUboBinding = 0;
+        uint32_t PrimaryLightUboSize = 0;
         
         std::vector<XJMaterialTextureBinding> MaterialSamplerBindings;/// 材质采样器绑定列表（对应到着色器中的每个 sampler）
 
@@ -70,6 +77,11 @@ namespace XJ
         bool HasMaterialResourceSet() const// 是否存在材质资源描述符集
         {
             return !MaterialResourceBindings.empty();
+        }
+
+        bool HasLightSet() const
+        {
+            return !LightBindings.empty() && PrimaryLightUboSize > 0;
         }
     };
 }

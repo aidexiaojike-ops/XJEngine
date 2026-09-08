@@ -5,7 +5,7 @@
 #include "Asset/Instantiation/XJSceneInstantiator.h"
 #include "ECS/XJEntity.h"
 #include "ECS/XJScene.h"
-#include "ECS/Component/Material/XJUnlitMaterialComponent.h"
+#include "ECS/Component/Material/XJSurfaceMaterialComponent.h"
 #include "ECS/Component/XJSceneAssetComponents.h"
 #include "ECS/Component/XJTransformComponent.h"
 #include "Render/Resource/XJMaterialFactory.h"
@@ -100,7 +100,7 @@ namespace XJ
             return false;
         }
 
-        auto& comp = entity->AddComponent<XJUnlitMaterialComponent>();
+        auto& comp = entity->AddComponent<XJSurfaceMaterialComponent>();
         auto& materialRefs = entity->AddComponent<XJMaterialAssetRefComponent>();
         // 新拖入实体使用默认材质，但资产引用槽必须与 Mesh 的 MaterialSlot 对齐。
         materialRefs.Materials.resize(materialSlotCount);
@@ -150,9 +150,9 @@ namespace XJ
 
         // MeshAssetRef 只有资产 handle，没有 GPU Mesh/Bounds。
         // Runtime material component 才保存真正的 XJMesh。
-        auto view = registry.view<XJTransformComponent, XJUnlitMaterialComponent>();
+        auto view = registry.view<XJTransformComponent, XJSurfaceMaterialComponent>();
 
-        view.each([&](auto entity, const XJTransformComponent& transform, const XJUnlitMaterialComponent& renderComponent)
+        view.each([&](auto entity, const XJTransformComponent& transform, const XJSurfaceMaterialComponent& renderComponent)
         {
             (void)entity;
 

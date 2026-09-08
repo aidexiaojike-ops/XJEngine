@@ -39,6 +39,10 @@ namespace XJ
                     shaderAsset.Reflection,
                     outLayout.MaterialResourceSet);
 
+                outLayout.LightBindings = BuildDescriptorSetLayoutBindings(
+                    shaderAsset.Reflection,
+                    outLayout.LightSet);
+
                 for (const auto& ubo : shaderAsset.Reflection.Ubos)
                 {
                     if (ubo.Set != outLayout.MaterialParameterSet)
@@ -94,6 +98,16 @@ namespace XJ
                     outLayout.PrimaryMaterialUboSet = materialUbo->Set;
                     outLayout.PrimaryMaterialUboBinding = materialUbo->Binding;
                     outLayout.PrimaryMaterialUboSize = materialUbo->Size;
+                }
+
+                // 查找主灯光 UBO（可选，仅 Lit shader 拥有 Light set）。
+                const XJShaderReflectedUbo* lightUbo = selectPrimaryUbo(outLayout.LightSet, "LightUbo");
+                if (lightUbo)
+                {
+                    outLayout.PrimaryLightUboName = lightUbo->Name;
+                    outLayout.PrimaryLightUboSet = lightUbo->Set;
+                    outLayout.PrimaryLightUboBinding = lightUbo->Binding;
+                    outLayout.PrimaryLightUboSize = lightUbo->Size;
                 }
 
                 for(const auto& sampler : shaderAsset.Reflection.Samplers)

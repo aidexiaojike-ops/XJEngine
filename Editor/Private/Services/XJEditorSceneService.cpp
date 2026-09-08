@@ -8,7 +8,7 @@
 #include "ECS/Component/XJCameraComponent.h"
 #include "ECS/Component/XJSceneAssetComponents.h"
 #include "ECS/Component/XJTransformComponent.h"
-#include "ECS/Component/Material/XJUnlitMaterialComponent.h"
+#include "ECS/Component/Material/XJSurfaceMaterialComponent.h"
 #include "ECS/Component/XJSceneAssetComponents.h"
 #include "ECS/Component/XJLightComponent.h"
 
@@ -22,7 +22,7 @@
 #include "Asset/Serialization/XJMaterialAssetSerializer.h"
 #include "Asset/Serialization/XJShaderAssetSerializer.h"
 #include "Render/Shader/XJShaderParameter.h"
-#include "Render/Material/XJUnlitMaterialBindingUtils.h"
+#include "Render/Material/XJSurfaceMaterialBindingUtils.h"
 
 #include <algorithm>
 #include <filesystem>
@@ -66,7 +66,7 @@ namespace XJ
             transform.UpdateModelMatrix();
         }
 
-        std::shared_ptr<XJUnlitMaterial> CreateMaterialForSlot(XJEntity& entity, uint32_t slotIndex, XJAssetRegistry& assetRegistry, const std::shared_ptr<XJTexture>& defaultTexture, const std::shared_ptr<XJSampler>& defaultSampler)//创建材质插槽
+        std::shared_ptr<XJSurfaceMaterial> CreateMaterialForSlot(XJEntity& entity, uint32_t slotIndex, XJAssetRegistry& assetRegistry, const std::shared_ptr<XJTexture>& defaultTexture, const std::shared_ptr<XJSampler>& defaultSampler)//创建材质插槽
         {
             if (entity.HasComponent<XJMaterialAssetRefComponent>())
             {
@@ -98,7 +98,7 @@ namespace XJ
             return XJMaterialFactory::GetInstance()->GetOrCreateDefaultMaterial(defaultTexture, defaultSampler);
         }
 
-        bool RebuildUnlitMeshRenderData(XJEntity& entity, XJAssetHandle meshAsset, XJAssetRegistry& assetRegistry, XJSceneInstantiateContext& instantiateContext, const std::shared_ptr<XJTexture>& defaultTexture, const std::shared_ptr<XJSampler>& defaultSampler)//设置默认材质
+        bool RebuildSurfaceMeshRenderData(XJEntity& entity, XJAssetHandle meshAsset, XJAssetRegistry& assetRegistry, XJSceneInstantiateContext& instantiateContext, const std::shared_ptr<XJTexture>& defaultTexture, const std::shared_ptr<XJSampler>& defaultSampler)//设置默认材质
         {
             if (!defaultTexture || !defaultSampler)
                 return false;
@@ -138,12 +138,12 @@ namespace XJ
             materialRefs->Materials.resize(
                 materialSlotCount);
             
-            if(entity.HasComponent<XJUnlitMaterialComponent>())
+            if(entity.HasComponent<XJSurfaceMaterialComponent>())
             {
-                entity.RemoveComponent<XJUnlitMaterialComponent>();
+                entity.RemoveComponent<XJSurfaceMaterialComponent>();
             }
 
-            auto& renderComponent = entity.AddComponent<XJUnlitMaterialComponent>();
+            auto& renderComponent = entity.AddComponent<XJSurfaceMaterialComponent>();
 
             for (uint32_t submeshIndex = 0; submeshIndex < submeshCount; ++submeshIndex)
             {
@@ -161,7 +161,7 @@ namespace XJ
                 
                 if (!material)
                 {
-                    entity.RemoveComponent<XJUnlitMaterialComponent>();
+                    entity.RemoveComponent<XJSurfaceMaterialComponent>();
                 
                     return false;
                 }
@@ -393,7 +393,7 @@ namespace XJ
         }
 
         bool ApplyRuntimeMaterialTextureParameter(
-            XJUnlitMaterial& runtimeMaterial,
+            XJSurfaceMaterial& runtimeMaterial,
             const std::string& parameterName,
             XJAssetHandle textureHandle,
             const std::shared_ptr<XJTexture>& defaultTexture,
@@ -425,7 +425,7 @@ namespace XJ
                     runtimeMaterial.UpdateSamplerTextureViewEnable(binding.SamplerName, enableTexture);
                 }
 
-                const uint32_t slot = ResolveUnlitTextureSlot(binding);
+                const uint32_t slot = ResolveSurfaceTextureSlot(binding);
                 runtimeMaterial.SetTextureView(slot, texture, defaultSampler);
                 runtimeMaterial.UpdateTextureViewEnable(slot, enableTexture);
 
@@ -543,9 +543,9 @@ namespace XJ
         float closestDistance = maxDistance;
 
         const auto& registry = scene.XJGetEcsRegistry();
-        auto view = registry.view<XJTransformComponent, XJUnlitMaterialComponent>();
+        auto view = registry.view<XJTransformComponent, XJSurfaceMaterialComponent>();
 
-        view.each([&](auto enttEntity, const XJTransformComponent& transform, const XJUnlitMaterialComponent& renderComponent)
+        view.each([&](auto enttEntity, const XJTransformComponent& transform, const XJSurfaceMaterialComponent& renderComponent)
         {
             bool entityHit = false;
             float entityDistance = closestDistance;
@@ -726,6 +726,9 @@ namespace XJ
             details.Light.Enabled = light.XJGetEnable();
             details.Light.Color = light.XJGetColor();
             details.Light.Intensity = light.XJGetIntensity();
+            details.Light.Range = light.XJGetRange();
+            details.Light.InnerAngleDegrees = light.XJGetInnerAngleDegrees();
+            details.Light.OuterAngleDegrees = light.XJGetOuterAngleDegrees();
         }
 
         return details;
@@ -764,6 +767,9 @@ namespace XJ
         light.XJSetEnable(request.Enabled);
         light.XJSetColor(request.Color);
         light.XJSetIntensity(request.Intensity);
+        light.XJSetRange(request.Range);
+        light.XJSetOuterAngleDegrees(request.OuterAngleDegrees);
+        light.XJSetInnerAngleDegrees(request.InnerAngleDegrees);
     }
 
     void XJEditorSceneService::UpdateCamera(XJScene& scene, const XJEditorUpdateCameraRequest& request)
@@ -911,9 +917,9 @@ namespace XJ
                     removed = true;
                 }
 
-                if(entity->HasComponent<XJUnlitMaterialComponent>())
+                if(entity->HasComponent<XJSurfaceMaterialComponent>())
                 {
-                   entity->RemoveComponent<XJUnlitMaterialComponent>();
+                   entity->RemoveComponent<XJSurfaceMaterialComponent>();
                    removed = true;
                 }
 
@@ -954,7 +960,7 @@ namespace XJ
             return false;
 
         EnsureTransformComponent(*entity);
-        if (!RebuildUnlitMeshRenderData(*entity, defaultMeshAsset, assetRegistry, instantiateContext, defaultTexture, defaultSampler))
+        if (!RebuildSurfaceMeshRenderData(*entity, defaultMeshAsset, assetRegistry, instantiateContext, defaultTexture, defaultSampler))
         {
             return false;
         }
@@ -977,7 +983,7 @@ namespace XJ
         if (!IsValidMeshAsset(assetRegistry, meshAsset))
             return false;
 
-        if (!RebuildUnlitMeshRenderData(*entity, meshAsset, assetRegistry, instantiateContext, defaultTexture, defaultSampler))
+        if (!RebuildSurfaceMeshRenderData(*entity, meshAsset, assetRegistry, instantiateContext, defaultTexture, defaultSampler))
         {
             return false;
         }
@@ -1019,10 +1025,10 @@ namespace XJ
 
         materialRef.Materials[slotIndex] = XJAssetRef{ materialAsset, XJAssetType::Material };
 
-        if (!RebuildUnlitMeshRenderData(*entity, meshRef.Mesh.Handle, assetRegistry, instantiateContext, defaultTexture, defaultSampler))
+        if (!RebuildSurfaceMeshRenderData(*entity, meshRef.Mesh.Handle, assetRegistry, instantiateContext, defaultTexture, defaultSampler))
         {
             materialRef.Materials[slotIndex] = oldMaterial;
-            RebuildUnlitMeshRenderData(*entity, meshRef.Mesh.Handle, assetRegistry, instantiateContext, defaultTexture, defaultSampler);
+            RebuildSurfaceMeshRenderData(*entity, meshRef.Mesh.Handle, assetRegistry, instantiateContext, defaultTexture, defaultSampler);
 
             return false;
         }
@@ -1054,10 +1060,10 @@ namespace XJ
 
         materialRef.Materials[slotIndex] = {};
 
-        if (!RebuildUnlitMeshRenderData(*entity, meshRef.Mesh.Handle, assetRegistry, instantiateContext, defaultTexture, defaultSampler))
+        if (!RebuildSurfaceMeshRenderData(*entity, meshRef.Mesh.Handle, assetRegistry, instantiateContext, defaultTexture, defaultSampler))
         {
             materialRef.Materials[slotIndex] = oldMaterial;
-            RebuildUnlitMeshRenderData(*entity, meshRef.Mesh.Handle, assetRegistry, instantiateContext, defaultTexture, defaultSampler);
+            RebuildSurfaceMeshRenderData(*entity, meshRef.Mesh.Handle, assetRegistry, instantiateContext, defaultTexture, defaultSampler);
 
             return false;
         }
@@ -1096,10 +1102,10 @@ namespace XJ
         // 编辑器刚修改了材质，主动失效 Inspector 快照，不依赖文件系统时间戳精度。
         InvalidateMaterialInspectorCacheEntry(materialAsset);
 
-        if(entity->HasComponent<XJUnlitMaterialComponent>())
+        if(entity->HasComponent<XJSurfaceMaterialComponent>())
         {
-            auto& renderComponent = entity->GetComponent<XJUnlitMaterialComponent>();
-            XJUnlitMaterial* runtimeMaterial = renderComponent.XJGetMaterial(slotIndex);
+            auto& renderComponent = entity->GetComponent<XJSurfaceMaterialComponent>();
+            XJSurfaceMaterial* runtimeMaterial = renderComponent.XJGetMaterial(slotIndex);
 
             // Update the live material slot directly. Rebuilding the mesh renderer
             // here would create a fresh GPU material for every slider tick.
@@ -1168,10 +1174,10 @@ namespace XJ
         // Reset 也会改写 .xjmat，下一次 ViewModel 刷新必须重新生成参数快照。
         InvalidateMaterialInspectorCacheEntry(materialAsset);
 
-        if(entity->HasComponent<XJUnlitMaterialComponent>())
+        if(entity->HasComponent<XJSurfaceMaterialComponent>())
         {
-            auto& renderComponent = entity->GetComponent<XJUnlitMaterialComponent>();
-            XJUnlitMaterial* runtimeMaterial = renderComponent.XJGetMaterial(slotIndex);
+            auto& renderComponent = entity->GetComponent<XJSurfaceMaterialComponent>();
+            XJSurfaceMaterial* runtimeMaterial = renderComponent.XJGetMaterial(slotIndex);
 
             if(runtimeMaterial)
             {

@@ -7,7 +7,7 @@
 #include "Edit/XJGlfwWindow.h"
 #include "Render/XJEditorRenderResources.h"
 #include "Render/System/XJBaseMaterialSystem.h"
-#include "Render/System/XJUnlitMaterialSystem.h"
+#include "Render/System/XJSurfaceMaterialSystem.h"
 #include "UI/Viewports/XJGamePreview.h"
 #include "UI/Viewports/XJScenePreview.h"
 
@@ -80,7 +80,7 @@ namespace XJ
         }
 
         mImpl->ScenePreview->AddMaterialSystem<XJBaseMaterialSystem>();
-        mImpl->ScenePreview->AddMaterialSystem<XJUnlitMaterialSystem>();
+        mImpl->ScenePreview->AddMaterialSystem<XJSurfaceMaterialSystem>();
 
         mImpl->GamePreview =
             std::make_unique<XJGamePreview>();
@@ -96,7 +96,7 @@ namespace XJ
         }
 
         mImpl->GamePreview->AddMaterialSystem<XJBaseMaterialSystem>();
-        mImpl->GamePreview->AddMaterialSystem<XJUnlitMaterialSystem>();
+        mImpl->GamePreview->AddMaterialSystem<XJSurfaceMaterialSystem>();
 
         mImpl->CameraController =
             std::make_unique<XJEditorCameraController>(

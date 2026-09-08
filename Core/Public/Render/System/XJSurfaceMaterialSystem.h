@@ -1,5 +1,5 @@
-#ifndef XJ_UNLIT_MATERIAL_SYSTEM_H
-#define XJ_UNLIT_MATERIAL_SYSTEM_H
+#ifndef XJ_SURFACE_MATERIAL_SYSTEM_H
+#define XJ_SURFACE_MATERIAL_SYSTEM_H
 
 #include "Render/System/XJMaterialRenderSystemBase.h"
 #include "Render/Material/XJMaterialRenderItem.h"
@@ -13,7 +13,7 @@ namespace XJ
 {
    struct XJMaterialPipelineRuntime;
 
-    class XJUnlitMaterialSystem : public XJMaterialRenderSystemBase
+    class XJSurfaceMaterialSystem : public XJMaterialRenderSystemBase
     {
         public:
             virtual void OnInit(XJVulkanRenderPass* renderPass) override;

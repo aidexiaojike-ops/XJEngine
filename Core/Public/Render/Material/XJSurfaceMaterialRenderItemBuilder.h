@@ -1,5 +1,5 @@
-#ifndef XJ_UNLIT_MATERIAL_RENDER_ITEM_BUILDER_H
-#define XJ_UNLIT_MATERIAL_RENDER_ITEM_BUILDER_H
+#ifndef XJ_SURFACE_MATERIAL_RENDER_ITEM_BUILDER_H
+#define XJ_SURFACE_MATERIAL_RENDER_ITEM_BUILDER_H
 
 #include "Render/Material/XJMaterialRenderItem.h"
 
@@ -9,7 +9,7 @@ namespace XJ
 {
     class XJScene;
 
-    class XJUnlitMaterialRenderItemBuilder
+    class XJSurfaceMaterialRenderItemBuilder
     {
         public:
             static std::vector<XJMaterialRenderItem> Build(XJScene& scene);

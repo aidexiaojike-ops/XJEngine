@@ -3,7 +3,7 @@
 #include "Asset/XJAssetRegistry.h"
 #include "Asset/Loader/XJMeshAssetLoader.h"
 
-#include "ECS/Component/Material/XJUnlitMaterialComponent.h"
+#include "ECS/Component/Material/XJSurfaceMaterialComponent.h"
 #include "ECS/Component/XJCameraComponent.h"
 #include "ECS/Component/XJSceneAssetComponents.h"
 #include "ECS/Component/XJTransformComponent.h"
@@ -28,7 +28,7 @@ namespace XJ
             Visited
         };
 
-        std::shared_ptr<XJUnlitMaterial> CreateMaterialForSlot(const std::vector<XJAssetRef>& materials, uint32_t slotIndex, XJSceneInstantiateContext& ctx)
+        std::shared_ptr<XJSurfaceMaterial> CreateMaterialForSlot(const std::vector<XJAssetRef>& materials, uint32_t slotIndex, XJSceneInstantiateContext& ctx)
         {
             if (slotIndex < materials.size())
             {
@@ -206,7 +206,7 @@ namespace XJ
         if (!gpuMesh || !ctx.DefaultTexture || !ctx.DefaultSampler)
             return;
 
-        auto& comp = entity.AddComponent<XJUnlitMaterialComponent>();
+        auto& comp = entity.AddComponent<XJSurfaceMaterialComponent>();
         comp.ClearMeshes();
 
         const uint32_t submeshCount = gpuMesh->GetSubmeshCount();
@@ -216,7 +216,7 @@ namespace XJ
                 "Scene instantiate skipped mesh: "
                 "GPU mesh contains no submeshes.");
                     
-            entity.RemoveComponent<XJUnlitMaterialComponent>();
+            entity.RemoveComponent<XJSurfaceMaterialComponent>();
                     
             return;
         }
@@ -225,7 +225,7 @@ namespace XJ
         if (materialSlotCount == 0)
         {
             spdlog::error("Scene instantiate skipped mesh: GPU mesh contains no material slots.");
-            entity.RemoveComponent<XJUnlitMaterialComponent>();
+            entity.RemoveComponent<XJSurfaceMaterialComponent>();
             return;
         }
 
@@ -314,5 +314,8 @@ namespace XJ
         light.XJSetLightType(static_cast<XJLightType>(data.Light.Type));
         light.XJSetColor(data.Light.Color);
         light.XJSetIntensity(data.Light.Intensity);
+        light.XJSetRange(data.Light.Range);
+        light.XJSetOuterAngleDegrees(data.Light.OuterAngleDegrees);
+        light.XJSetInnerAngleDegrees(data.Light.InnerAngleDegrees);
     }
 }

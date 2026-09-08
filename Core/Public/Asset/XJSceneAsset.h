@@ -44,6 +44,9 @@ namespace XJ
         int Type = 0; // 0 directional, 1 point, 2 spot
         glm::vec3 Color {1.0f};
         float Intensity = 1.0f;
+        float Range = 10.0f;
+        float InnerAngleDegrees = 20.0f;
+        float OuterAngleDegrees = 30.0f;
     };
 
     struct XJSceneEntityData//场景 资产的entity

@@ -73,6 +73,9 @@ namespace XJ
         bool Enabled = true;
         glm::vec3 Color{1.0f};
         float Intensity = 1.0f;
+        float Range = 10.0f;
+        float InnerAngleDegrees = 20.0f;
+        float OuterAngleDegrees = 30.0f;
     };
 
     struct XJEditorSetMeshRendererMeshRequest//设置渲染mesh 

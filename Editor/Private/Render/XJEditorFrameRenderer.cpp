@@ -9,7 +9,7 @@
 #include "Render/XJRenderer.h"
 #include "Render/XJRenderTarget.h"
 #include "Render/System/XJBaseMaterialSystem.h"
-#include "Render/System/XJUnlitMaterialSystem.h"
+#include "Render/System/XJSurfaceMaterialSystem.h"
 
 #include <spdlog/spdlog.h>
 
@@ -157,7 +157,7 @@ namespace XJ
             VkClearDepthStencilValue{1.0f, 0});
 
         mRenderTarget->AddMaterialSystem<XJBaseMaterialSystem>();
-        mRenderTarget->AddMaterialSystem<XJUnlitMaterialSystem>();
+        mRenderTarget->AddMaterialSystem<XJSurfaceMaterialSystem>();
 
         return true;
     }

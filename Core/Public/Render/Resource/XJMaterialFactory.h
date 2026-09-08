@@ -4,7 +4,7 @@
 #include "Render/Resource/XJMaterial.h"
 #include "Asset/XJMaterialAsset.h"
 #include <unordered_map>
-#include "ECS/Component/Material/XJUnlitMaterialComponent.h"
+#include "ECS/Component/Material/XJSurfaceMaterialComponent.h"
 #include "Asset/Serialization/XJShaderAssetSerializer.h"
 #include "Render/Material/XJMaterialParameterBlockBuilder.h"
 
@@ -27,11 +27,11 @@ namespace XJ
             void SetAssetRegistry(XJAssetRegistry* registry) { std::scoped_lock lock(mMutex);
                                 mAssetRegistry = registry; }
 
-            std::shared_ptr<XJUnlitMaterial> CreateFromAsset(const XJMaterialAsset& asset,
+            std::shared_ptr<XJSurfaceMaterial> CreateFromAsset(const XJMaterialAsset& asset,
                                     const std::shared_ptr<XJTexture>& defaultTex,
                                     const std::shared_ptr<XJSampler>& defaultSampler);
 
-            std::shared_ptr<XJUnlitMaterial> GetOrCreateFromAsset(const XJMaterialAsset& asset,
+            std::shared_ptr<XJSurfaceMaterial> GetOrCreateFromAsset(const XJMaterialAsset& asset,
                                     const std::shared_ptr<XJTexture>& defaultTex,
                                     const std::shared_ptr<XJSampler>& defaultSampler);
 
@@ -52,11 +52,11 @@ namespace XJ
             ~XJMaterialFactory() = default;
 
 
-            std::shared_ptr<XJUnlitMaterial> CreateDefaultMaterial(
+            std::shared_ptr<XJSurfaceMaterial> CreateDefaultMaterial(
                                             const std::shared_ptr<XJTexture>& defaultTexture,
                                             const std::shared_ptr<XJSampler>& defaultSampler);
 
-            std::shared_ptr<XJUnlitMaterial> GetOrCreateDefaultMaterial(
+            std::shared_ptr<XJSurfaceMaterial> GetOrCreateDefaultMaterial(
                                             const std::shared_ptr<XJTexture>& defaultTexture,
                                             const std::shared_ptr<XJSampler>& defaultSampler);
 
@@ -135,12 +135,12 @@ namespace XJ
             
             // 用 type_index 避免 entt hash 截断和理论碰撞。
             std::unordered_map<std::type_index, std::vector<std::weak_ptr<XJMaterial>>> mMaterials;
-            std::unordered_map<XJAssetHandle, std::weak_ptr<XJUnlitMaterial>> mMaterialAssetCache;
-            std::unordered_map<uint64_t, std::weak_ptr<XJUnlitMaterial>> mDefaultMaterialCache;
+            std::unordered_map<XJAssetHandle, std::weak_ptr<XJSurfaceMaterial>> mMaterialAssetCache;
+            std::unordered_map<uint64_t, std::weak_ptr<XJSurfaceMaterial>> mDefaultMaterialCache;
             // 纹理缓存本来就是 weak_ptr，保留弱引用，但访问必须加锁。
             std::unordered_map<XJAssetHandle, std::weak_ptr<XJTexture>> mTextureCache;
 
-            void ApplyTextureBindings(XJUnlitMaterial& material, const XJMaterialAsset& asset, const std::shared_ptr<XJTexture>& defaultTexture, const std::shared_ptr<XJSampler>& defaultSampler);
+            void ApplyTextureBindings(XJSurfaceMaterial& material, const XJMaterialAsset& asset, const std::shared_ptr<XJTexture>& defaultTexture, const std::shared_ptr<XJSampler>& defaultSampler);
            
         } ;
     

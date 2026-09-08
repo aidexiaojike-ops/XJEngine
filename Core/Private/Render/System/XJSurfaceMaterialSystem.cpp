@@ -1,4 +1,4 @@
-#include "Render/System/XJUnlitMaterialSystem.h"
+#include "Render/System/XJSurfaceMaterialSystem.h"
 
 #include "Graphic/XJVulkanDescriptorSet.h"
 #include "Graphic/XJVulkanFrameBuffer.h"
@@ -6,11 +6,12 @@
 #include "Graphic/XJVulkanRenderPass.h"
 #include "Graphic/VulkanCommon.h"
 #include "Render/Material/XJMaterialRuntimeUploader.h"
-#include "Render/Material/XJUnlitMaterialRenderItemBuilder.h"
+#include "Render/Material/XJSurfaceMaterialRenderItemBuilder.h"
 #include "Render/Resource/XJMaterial.h"
 #include "Render/Resource/XJMaterialFactory.h"
 #include "Render/Resource/XJMesh.h"
 #include "Render/XJRenderTarget.h"
+#include "Render/XJLightSceneUtils.h"
 
 #include <glm/gtc/matrix_inverse.hpp>
 #include "Edit\FileUtil.h"
@@ -22,7 +23,7 @@ namespace XJ
         constexpr uint32_t NUM_MATERIAL_BATCH = 16;
     }
 
-    void XJUnlitMaterialSystem::OnInit(XJVulkanRenderPass *renderPass) 
+    void XJSurfaceMaterialSystem::OnInit(XJVulkanRenderPass *renderPass) 
     {//添加内容查看shader Uniform  UBO
        
         if (!InitializeMaterialRuntime(renderPass, "Resource/Shader/Unlit.xjshader"))
@@ -46,7 +47,7 @@ namespace XJ
         }
        
     }
-    void XJUnlitMaterialSystem::MarkMaterialParamsDirtyForAllFrameSlots(XJMaterialPipelineRuntime& runtime, uint32_t materialIndex)
+    void XJSurfaceMaterialSystem::MarkMaterialParamsDirtyForAllFrameSlots(XJMaterialPipelineRuntime& runtime, uint32_t materialIndex)
     {
         std::vector<bool>& flags = mParamUploadedByRuntime[&runtime];
         const uint32_t flagCount = runtime.LastDescriptorSetCount*RENDERER_NUM_BUFFER;
@@ -65,7 +66,7 @@ namespace XJ
             flags[frameSlot * runtime.LastDescriptorSetCount + materialIndex] = false;
     }
 
-    void XJUnlitMaterialSystem::MarkMaterialResourcesDirtyForAllFrameSlots(XJMaterialPipelineRuntime& runtime, uint32_t materialIndex)
+    void XJSurfaceMaterialSystem::MarkMaterialResourcesDirtyForAllFrameSlots(XJMaterialPipelineRuntime& runtime, uint32_t materialIndex)
     {
         std::vector<bool>& flags = mResourceUploadedByRuntime[&runtime];
         const uint32_t flagCount = runtime.LastDescriptorSetCount * RENDERER_NUM_BUFFER;
@@ -80,7 +81,7 @@ namespace XJ
             flags[frameSlot * runtime.LastDescriptorSetCount + materialIndex] = false;
     }
 
-    bool XJUnlitMaterialSystem::HasPendingMaterialParamUpdates(XJMaterialPipelineRuntime& runtime, uint32_t materialIndex) const//
+    bool XJSurfaceMaterialSystem::HasPendingMaterialParamUpdates(XJMaterialPipelineRuntime& runtime, uint32_t materialIndex) const//
     {
         auto it = mParamUploadedByRuntime.find(&runtime);
         if (it == mParamUploadedByRuntime.end())
@@ -100,7 +101,7 @@ namespace XJ
         return false;
     }
 
-    bool XJUnlitMaterialSystem::HasPendingMaterialResourceUpdates(XJMaterialPipelineRuntime& runtime, uint32_t materialIndex) const
+    bool XJSurfaceMaterialSystem::HasPendingMaterialResourceUpdates(XJMaterialPipelineRuntime& runtime, uint32_t materialIndex) const
     {
         auto it = mResourceUploadedByRuntime.find(&runtime);
         if (it == mResourceUploadedByRuntime.end())
@@ -120,7 +121,7 @@ namespace XJ
         return false;
     }
 
-    void XJUnlitMaterialSystem::OnRender(XJVulkanCommandBuffer cmdBuffer, XJRenderTarget* renderTarget) 
+    void XJSurfaceMaterialSystem::OnRender(XJVulkanCommandBuffer cmdBuffer, XJRenderTarget* renderTarget) 
     {
         XJScene *scene = XJGetScene();
 
@@ -133,7 +134,7 @@ namespace XJ
             return;
         }
 
-        XJUnlitMaterialRenderItemBuilder::Build(*scene, mRenderItems);
+        XJSurfaceMaterialRenderItemBuilder::Build(*scene, mRenderItems);
         if (mRenderItems.empty())
             return;// 视图确实为空
       
@@ -163,6 +164,11 @@ namespace XJ
         //更新设备  模型 窗口 时间
         XJMaterialRuntimeUploadContext uploadContext = BuildUploadContext(renderTarget);
         const uint32_t frameSlot = uploadContext.FrameSlot % RENDERER_NUM_BUFFER;
+
+        // 收集本帧灯光数据（Unlit 无 Light set 会自动跳过上传，Lit 会消费）。
+        XJLightUbo lightUbo{};
+        XJLightSceneUtils::BuildLightUboFromScene(*scene, lightUbo);
+        uploadContext.LightData = &lightUbo;
 
         mForceUpdateRuntimes.clear();
         mUpdatedFrameRuntimes.clear();
@@ -237,7 +243,11 @@ namespace XJ
                 continue;
 
             if (mUpdatedFrameRuntimes.insert(runtime).second)
+            {
                 XJMaterialRuntimeUploader::UpdateFrameUboDescSet(uploadContext, *runtime);
+                if (runtime->ShaderLayout.HasLightSet())
+                    XJMaterialRuntimeUploader::UpdateLightUboDescSet(uploadContext, *runtime);
+            }
 
             const uint32_t materialIndex = material->GetIndex();
             const uint32_t descriptorIndex = frameSlot * runtime->LastDescriptorSetCount + materialIndex;
@@ -345,20 +355,23 @@ namespace XJ
             VkDescriptorSet paramsDescSet = runtime->MaterialParamDescSets[descriptorIndex];
             VkDescriptorSet resourceDescSet = runtime->MaterialResourceDescSets[descriptorIndex];
 
-            VkDescriptorSet descriptorSets[] =
+            // 绑定描述符集：FrameUbo / MaterialParam / MaterialResource，Lit shader 额外附加 Light set。
+            std::vector<VkDescriptorSet> descriptorSets =
             {
                 runtime->FrameUboDescSets[frameSlot],
                 paramsDescSet,
                 resourceDescSet
             };
+            if (runtime->ShaderLayout.HasLightSet())
+                descriptorSets.push_back(runtime->LightDescSets[frameSlot]);
 
             vkCmdBindDescriptorSets(
                 cmdBuffer,
                 VK_PIPELINE_BIND_POINT_GRAPHICS,
                 runtime->PipelineLayout->XJGetPipelineLayout(),
                 0,
-                ARRAY_SIZE(descriptorSets),
-                descriptorSets,
+                static_cast<uint32_t>(descriptorSets.size()),
+                descriptorSets.data(),
                 0,
                 nullptr);
 
@@ -386,7 +399,7 @@ namespace XJ
         
     }
 
-    void XJUnlitMaterialSystem::OnDestroy() 
+    void XJSurfaceMaterialSystem::OnDestroy() 
     {
         mRenderItems.clear();
         mForceUpdateRuntimes.clear();

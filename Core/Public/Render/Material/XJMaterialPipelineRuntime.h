@@ -31,6 +31,11 @@ namespace XJ
         std::shared_ptr<XJVulkanDescriptorPool> FrameDescriptorPool;
         std::array<VkDescriptorSet, RENDERER_NUM_BUFFER> FrameUboDescSets{};
         std::array<std::shared_ptr<XJVulkanBuffer>, RENDERER_NUM_BUFFER> FrameUboBuffers;
+         // 灯光 set
+        std::shared_ptr<XJVulkanDescriptorSetLayout> LightDescSetLayout;
+        std::shared_ptr<XJVulkanDescriptorPool> LightDescriptorPool;
+        std::array<VkDescriptorSet, RENDERER_NUM_BUFFER> LightDescSets{};
+        std::array<std::shared_ptr<XJVulkanBuffer>, RENDERER_NUM_BUFFER> LightUboBuffers;
 
         std::shared_ptr<XJVulkanDescriptorPool> MaterialDescriptorPool;
         uint32_t LastDescriptorSetCount = 0;
@@ -52,7 +57,8 @@ namespace XJ
                 FrameUboDescSets[0] != VK_NULL_HANDLE &&
                 FrameUboBuffers[0] &&
                 ShaderLayout.HasPrimaryFrameUbo() &&
-                ShaderLayout.HasPrimaryMaterialUbo();;
+                ShaderLayout.HasPrimaryMaterialUbo()&& 
+                (!ShaderLayout.HasLightSet() ||(LightDescSetLayout && LightDescSets[0] != VK_NULL_HANDLE && LightUboBuffers[0]));
         }
         //材质是否拥有描述符
         bool HasMaterialDescriptors() const//材质是否拥有描述符
@@ -90,6 +96,14 @@ namespace XJ
             MaterialResourceDescSetLayout.reset();
             MaterialParamDescSetLayout.reset();
             FrameUboDescSetLayout.reset();
+
+            LightDescSetLayout.reset();
+            LightDescriptorPool.reset();
+            for (uint32_t frameSlot = 0; frameSlot < RENDERER_NUM_BUFFER; ++frameSlot)
+            {
+                LightDescSets[frameSlot] = VK_NULL_HANDLE;
+                LightUboBuffers[frameSlot].reset();
+            }
 
             ShaderLayout = XJMaterialShaderRuntimeLayout{};
         }

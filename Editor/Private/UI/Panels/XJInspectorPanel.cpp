@@ -523,13 +523,16 @@ namespace XJ
                 std::snprintf(
                     buffer,
                     sizeof(buffer),
-                    "Light\nType: %d\nEnabled: %d\nColor: %.3f %.3f %.3f\nIntensity: %.3f",
+                    "Light\nType: %d\nEnabled: %d\nColor: %.3f %.3f %.3f\nIntensity: %.3f\nRange: %.3f\nInner Angle: %.3f\nOuter Angle: %.3f",
                     details.Light.Type,
                     details.Light.Enabled ? 1 : 0,
                     details.Light.Color.x,
                     details.Light.Color.y,
                     details.Light.Color.z,
-                    details.Light.Intensity);
+                    details.Light.Intensity,
+                    details.Light.Range,
+                    details.Light.InnerAngleDegrees,
+                    details.Light.OuterAngleDegrees);
                 return buffer;
             }
 
@@ -570,6 +573,9 @@ namespace XJ
                 mState.ComponentClipboard.LightEnabled = details.Light.Enabled;
                 mState.ComponentClipboard.LightColor = details.Light.Color;
                 mState.ComponentClipboard.LightIntensity = details.Light.Intensity;
+                mState.ComponentClipboard.LightRange = details.Light.Range;
+                mState.ComponentClipboard.LightInnerAngleDegrees = details.Light.InnerAngleDegrees;
+                mState.ComponentClipboard.LightOuterAngleDegrees = details.Light.OuterAngleDegrees;
                 break;
             }
 
@@ -638,6 +644,9 @@ namespace XJ
                 mState.SceneRequests.UpdateLight.Enabled = mState.ComponentClipboard.LightEnabled;
                 mState.SceneRequests.UpdateLight.Color = mState.ComponentClipboard.LightColor;
                 mState.SceneRequests.UpdateLight.Intensity = mState.ComponentClipboard.LightIntensity;
+                mState.SceneRequests.UpdateLight.Range = mState.ComponentClipboard.LightRange;
+                mState.SceneRequests.UpdateLight.InnerAngleDegrees = mState.ComponentClipboard.LightInnerAngleDegrees;
+                mState.SceneRequests.UpdateLight.OuterAngleDegrees = mState.ComponentClipboard.LightOuterAngleDegrees;
                 break;
             }
 
@@ -1234,6 +1243,9 @@ namespace XJ
         bool enabled = details.Light.Enabled;
         glm::vec3 color = details.Light.Color;
         float intensity = details.Light.Intensity;
+        float range = details.Light.Range;
+        float innerAngleDegrees = details.Light.InnerAngleDegrees;
+        float outerAngleDegrees = details.Light.OuterAngleDegrees;
 
         static const char* kLightTypeNames[] = { "Directional", "Point", "Spot" };
 
@@ -1257,6 +1269,22 @@ namespace XJ
         changed |= ImGui::ColorEdit3("Color", &color[0]);
         changed |= ImGui::DragFloat("Intensity", &intensity, 0.05f, 0.0f, 1000.0f, "%.2f");
 
+        if (type == 1 || type == 2)
+            changed |= ImGui::DragFloat("Range", &range, 0.1f, 0.001f, 100000.0f, "%.2f");
+
+        if (type == 2)
+        {
+            const bool innerChanged = ImGui::DragFloat("Inner Angle", &innerAngleDegrees, 0.1f, 0.0f, 89.98f, "%.2f deg");
+            if (innerChanged)
+                innerAngleDegrees = std::clamp(innerAngleDegrees, 0.0f, outerAngleDegrees - 0.01f);
+
+            const bool outerChanged = ImGui::DragFloat("Outer Angle", &outerAngleDegrees, 0.1f, 0.01f, 89.99f, "%.2f deg");
+            if (outerChanged)
+                outerAngleDegrees = std::clamp(outerAngleDegrees, innerAngleDegrees + 0.01f, 89.99f);
+
+            changed |= innerChanged || outerChanged;
+        }
+
         if (changed)
         {
             mState.SceneRequests.RequestUpdateLight = true;
@@ -1265,6 +1293,9 @@ namespace XJ
             mState.SceneRequests.UpdateLight.Enabled = enabled;
             mState.SceneRequests.UpdateLight.Color = color;
             mState.SceneRequests.UpdateLight.Intensity = intensity;
+            mState.SceneRequests.UpdateLight.Range = range;
+            mState.SceneRequests.UpdateLight.InnerAngleDegrees = innerAngleDegrees;
+            mState.SceneRequests.UpdateLight.OuterAngleDegrees = outerAngleDegrees;
         }
 
         ImGui::TreePop();

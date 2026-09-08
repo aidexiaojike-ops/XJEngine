@@ -1,7 +1,7 @@
 #include "Render/Resource/XJMaterialFactory.h"
 
 #include "Render/Material/XJMaterialParameterBlockBuilder.h"
-#include "Render/Material/XJUnlitMaterialBindingUtils.h"
+#include "Render/Material/XJSurfaceMaterialBindingUtils.h"
 
 #include "Asset/Serialization/XJShaderAssetSerializer.h"
 #include "Asset/XJAssetRegistry.h"
@@ -124,7 +124,7 @@ namespace XJ
             return true;
         }
 
-        void SetSamplerTextureFallback(XJUnlitMaterial& material,
+        void SetSamplerTextureFallback(XJSurfaceMaterial& material,
             const XJMaterialTextureBinding& binding,
             const std::shared_ptr<XJTexture>& defaultTexture,
             const std::shared_ptr<XJSampler>& defaultSampler)
@@ -136,13 +136,13 @@ namespace XJ
             material.UpdateSamplerTextureViewEnable(binding.SamplerName, false);
         }
 
-        void ApplyFallbackUnlitTextureViews(XJUnlitMaterial& material, const std::shared_ptr<XJTexture>& defaultTexture, const std::shared_ptr<XJSampler>& defaultSampler)
+        void ApplyFallbackSurfaceTextureViews(XJSurfaceMaterial& material, const std::shared_ptr<XJTexture>& defaultTexture, const std::shared_ptr<XJSampler>& defaultSampler)
         {
-            material.SetTextureView(UNLIT_MAT_BASE_COLOR, defaultTexture, defaultSampler);
-            material.UpdateTextureViewEnable(UNLIT_MAT_BASE_COLOR, false);
+            material.SetTextureView(SURFACE_MAT_BASE_COLOR, defaultTexture, defaultSampler);
+            material.UpdateTextureViewEnable(SURFACE_MAT_BASE_COLOR, false);
         }
 
-        void ApplyFallbackSamplerTextureViews(XJUnlitMaterial& material, const std::shared_ptr<XJTexture>& defaultTexture, const std::shared_ptr<XJSampler>& defaultSampler)
+        void ApplyFallbackSamplerTextureViews(XJSurfaceMaterial& material, const std::shared_ptr<XJTexture>& defaultTexture, const std::shared_ptr<XJSampler>& defaultSampler)
         {
             if (!defaultTexture || !defaultSampler)
                 return;
@@ -159,29 +159,29 @@ namespace XJ
             return texture != nullptr && texture != fallback;
         }
 
-        void SetUnlitSlotTextureFallback(
-            XJUnlitMaterial& material,
+        void SetSurfaceSlotTextureFallback(
+            XJSurfaceMaterial& material,
             const XJMaterialTextureBinding& binding,
             const std::shared_ptr<XJTexture>& defaultTexture,
             const std::shared_ptr<XJSampler>& defaultSampler)
         {
-            const uint32_t slot = ResolveUnlitTextureSlot(binding);
+            const uint32_t slot = ResolveSurfaceTextureSlot(binding);
         
             material.SetTextureView(slot, defaultTexture, defaultSampler);
             material.UpdateTextureViewEnable(slot, false);
         }
 
-        void SetTextureFallbackForBinding(XJUnlitMaterial& material,
+        void SetTextureFallbackForBinding(XJSurfaceMaterial& material,
             const XJMaterialTextureBinding& binding,
             const std::shared_ptr<XJTexture>& defaultTexture,
             const std::shared_ptr<XJSampler>& defaultSampler)
         {
             SetSamplerTextureFallback(material, binding, defaultTexture, defaultSampler);
-            SetUnlitSlotTextureFallback(material, binding, defaultTexture, defaultSampler);
+            SetSurfaceSlotTextureFallback(material, binding, defaultTexture, defaultSampler);
         }
 
         void SetTextureForBinding(
-            XJUnlitMaterial& material,
+            XJSurfaceMaterial& material,
             const XJMaterialTextureBinding& binding,
             const std::shared_ptr<XJTexture>& texture,
             const std::shared_ptr<XJSampler>& sampler,
@@ -193,7 +193,7 @@ namespace XJ
                 material.UpdateSamplerTextureViewEnable(binding.SamplerName, enable);
             }
         
-            const uint32_t slot = ResolveUnlitTextureSlot(binding);
+            const uint32_t slot = ResolveSurfaceTextureSlot(binding);
             material.SetTextureView(slot, texture, sampler);
             material.UpdateTextureViewEnable(slot, enable);
         }
@@ -258,7 +258,7 @@ namespace XJ
 
 
 
-    void XJMaterialFactory::ApplyTextureBindings(XJUnlitMaterial& material, const XJMaterialAsset& asset, const std::shared_ptr<XJTexture>& defaultTexture, const std::shared_ptr<XJSampler>& defaultSampler)
+    void XJMaterialFactory::ApplyTextureBindings(XJSurfaceMaterial& material, const XJMaterialAsset& asset, const std::shared_ptr<XJTexture>& defaultTexture, const std::shared_ptr<XJSampler>& defaultSampler)
     {
         if (!defaultTexture || !defaultSampler)
         {
@@ -269,7 +269,7 @@ namespace XJ
         // First make every reflected sampler descriptor valid. Some samplers are not schema-exposed
         // but still declared in shader and must receive a descriptor write.
         ApplyFallbackSamplerTextureViews(material, defaultTexture, defaultSampler);
-        ApplyFallbackUnlitTextureViews(material, defaultTexture, defaultSampler);
+        ApplyFallbackSurfaceTextureViews(material, defaultTexture, defaultSampler);
 
         
         for (const auto& binding : material.GetTextureBindings())
@@ -331,11 +331,11 @@ namespace XJ
     }
 
 
-    std::shared_ptr<XJUnlitMaterial> XJMaterialFactory::CreateFromAsset(const XJMaterialAsset& asset,
+    std::shared_ptr<XJSurfaceMaterial> XJMaterialFactory::CreateFromAsset(const XJMaterialAsset& asset,
                                     const std::shared_ptr<XJTexture>& defaultTex,
                                     const std::shared_ptr<XJSampler>& defaultSampler)
     {
-        auto kMat = CreateMaterial<XJUnlitMaterial>();
+        auto kMat = CreateMaterial<XJSurfaceMaterial>();
 
         const bool runtimeReady = BuildRuntimeMaterialData(asset, *kMat);
 
@@ -365,11 +365,11 @@ namespace XJ
         
     }
 
-    std::shared_ptr<XJUnlitMaterial> XJMaterialFactory::CreateDefaultMaterial(
+    std::shared_ptr<XJSurfaceMaterial> XJMaterialFactory::CreateDefaultMaterial(
                 const std::shared_ptr<XJTexture>& defaultTexture,
                 const std::shared_ptr<XJSampler>& defaultSampler)
     {
-        auto mat = CreateMaterial<XJUnlitMaterial>();
+        auto mat = CreateMaterial<XJSurfaceMaterial>();
 
         XJMaterialAsset asset;
         asset.Version = 2;
@@ -392,7 +392,7 @@ namespace XJ
         return mat;
     }
 
-    std::shared_ptr<XJUnlitMaterial> XJMaterialFactory::GetOrCreateDefaultMaterial(
+    std::shared_ptr<XJSurfaceMaterial> XJMaterialFactory::GetOrCreateDefaultMaterial(
         const std::shared_ptr<XJTexture>& defaultTexture,
         const std::shared_ptr<XJSampler>& defaultSampler)
     {
@@ -425,7 +425,7 @@ namespace XJ
         return material;
     }
 
-    std::shared_ptr<XJUnlitMaterial> XJMaterialFactory::GetOrCreateFromAsset(
+    std::shared_ptr<XJSurfaceMaterial> XJMaterialFactory::GetOrCreateFromAsset(
         const XJMaterialAsset& asset,
         const std::shared_ptr<XJTexture>& defaultTex,
         const std::shared_ptr<XJSampler>& defaultSampler)

@@ -1,11 +1,15 @@
 #include "Render/Material/XJMaterialPipelineRuntimeBuilder.h"
 
 #include "Graphic/XJVulkanDescriptorSet.h"
+#include "Graphic/XJVulkanBuffer.h"
 #include "Graphic/XJVulkanPipeline.h"
 #include "Graphic/XJVulkanRenderPass.h"
+#include "Graphic/XJVulkanVertex.h"
 #include "Render/Material/XJMaterialShaderRuntimeLayoutBuilder.h"
 #include "Render/Shader/XJShaderAsset.h"
-#include "ECS/Component/Material/XJUnlitMaterialComponent.h"
+#include "Render/XJLightUbo.h"
+#include "Render/XJFrameUbo.h"
+#include "Render/Resource/XJMaterial.h"
 
 namespace XJ
 {
@@ -68,8 +72,28 @@ namespace XJ
             spdlog::error("Material pipeline runtime build failed: no material resource descriptor set.");
             return false;
         }
-
         XJVulkanDevice* device = context.Device;
+
+        const bool hasLightSet = runtime.ShaderLayout.HasLightSet();
+
+        if (runtime.ShaderLayout.PrimaryFrameUboSize != sizeof(XJFrameUbo))
+        {
+            spdlog::error(
+                "Material pipeline runtime build failed: FrameUbo size mismatch, reflected={}, C++={}.",
+                runtime.ShaderLayout.PrimaryFrameUboSize,
+                sizeof(XJFrameUbo));
+            return false;
+        }
+
+        if (hasLightSet && runtime.ShaderLayout.PrimaryLightUboSize != sizeof(XJLightUbo))
+        {
+            spdlog::error(
+                "Material pipeline runtime build failed: LightUbo size mismatch, reflected={}, C++={}.",
+                runtime.ShaderLayout.PrimaryLightUboSize,
+                sizeof(XJLightUbo));
+            return false;
+        }
+
         //frame ubo
         runtime.FrameUboDescSetLayout =
             std::make_shared<XJVulkanDescriptorSetLayout>(
@@ -85,6 +109,51 @@ namespace XJ
             std::make_shared<XJVulkanDescriptorSetLayout>(
                 device,
                 runtime.ShaderLayout.MaterialResourceBindings);
+
+        // 灯光 set（可选，仅 Lit shader 拥有）
+        if (hasLightSet)
+        {
+            runtime.LightDescSetLayout =
+                std::make_shared<XJVulkanDescriptorSetLayout>(
+                    device,
+                    runtime.ShaderLayout.LightBindings);
+
+            std::vector<VkDescriptorPoolSize> lightPoolSizes =
+            {
+                { .type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, .descriptorCount = RENDERER_NUM_BUFFER },
+            };
+            runtime.LightDescriptorPool =
+                std::make_shared<XJVulkanDescriptorPool>(device, RENDERER_NUM_BUFFER, lightPoolSizes);
+
+            auto lightDescSets = runtime.LightDescriptorPool->AllocateDescriptorSet(
+                runtime.LightDescSetLayout.get(), RENDERER_NUM_BUFFER);
+            if (lightDescSets.size() != RENDERER_NUM_BUFFER)
+            {
+                spdlog::error("Material pipeline runtime build failed: light descriptor set allocation failed, count={}.", lightDescSets.size());
+                return false;
+            }
+
+            std::array<VkDescriptorBufferInfo, RENDERER_NUM_BUFFER> lightBufferInfos{};
+            std::vector<VkWriteDescriptorSet> lightWrites;
+            lightWrites.reserve(RENDERER_NUM_BUFFER);
+
+            for (uint32_t slot = 0; slot < RENDERER_NUM_BUFFER; ++slot)
+            {
+                runtime.LightDescSets[slot] = lightDescSets[slot];
+                runtime.LightUboBuffers[slot] = std::make_shared<XJVulkanBuffer>(
+                    device, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, sizeof(XJLightUbo), nullptr, true);
+
+                lightBufferInfos[slot] = DescriptorSetWriter::BuildBufferInfo(
+                    runtime.LightUboBuffers[slot]->XJGetBuffer(), 0, sizeof(XJLightUbo));
+
+                lightWrites.push_back(DescriptorSetWriter::WriteBuffer(
+                    runtime.LightDescSets[slot],
+                    runtime.ShaderLayout.PrimaryLightUboBinding,
+                    VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+                    &lightBufferInfos[slot]));
+            }
+            DescriptorSetWriter::UpdateDescriptorSets(device->XJGetDevice(), lightWrites);
+        }
         //描述符集
         std::vector<VkDescriptorPoolSize> framePoolSizes =
         {
@@ -129,7 +198,7 @@ namespace XJ
                 std::make_shared<XJ::XJVulkanBuffer>(
                     device,
                     VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
-                    sizeof(FrameUbo),
+                    sizeof(XJFrameUbo),
                     nullptr,
                     true);
 
@@ -143,7 +212,7 @@ namespace XJ
                 DescriptorSetWriter::BuildBufferInfo(
                     runtime.FrameUboBuffers[frameSlot]->XJGetBuffer(),
                     0,
-                    sizeof(FrameUbo));
+                    sizeof(XJFrameUbo));
 
             // Frame descriptor sets bind per-frame UBO buffers once at runtime creation.
             frameDescriptorWrites.push_back(
@@ -162,16 +231,22 @@ namespace XJ
             .offset = 0,
             .size = sizeof(ModelPC)
         };
-        //shader
+        //shader：按实际 set 数量动态拼装 pipeline layout（Lit 额外包含 Light set）。
+        std::vector<VkDescriptorSetLayout> descriptorSetLayouts =
+        {
+            runtime.FrameUboDescSetLayout->XJGetDescriptorSet(),
+            runtime.MaterialParamDescSetLayout->XJGetDescriptorSet(),
+            runtime.MaterialResourceDescSetLayout->XJGetDescriptorSet()
+        };
+        if (hasLightSet)
+            descriptorSetLayouts.push_back(runtime.LightDescSetLayout->XJGetDescriptorSet());
+
         ShaderLayout shaderLayout =
         {
-            .descriptorSetLayouts = {
-                runtime.FrameUboDescSetLayout->XJGetDescriptorSet(),
-                runtime.MaterialParamDescSetLayout->XJGetDescriptorSet(),
-                runtime.MaterialResourceDescSetLayout->XJGetDescriptorSet()
-            },
+            .descriptorSetLayouts = descriptorSetLayouts,
             .pushConstantRanges = { modelPC }
         };
+
         //资源
         runtime.PipelineLayout =
             std::make_shared<XJVulkanPipelineLayout>(

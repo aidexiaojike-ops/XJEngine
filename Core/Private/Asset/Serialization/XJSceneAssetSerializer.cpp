@@ -1,6 +1,6 @@
 #include "Asset/Serialization/XJSceneAssetSerializer.h"
 
-#include "ECS/Component/Material/XJUnlitMaterialComponent.h"
+#include "ECS/Component/Material/XJSurfaceMaterialComponent.h"
 #include "ECS/Component/XJCameraComponent.h"
 #include "ECS/Component/XJSceneAssetComponents.h"
 #include "ECS/Component/XJTransformComponent.h"
@@ -87,7 +87,10 @@ namespace XJ
             {"enabled", l.Enabled},
             {"lightType", l.Type},
             {"color", SerializeVec3(l.Color)},
-            {"intensity", l.Intensity}
+            {"intensity", l.Intensity},
+            {"range", l.Range},
+            {"innerAngleDegrees", l.InnerAngleDegrees},
+            {"outerAngleDegrees", l.OuterAngleDegrees}
         };
     }
 
@@ -182,6 +185,9 @@ namespace XJ
         if (j.is_object() && j.contains("color"))
             l.Color = DeserializeVec3(j["color"], l.Color);
         l.Intensity = JsonReadFloatOr(j, "intensity", l.Intensity);
+        l.Range = JsonReadFloatOr(j, "range", l.Range);
+        l.InnerAngleDegrees = JsonReadFloatOr(j, "innerAngleDegrees", l.InnerAngleDegrees);
+        l.OuterAngleDegrees = JsonReadFloatOr(j, "outerAngleDegrees", l.OuterAngleDegrees);
         return l;
     }
 
@@ -374,6 +380,9 @@ namespace XJ
             data.Light.Type = static_cast<int>(l.XJGetLightType());
             data.Light.Color = l.XJGetColor();
             data.Light.Intensity = l.XJGetIntensity();
+            data.Light.Range = l.XJGetRange();
+            data.Light.InnerAngleDegrees = l.XJGetInnerAngleDegrees();
+            data.Light.OuterAngleDegrees = l.XJGetOuterAngleDegrees();
         }
 
         return data;

@@ -3,6 +3,7 @@
 
 #include "Graphic/VulkanCommon.h"
 #include "Render/Material/XJMaterialPipelineRuntime.h"
+#include "Render/XJLightUbo.h"
 
 #include <glm/glm.hpp>
 
@@ -22,6 +23,9 @@ namespace XJ
         uint32_t FrameId = 0;
         uint32_t FrameSlot = 0;
         float Time = 0.0f;
+        glm::vec3 CameraPosition{0.0f};
+
+        const XJLightUbo* LightData = nullptr;  // 本帧要上传的灯光数据
     };
 
     class XJMaterialRuntimeUploader
@@ -43,6 +47,12 @@ namespace XJ
                 XJMaterialPipelineRuntime& runtime,
                 VkDescriptorSet descSet,
                 XJMaterial* material);
+
+            static bool UpdateLightUboDescSet(
+                const XJMaterialRuntimeUploadContext& context,
+                XJMaterialPipelineRuntime& runtime);
+            
+            
     };
 }
 
