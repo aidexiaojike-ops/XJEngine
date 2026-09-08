@@ -138,6 +138,7 @@ Swapchain
 - **Entity Management**: Lightweight entity handles with automatic lifetime tracking and scene lifetime-token validation (`XJEntity::GetSceneChecked`) to guard against dangling scene access
 - **Reserved UUID Range**: Engine/editor-owned UUIDs live in a reserved range (`XJReservedUUID`), and user UUID generation skips it to avoid collisions
 - **Component Storage**: Dense array storage for optimal cache performance
+- **Light Component**: `XJLightComponent` supports Directional/Point/Spot lights with enable toggle, color, and intensity
 - **System Scheduling**: Flexible system registration and execution order
 - **System Scheduler**: `XJSystemScheduler` manages system lifecycle (Start/Stop), drives `OnUpdate` + fixed-step `OnFixedUpdate` with configurable tick rate and max delta-time clamping
 - **Input Singleton**: `XJInput` polls GLFW every frame via `Update()`, exposing a read-only `XJInputState` snapshot with keyboard/mouse held/pressed/released queries, mouse position/delta/scroll, and WASD axis synthesis (`GetAxis(Horizontal|Vertical)`)
@@ -185,7 +186,7 @@ Swapchain
 
 #### **Editor UI System**
 - **Editor Runtime**: `XJEditorRuntime` (pimpl) owns the full editor lifecycle — project config (`XJEditorProjectConfig`), workspace, viewport system, frame renderer, input bindings, and UI host — driven by `XJEditorApplication` in `Src/`
-- **Editor Play Mode**: `XJEditorPlayState` state machine (`Edit`/`Playing`/`Paused`) for in-editor game simulation
+- **Editor Play Mode**: `XJEditorPlayController` manages game simulation lifecycle (Start/Pause/Resume/Stop), clones the editor scene into a runtime scene, and wires `XJSystemScheduler` with registered system factories; `XJEditorPlayState` (`Edit`/`Playing`/`Paused`) tracks the current mode; `XJEditorWorkspaceMode` (`Edit`/`PlayReadOnly`/`PlayRuntime`) controls workspace editing permissions
 - **Editor Workspace**: `XJEditorWorkspace` manages the in-engine project workspace (resource root, asset registry, scene wiring)
 - **Frame Renderer**: `XJEditorFrameRenderer` + `XJEditorRenderResources` own ImGui/Vulkan frame rendering and shared editor render resources; `XJEditorUIHost` hosts the UI layer
 - **Input Bindings**: `XJEditorInputBindings` centralizes editor input mapping (camera, viewport, actions)
@@ -317,6 +318,7 @@ XJEngine/
 │   │   │   ├── Component/          # 具体组件
 │   │   │   │   ├── XJCameraComponent.h
 │   │   │   │   ├── XJTransformComponent.h
+│   │   │   │   ├── XJLightComponent.h       # 灯光组件（Directional/Point/Spot）
 │   │   │   │   └── Material/       # 材质组件
 │   │   │   │       ├── XJBaseMaterialComponent.h
 │   │   │   │       └── XJUnlitMaterialComponent.h

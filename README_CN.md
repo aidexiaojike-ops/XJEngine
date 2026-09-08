@@ -103,7 +103,7 @@ File -> Importer -> Asset (CPU) -> Factory -> Resource (GPU) -> Renderer
 ### 编辑器架构（MVVM）
 
 - **编辑器运行时**：`XJEditorRuntime`（pimpl 封装）统一管理编辑器生命周期——项目配置（`XJEditorProjectConfig`）、工作区、视口系统、帧渲染、输入绑定与 UI Host，由 `Src/XJEditorApplication` 驱动
-- **编辑器 Play Mode**：`XJEditorPlayState` 状态机（`Edit`/`Playing`/`Paused`）支持编辑器内游戏模拟
+- **编辑器 Play Mode**：`XJEditorPlayController` 管理游戏模拟生命周期（Start/Pause/Resume/Stop），克隆编辑器场景为运行时场景并接入 `XJSystemScheduler`；`XJEditorPlayState`（`Edit`/`Playing`/`Paused`）跟踪当前模式；`XJEditorWorkspaceMode`（`Edit`/`PlayReadOnly`/`PlayRuntime`）控制工作区编辑权限
 - **工作区**：`XJEditorWorkspace` 管理引擎内项目工作区（资源根目录、资产注册表、场景接线），支持 `SelectEntityFromViewportRay` 射线选择实体
 - **帧渲染**：`XJEditorFrameRenderer` + `XJEditorRenderResources` 负责 ImGui/Vulkan 帧渲染与共享编辑器渲染资源；`XJEditorUIHost` 承载 UI 层
 - **输入绑定**：`XJEditorInputBindings` 集中编辑器输入映射（摄像机、视口、操作）
@@ -122,7 +122,7 @@ File -> Importer -> Asset (CPU) -> Factory -> Resource (GPU) -> Renderer
 - **材质系统**：`XJBaseMaterialSystem`、`XJUnlitMaterialSystem`、`XJMaterialRenderSystemBase`、`XJMaterialParameterBlock`/`Builder`/`Writer`
 - **摄像机系统**：`XJCameraController`（Core/Camera）、`XJCameraMath`（数学工具）、`XJCameraSystem`（ECS 适配）
 - **资产系统**：`XJModelImporter`、`XJTextureImporter`、`XJAssetRegistry`、`XJAssetRegistryScanner`、`XJAssetBootstrap`、`XJSceneRuntimeUtil`、`XJMeshAssetLoader`、`XJJsonIO`
-- **ECS 基础**：`XJEntity` 通过场景生命周期 token 校验避免悬垂访问；`XJReservedUUID` 定义引擎/编辑器保留 UUID 区间，用户 UUID 生成自动避开；`XJSystemScheduler` 管理系统生命周期（Start/Stop），驱动 `OnUpdate` + 固定步进 `OnFixedUpdate`；`XJInput` 输入单例每帧轮询 GLFW，提供键盘/鼠标按住/按下/释放查询、鼠标位置/增量/滚轮、WASD 轴向合成
+- **ECS 基础**：`XJEntity` 通过场景生命周期 token 校验避免悬垂访问；`XJReservedUUID` 定义引擎/编辑器保留 UUID 区间，用户 UUID 生成自动避开；`XJSystemScheduler` 管理系统生命周期（Start/Stop），驱动 `OnUpdate` + 固定步进 `OnFixedUpdate`；`XJInput` 输入单例每帧轮询 GLFW，提供键盘/鼠标按住/按下/释放查询、鼠标位置/增量/滚轮、WASD 轴向合成；`XJLightComponent` 支持 Directional/Point/Spot 灯光（开关、颜色、强度）
 - **编辑器系统**：`XJEditorSceneController`、`XJEditorCameraManager`、`XJEditorSceneService`、`XJUIContext`、`XJEditorRenderer`、`XJEditorUILayer`、编辑器面板
 - **Vulkan 平台层**：`XJSwapchainAcquireResult`/`XJSwapchainPresentResult` 区分成功、重建和设备丢失状态；`XJVulkanInstance` 自动选择最高支持到 Vulkan 1.3 的 API 版本；`XJVulkanSurface`、`XJGlfwWindow`、`XJVulkanTextureSampler` 增加句柄校验、生命周期顺序和 RAII 释放
 
