@@ -25,6 +25,7 @@ XJEngine is a lightweight modern game engine built with Vulkan and ECS architect
 | **Modular Material System** | Extensible material pipeline with textures, samplers and uniform buffers |
 | **Shader Schema System** | JSON-defined shader parameters, schema validation, binding resolution, descriptor layout builder, SPIR-V reflection, material asset serialization |
 | **Surface Material System** | Schema-driven surface pipeline with shared Frame/Light UBOs, material parameter blocks, texture bindings, and dynamic descriptor pool expansion |
+| **Scene Lighting** | Directional, point, and spot lights with scene persistence, per-frame GPU upload, range, intensity, color, and spot cone controls |
 | **Runtime Material Generation** | Programmatic material creation with random colors, textures, and UV transforms at runtime |
 | **Procedural Textures** | Generate textures from pixel data (single color or multi-pixel arrays) without external files |
 | **Dynamic Instancing** | Support for large-scale entity rendering with dynamic uniform buffers |
@@ -151,7 +152,7 @@ Swapchain
 - **Base Material System**: Dynamic uniform buffer instancing with global/per-instance UBOs
 - **Material Render System**: `XJMaterialRenderSystemBase` — base class for material-driven render systems, `XJMaterialRenderItem` — render item abstraction
 - **Surface Material System**: `XJSurfaceMaterialSystem` renders `XJSurfaceMaterialComponent` items through schema-driven pipeline runtimes, tracking parameter/resource uploads independently for each frame slot
-- **Shared Frame/Light Data**: `XJFrameUbo` provides projection, view, resolution, frame/time, and camera position; `XJLightUbo` provides one directional light plus up to eight point and eight spot lights using std140-compatible layouts
+- **Shared Frame/Light Data**: `XJFrameUbo` provides projection, view, resolution, frame/time, and camera position; `XJLightUbo` provides one directional light plus up to eight point and eight spot lights using std140-compatible layouts and per-frame descriptor sets
 - **Scene Light Collection**: `XJLightSceneUtils` gathers enabled `XJLightComponent` instances and transforms into the per-frame light UBO
 - **DescriptorSetWriter**: Utility class providing static helpers for descriptor buffer/image info creation and descriptor set writes
 - **Dynamic Descriptor Pool**: Automatic expansion of material descriptor sets on demand (up to 2048)
@@ -159,10 +160,11 @@ Swapchain
 - **Push Constants**: `ModelPC` struct for per-draw model and normal matrix updates
 - **Shader Pipeline**: SPIR-V shader compilation and pipeline state management
 - **Shader Schema System**: JSON-defined parameters (Unlit.schema), schema validation via `XJShaderSchemaValidator`, binding resolution via `XJShaderSchemaBindingResolver`, descriptor layout via `XJShaderDescriptorLayoutBuilder`
-- **Shader Runtime Layout**: `XJMaterialShaderRuntimeLayout`/`Builder`, `XJMaterialPipelineRuntime`/`Builder`/`Cache`/`Descriptor`, `XJMaterialRuntimeUploader`, `XJSurfaceMaterialBindingUtils` — runtime shader-material binding, descriptor set wiring, pipeline caching, and GPU upload
+- **Shader Runtime Layout**: `XJMaterialShaderRuntimeLayout`/`Builder`, `XJMaterialPipelineRuntime`/`Builder`/`Cache`/`Descriptor`, `XJMaterialRuntimeUploader`, `XJSurfaceMaterialBindingUtils` — runtime shader-material binding, optional light descriptor set (`set=3`), pipeline caching, and GPU upload
 - **Material Serializers**: `XJMaterialAssetSerializer`, `XJShaderAssetSerializer`, `XJShaderSchemaSerializer`
 - **Material Factory Cache**: `XJMaterialFactory` caches materials by asset/default key (weak refs), reuses loaded textures, and provides `ClearExpiredMaterials`/`ClearCaches` for scene lifetime management
 - **Inspector Material Editing**: Parameter editing with `XJEditorMaterialParameterType` (Float, Color3, Texture2D, etc.)
+- **Inspector Light Editing**: Directional/Point/Spot type, enabled state, color, intensity, range, and spot inner/outer cone angles are editable through the scene request/ViewModel flow
 
 #### **Asset System**
 - **Two-Layer Architecture**: Assets (CPU-side pure data) separate from Render Resources (GPU-side Vulkan objects)
@@ -170,7 +172,7 @@ Swapchain
 - **Asset Metadata**: `.xjmeta` sidecar files (`XJAssetMetadata`) store per-asset handle/type/importer info; `XJAssetMetadataSerializer` reads/writes them; `XJPersistentAssetHandleGenerator` ensures unique handle generation
 - **Asset Registry Scanner**: `XJAssetRegistryScanner` auto-scans Resource directories by extension to register assets
 - **Atomic JSON IO**: `XJJsonIO` centralizes JSON read helpers (float/vec2/vec3/vec4/uint64) and atomic file writes (temp file + rename) across all asset serializers
-- **Scene Assets**: Disk-side scene data (`XJSceneAsset`) with entities, transforms, meshes, cameras, lights
+- **Scene Assets**: Disk-side scene data (`XJSceneAsset`) with entities, transforms, meshes, cameras, and lights; light serialization includes type, color, intensity, range, and spot inner/outer cone angles
 - **Scene Switching**: Create/destroy entities via ECS lifecycle, support for multiple `.xjscene` files
 - **Scene Instantiator**: `XJSceneInstantiator` converts scene assets into live ECS entities with hierarchy
 - **Scene Serializer**: `XJSceneAssetSerializer` reads/writes `.xjscene` files via nlohmann/json
@@ -338,6 +340,9 @@ XJEngine/
 │   │       ├── XJSampler.h
 │   │       ├── XJRenderTarget.h
 │   │       ├── XJRenderer.h
+│   │       ├── XJFrameUbo.h        # Shared per-frame camera/render data
+│   │       ├── XJLightUbo.h        # std140 directional/point/spot light data
+│   │       ├── XJLightSceneUtils.h # Scene light collection and UBO packing
 │   │       ├── System/      # 渲染系统（材质系统）
 │   │       │   ├── XJMaterialSystem.h
 │   │       │   ├── XJBaseMaterialSystem.h

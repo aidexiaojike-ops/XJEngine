@@ -25,6 +25,7 @@ XJEngine 是一个基于 Vulkan 和 ECS 架构的轻量级现代游戏引擎，�
 | **模块化材质系统** | 可扩展的纹理、采样器、UBO 管线 |
 | **Shader Schema 系统** | JSON 定义着色器参数，Schema 验证、绑定解析、描述符布局构建、SPIR-V 反射、材质资产序列化 |
 | **Surface 材质系统** | Schema 驱动的 Surface 管线，共享 Frame/Light UBO、材质参数块、纹理绑定与动态描述符池扩容 |
+| **场景灯光** | 方向光、点光和聚光灯支持场景持久化与逐帧 GPU 上传，并提供范围、强度、颜色和聚光锥角控制 |
 | **运行时材质生成** | 支持程序化创建材质、随机颜色、纹理和 UV 变换 |
 | **程序化纹理** | 从像素数据直接生成纹理，无需外部文件 |
 | **摄像机系统** | 独立 Camera 模块，轨道/自由模式，编辑器摄像机管理器，ECS 摄像机系统 |
@@ -83,7 +84,7 @@ File -> Importer -> Asset (CPU) -> Factory -> Resource (GPU) -> Renderer
 - **Asset 层**：纯 CPU 数据，例如顶点、像素、材质参数、场景数据
 - **Resource 层**：GPU 资源，例如 `VkBuffer`、`VkImage`
 - **资产扫描**：`XJAssetRegistryScanner` 自动扫描 Resource 目录，按扩展名注册资产
-- **场景系统**：`.xjscene` -> `XJSceneAssetSerializer` -> `XJSceneInstantiator` -> ECS 实体
+- **场景系统**：`.xjscene` -> `XJSceneAssetSerializer` -> `XJSceneInstantiator` -> ECS 实体；灯光序列化包含类型、颜色、强度、范围和聚光灯内外锥角
 - **场景切换**：支持多个 `.xjscene` 文件，通过 ECS 生命周期创建/销毁实体
 - **注册表**：`XJAssetRegistry` 用于持久化资产句柄与元数据；运行时生成的句柄使用高位命名空间，与稳定的注册表句柄隔离，避免冲突
 - **资产元数据**：`.xjmeta` 旁置文件（`XJAssetMetadata`）存储每个资产的句柄/类型/导入器信息；`XJAssetMetadataSerializer` 负责读写；`XJPersistentAssetHandleGenerator` 确保唯一句柄生成
@@ -96,12 +97,13 @@ File -> Importer -> Asset (CPU) -> Factory -> Resource (GPU) -> Renderer
 
 - **Shader Schema 系统**：JSON 定义的着色器参数，`XJShaderSchemaValidator` 验证 + `XJShaderSchemaBindingResolver` 绑定解析 + `XJShaderDescriptorLayoutBuilder` 描述符布局构建
 - **Surface 材质系统**：`XJSurfaceMaterialSystem` 渲染 `XJSurfaceMaterialComponent`，按 frame slot 分别跟踪材质参数和资源上传状态
-- **共享 Frame/Light 数据**：`XJFrameUbo` 提供投影/视图矩阵、分辨率、帧号/时间与摄像机位置；`XJLightUbo` 使用 std140 布局支持 1 个方向光、最多 8 个点光和 8 个聚光灯
+- **共享 Frame/Light 数据**：`XJFrameUbo` 提供投影/视图矩阵、分辨率、帧号/时间与摄像机位置；`XJLightUbo` 使用 std140 布局和逐帧描述符集支持 1 个方向光、最多 8 个点光和 8 个聚光灯
 - **场景灯光收集**：`XJLightSceneUtils` 从场景中的 `XJLightComponent` 与 Transform 构建每帧灯光 UBO
-- **Shader 运行时布局**：`XJMaterialShaderRuntimeLayout`/`Builder`、`XJMaterialPipelineRuntime`/`Builder`/`Cache`/`Descriptor`、`XJMaterialRuntimeUploader`、`XJSurfaceMaterialBindingUtils` — 运行时 Shader-材质绑定、管线缓存、GPU 上传
+- **Shader 运行时布局**：`XJMaterialShaderRuntimeLayout`/`Builder`、`XJMaterialPipelineRuntime`/`Builder`/`Cache`/`Descriptor`、`XJMaterialRuntimeUploader`、`XJSurfaceMaterialBindingUtils` — 运行时 Shader-材质绑定、可选灯光描述符集（`set=3`）、管线缓存与 GPU 上传
 - **材质序列化**：`XJMaterialAssetSerializer`、`XJShaderAssetSerializer`、`XJShaderSchemaSerializer`
 - **材质工厂缓存**：`XJMaterialFactory` 按资产/默认材质键缓存材质（弱引用）、复用已加载纹理，并提供 `ClearExpiredMaterials`/`ClearCaches` 配合场景生命周期管理
 - **Inspector 材质编辑**：通过 `XJEditorMaterialParameterType` 编辑 Float、Color3、Texture2D 等参数
+- **Inspector 灯光编辑**：通过场景请求/ViewModel 数据流编辑 Directional/Point/Spot 类型、开关、颜色、强度、范围和聚光灯内外锥角
 
 ### 编辑器架构（MVVM）
 
@@ -170,6 +172,9 @@ XJEngine/
 │   │   ├── Metadata/        # 资产元数据（.xjmeta、句柄生成器）
 │   │   └── Register/        # 资产引导注册/扫描
 │   ├── Public/Render/       # 渲染接口
+│   │   ├── XJFrameUbo.h     # 共享逐帧摄像机/渲染数据
+│   │   ├── XJLightUbo.h     # std140 方向光/点光/聚光灯数据
+│   │   ├── XJLightSceneUtils.h # 场景灯光收集与 UBO 打包
 │   │   ├── System/          # 渲染系统（材质系统 + RenderSystemBase）
 │   │   ├── Material/        # 材质参数与管线运行时（Block/Layout/Builder/Writer/PipelineRuntime）
 │   │   └── Shader/          # 着色器资产（Schema/Parameter/Asset/Validator/BindingResolver/Reflection）
