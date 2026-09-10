@@ -55,11 +55,25 @@
     "source": "Mesh/Plane.glb",
     "type": 1
   },
+  "7727386359093277130": {
+    "handle": 7727386359093277130,
+    "imported": "",
+    "name": "LitTest",
+    "source": "Material/LitTest.xjmat",
+    "type": 3
+  },
   "7949313787214589732": {
     "handle": 7949313787214589732,
     "imported": "",
     "name": "Unlit",
     "source": "Shader/Unlit.xjshader",
+    "type": 5
+  },
+  "8094561237004005815": {
+    "handle": 8094561237004005815,
+    "imported": "",
+    "name": "Lit",
+    "source": "Shader/Lit.xjshader",
     "type": 5
   },
   "8557768953746195919": {

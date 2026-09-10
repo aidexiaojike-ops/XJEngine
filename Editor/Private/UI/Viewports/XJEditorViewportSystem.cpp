@@ -8,6 +8,7 @@
 #include "Render/XJEditorRenderResources.h"
 #include "Render/System/XJBaseMaterialSystem.h"
 #include "Render/System/XJSurfaceMaterialSystem.h"
+#include "Render/System/XJLightGizmoMaterialSystem.h"
 #include "UI/Viewports/XJGamePreview.h"
 #include "UI/Viewports/XJScenePreview.h"
 
@@ -81,6 +82,7 @@ namespace XJ
 
         mImpl->ScenePreview->AddMaterialSystem<XJBaseMaterialSystem>();
         mImpl->ScenePreview->AddMaterialSystem<XJSurfaceMaterialSystem>();
+        mImpl->ScenePreview->AddMaterialSystem<XJLightGizmoMaterialSystem>();
 
         mImpl->GamePreview =
             std::make_unique<XJGamePreview>();
@@ -179,6 +181,15 @@ namespace XJ
     {
         if (mImpl->Initialized)
             mImpl->CameraManager.OnMouseScroll(yOffset);
+    }
+
+    void XJEditorViewportSystem::SetPreviewOrbitPivotFromRay(
+        const glm::vec3& rayOrigin,
+        const glm::vec3& rayDirection,
+        float maxDistance)
+    {
+        if (mImpl->Initialized)
+            mImpl->CameraManager.SetPreviewOrbitPivotFromRay(rayOrigin, rayDirection, maxDistance);
     }
     //Getter 与 Shutdown
     XJScenePreview* XJEditorViewportSystem::GetScenePreview() const

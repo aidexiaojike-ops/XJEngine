@@ -11,9 +11,20 @@
 #include <string>
 #include <vector>
 #include <memory>
+#include <glm/glm.hpp>
 
 namespace XJ
 {
+    struct XJEditorSceneRaycastHit
+    {
+        XJEditorEntityId Entity = XJ_INVALID_EDITOR_ENTITY_ID;
+        float Distance = 0.0f;
+        glm::vec3 Position{0.0f};
+        glm::vec3 Normal{0.0f};
+
+        bool IsValid() const { return Entity != XJ_INVALID_EDITOR_ENTITY_ID; }
+    };
+
     class XJScene;
     class XJEntity;
     class XJAssetRegistry;
@@ -29,6 +40,12 @@ namespace XJ
             static XJEntity* FindEntityById(XJScene& scene, XJEditorEntityId id);//ID找到ecs
             static std::vector<XJEditorEntityId> FindEntitiesUsingAsset(XJScene& scene, XJAssetHandle assetHandle);//删除前做引用检查
             static XJAssetHandle GetMeshAssetFromEntity(XJScene& scene, XJEditorEntityId entityId);
+            static bool RaycastClosestSceneEntity(
+                XJScene& scene,
+                const glm::vec3& rayOrigin,
+                const glm::vec3& rayDirection,
+                float maxDistance,
+                XJEditorSceneRaycastHit& outHit);
             static XJEditorEntityId FindClosestMeshEntityFromRay(
                 XJScene& scene,
                 const glm::vec3& rayOrigin,

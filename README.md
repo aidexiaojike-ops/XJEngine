@@ -26,6 +26,7 @@ XJEngine is a lightweight modern game engine built with Vulkan and ECS architect
 | **Shader Schema System** | JSON-defined shader parameters, schema validation, binding resolution, descriptor layout builder, SPIR-V reflection, material asset serialization |
 | **Surface Material System** | Schema-driven surface pipeline with shared Frame/Light UBOs, material parameter blocks, texture bindings, and dynamic descriptor pool expansion |
 | **Scene Lighting** | Directional, point, and spot lights with scene persistence, per-frame GPU upload, range, intensity, color, and spot cone controls |
+| **Lit Shader** | Schema-driven forward lighting with base color/albedo texture, specular strength, shininess, and directional/point/spot light evaluation |
 | **Runtime Material Generation** | Programmatic material creation with random colors, textures, and UV transforms at runtime |
 | **Procedural Textures** | Generate textures from pixel data (single color or multi-pixel arrays) without external files |
 | **Dynamic Instancing** | Support for large-scale entity rendering with dynamic uniform buffers |
@@ -159,7 +160,9 @@ Swapchain
 - **Texture Management**: Per-material texture views with sampler state, UV transform support
 - **Push Constants**: `ModelPC` struct for per-draw model and normal matrix updates
 - **Shader Pipeline**: SPIR-V shader compilation and pipeline state management
-- **Shader Schema System**: JSON-defined parameters (Unlit.schema), schema validation via `XJShaderSchemaValidator`, binding resolution via `XJShaderSchemaBindingResolver`, descriptor layout via `XJShaderDescriptorLayoutBuilder`
+- **Shader Schema System**: JSON-defined parameters (`Unlit.schema`, `Lit.schema`), schema validation via `XJShaderSchemaValidator`, binding resolution via `XJShaderSchemaBindingResolver`, descriptor layout via `XJShaderDescriptorLayoutBuilder`
+- **Lit Material Parameters**: `Lit.schema` exposes base color, albedo texture, specular strength, and shininess while reusing the shared SurfaceMaterial runtime
+- **Cross-Stage Reflection**: Shader stage flags are bitmasks, allowing descriptor bindings reflected from vertex and fragment stages to be merged into one Vulkan layout
 - **Shader Runtime Layout**: `XJMaterialShaderRuntimeLayout`/`Builder`, `XJMaterialPipelineRuntime`/`Builder`/`Cache`/`Descriptor`, `XJMaterialRuntimeUploader`, `XJSurfaceMaterialBindingUtils` — runtime shader-material binding, optional light descriptor set (`set=3`), pipeline caching, and GPU upload
 - **Material Serializers**: `XJMaterialAssetSerializer`, `XJShaderAssetSerializer`, `XJShaderSchemaSerializer`
 - **Material Factory Cache**: `XJMaterialFactory` caches materials by asset/default key (weak refs), reuses loaded textures, and provides `ClearExpiredMaterials`/`ClearCaches` for scene lifetime management
@@ -179,6 +182,7 @@ Swapchain
 - **glTF 2.0 Importer**: `XJModelImporter` parses `.glb`/`.gltf` via tinygltf, merging primitives into a shared vertex/index buffer with per-primitive index ranges (`XJMeshPrimitive`) and validating accessors/modes (skipping non-TRIANGLES) with rollback on invalid data
 - **Submesh Rendering**: `XJMesh` exposes `XJSubmesh` index ranges shared across vertex/index buffers with `Bind`/`Draw`/`DrawSubmesh`; `XJMaterialRenderItem` carries a `SubmeshIndex` so each primitive is drawn with its own material slot
 - **AABB Bounding Box**: `XJBoundingBox` (expand/merge/transformed) computed during glTF import per-primitive and stored in `XJMeshPrimitive`/`XJSubmesh`; `XJMesh` exposes the overall bounds via `GetBounds()`
+- **CPU Picking Geometry**: `XJMesh` retains compact CPU position/index copies for precise editor ray-triangle tests after AABB broad-phase filtering
 - **Factories**: `XJMeshFactory`, `XJTextureFactory`, `XJMaterialFactory` convert Assets into GPU Render Resources
 - **Data Flow**: `File → Scanner/Importer → Asset → Factory → Render Resource → Renderer`
 
@@ -195,6 +199,9 @@ Swapchain
 - **Frame Renderer**: `XJEditorFrameRenderer` + `XJEditorRenderResources` own ImGui/Vulkan frame rendering and shared editor render resources; `XJEditorUIHost` hosts the UI layer
 - **Input Bindings**: `XJEditorInputBindings` centralizes editor input mapping (camera, viewport, actions)
 - **Viewport System**: `XJEditorViewportSystem` orchestrates Scene/Game preview viewports, camera resolution, protected editor entities, and scene attach/detach
+- **Precise Scene Picking**: `XJEditorSceneService::RaycastClosestSceneEntity` uses world-space AABB broad phase followed by CPU triangle intersection against mesh position/index copies
+- **Selection Orbit Pivot**: Scene Preview can set the camera orbit pivot from a viewport ray, so orbit controls rotate around the picked surface point
+- **Light Gizmos**: `XJLightGizmoMaterialSystem` draws editor-only line meshes for directional, point, and spot lights in Scene Preview
 - **Lifecycle Hooks**: `OnUIBegin`/`OnUIEnd`/`OnUIRender`/`OnUIDestroy` virtual methods in XJApplication base class
 - **MVVM Architecture**: Controllers (camera, scene, drop, asset), Services, ViewModels decouple UI from ECS
 - **Asset ViewModel**: `XJEditorAssetViewModel` exposes asset details (handle, type, name, path), shader validation view (`XJEditorShaderValidationView`), and mesh bounds view (`XJEditorMeshBoundsView` with per-submesh AABB) for the Inspector panel

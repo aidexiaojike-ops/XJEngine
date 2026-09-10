@@ -1,0 +1,44 @@
+{
+  "version": 2,
+  "parameters": [
+    {
+      "name": "BaseColor",
+      "displayName": "Base Color",
+      "type": "color4",
+      "default": [0.8, 0.8, 0.8, 1.0],
+      "category": "Surface",
+      "ubo": "MaterialUbo",
+      "member": "baseColor"
+    },
+    {
+      "name": "SpecularStrength",
+      "displayName": "Specular Strength",
+      "type": "float",
+      "default": 0.35,
+      "min": 0.0,
+      "max": 1.0,
+      "category": "Surface",
+      "ubo": "MaterialUbo",
+      "member": "specularStrength"
+    },
+    {
+      "name": "Shininess",
+      "displayName": "Shininess",
+      "type": "float",
+      "default": 32.0,
+      "min": 1.0,
+      "max": 256.0,
+      "category": "Surface",
+      "ubo": "MaterialUbo",
+      "member": "shininess"
+    },
+    {
+      "name": "AlbedoTexture",
+      "displayName": "Albedo Texture",
+      "type": "texture2D",
+      "default": 0,
+      "category": "Textures",
+      "sampler": "albedoTexture"
+    }
+  ]
+}

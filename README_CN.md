@@ -26,6 +26,7 @@ XJEngine 是一个基于 Vulkan 和 ECS 架构的轻量级现代游戏引擎，�
 | **Shader Schema 系统** | JSON 定义着色器参数，Schema 验证、绑定解析、描述符布局构建、SPIR-V 反射、材质资产序列化 |
 | **Surface 材质系统** | Schema 驱动的 Surface 管线，共享 Frame/Light UBO、材质参数块、纹理绑定与动态描述符池扩容 |
 | **场景灯光** | 方向光、点光和聚光灯支持场景持久化与逐帧 GPU 上传，并提供范围、强度、颜色和聚光锥角控制 |
+| **Lit Shader** | Schema 驱动的前向光照，支持基础颜色/Albedo 纹理、高光强度、光泽度以及方向光/点光/聚光灯计算 |
 | **运行时材质生成** | 支持程序化创建材质、随机颜色、纹理和 UV 变换 |
 | **程序化纹理** | 从像素数据直接生成纹理，无需外部文件 |
 | **摄像机系统** | 独立 Camera 模块，轨道/自由模式，编辑器摄像机管理器，ECS 摄像机系统 |
@@ -90,12 +91,15 @@ File -> Importer -> Asset (CPU) -> Factory -> Resource (GPU) -> Renderer
 - **资产元数据**：`.xjmeta` 旁置文件（`XJAssetMetadata`）存储每个资产的句柄/类型/导入器信息；`XJAssetMetadataSerializer` 负责读写；`XJPersistentAssetHandleGenerator` 确保唯一句柄生成
 - **Submesh 渲染**：`XJMesh` 通过 `XJSubmesh` 索引范围共享顶点/索引缓冲，提供 `Bind`/`Draw`/`DrawSubmesh`；`XJMaterialRenderItem` 携带 `SubmeshIndex`，使每个 primitive 使用各自材质槽绘制
 - **AABB 包围盒**：`XJBoundingBox`（Expand/Merge/Transformed）在 glTF 导入时逐 primitive 计算并存入 `XJMeshPrimitive`/`XJSubmesh`；`XJMesh` 通过 `GetBounds()` 暴露整体包围盒
+- **CPU 拾取几何**：`XJMesh` 保留紧凑的 CPU 位置/索引副本，用于 AABB 粗筛后的精确射线-三角形检测
 - **glTF 导入**：`XJModelImporter` 将 primitive 合并进共享顶点/索引缓冲，保存每个 primitive 的索引范围（`XJMeshPrimitive`），校验 accessor 与绘制模式（跳过非 TRIANGLES），数据无效时回滚
 - **原子 JSON IO**：`XJJsonIO` 统一提供 JSON 读取辅助（float/vec2/vec3/vec4/uint64）与原子文件写入（临时文件 + rename），供所有资产序列化器使用
 - **引导程序**：`XJAssetBootstrap` 管理默认资产注册和场景创建
 - **运行时工具**：`XJSceneRuntimeUtil` 提供主摄像机查找等运行时辅助功能
 
 - **Shader Schema 系统**：JSON 定义的着色器参数，`XJShaderSchemaValidator` 验证 + `XJShaderSchemaBindingResolver` 绑定解析 + `XJShaderDescriptorLayoutBuilder` 描述符布局构建
+- **Lit 材质参数**：`Lit.schema` 提供基础颜色、Albedo 纹理、高光强度和光泽度，并复用通用 SurfaceMaterial 运行时
+- **跨阶段 Shader 反射**：Shader stage 使用位掩码，将 Vertex/Fragment 反射出的同一描述符绑定合并进统一 Vulkan 布局
 - **Surface 材质系统**：`XJSurfaceMaterialSystem` 渲染 `XJSurfaceMaterialComponent`，按 frame slot 分别跟踪材质参数和资源上传状态
 - **共享 Frame/Light 数据**：`XJFrameUbo` 提供投影/视图矩阵、分辨率、帧号/时间与摄像机位置；`XJLightUbo` 使用 std140 布局和逐帧描述符集支持 1 个方向光、最多 8 个点光和 8 个聚光灯
 - **场景灯光收集**：`XJLightSceneUtils` 从场景中的 `XJLightComponent` 与 Transform 构建每帧灯光 UBO
@@ -114,6 +118,9 @@ File -> Importer -> Asset (CPU) -> Factory -> Resource (GPU) -> Renderer
 - **输入绑定**：`XJEditorInputBindings` 集中编辑器输入映射（摄像机、视口、操作）
 - **视口系统**：`XJEditorViewportSystem` 统筹 Scene/Game 预览视口、摄像机解析、受保护编辑器实体以及场景挂载/卸载
 - **实体拾取**：`XJScenePreview` 通过 `EntityPickCallback` 触发射线-AABB 相交检测，实现实体视口点击选择
+- **精确场景拾取**：`XJEditorSceneService::RaycastClosestSceneEntity` 先进行世界空间 AABB 粗筛，再使用 Mesh 的 CPU 顶点/索引副本执行射线-三角形检测
+- **选中点轨道旋转**：Scene Preview 可通过视口射线设置摄像机 orbit pivot，使轨道控制围绕命中的表面点旋转
+- **灯光 Gizmo**：`XJLightGizmoMaterialSystem` 在 Scene Preview 中以编辑器专用线框显示方向光、点光和聚光灯
 - **Controllers**：`XJEditorSceneController`（场景加载/保存/切换 + 基于快照的 Undo/Redo 历史，含场景与材质资产，最多 100 条）+ `XJEditorAssetController`（资产 CRUD）+ `XJEditorCameraManager`（基于实体 ID 的视口摄像机绑定与解析，避免悬垂指针）+ `XJEditorSceneAssetDropController`（资产拖放到场景）+ `XJEditorExternalDropController`（OS文件拖入）
 - **Console 日志**：`XJEditorLog` 通过自定义 spdlog sink 将引擎日志桥接到 Console 面板（异步安全复制、级别映射、线程安全队列）
 - **Viewport 渲染表面**：`XJViewport` 接口（`GetViewportTextureID`/`IsViewportTextureReady`/`OnViewportResized`）由 `XJViewportRenderSurface` 实现，负责离屏 render pass、render target、调整大小时的延迟 descriptor 释放以及 ImGui 纹理显示

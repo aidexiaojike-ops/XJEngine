@@ -7,6 +7,16 @@
 
 namespace XJ
 {
+    namespace
+    {
+        glm::mat3 BuildCameraBasis(const glm::vec3& forward)
+        {
+            const glm::vec3 right = CameraMath::BuildRightFromForward(forward);
+            const glm::vec3 up = glm::normalize(glm::cross(right, forward));
+            return glm::mat3(right, up, forward);
+        }
+    }
+
     XJCameraController::XJCameraController(
         float mouseSensitivity,
         float cameraMoveSpeed,
@@ -21,6 +31,18 @@ namespace XJ
           mLeftButtonDown(false),
           mRightButtonDown(false)
     {
+    }
+
+    void XJCameraController::SetOrbitPivot(const glm::vec3& worldPosition)
+    {
+        mOrbitPivot = worldPosition;
+        mHasOrbitPivot = true;
+    }
+
+    void XJCameraController::ClearOrbitPivot()
+    {
+        mHasOrbitPivot = false;
+        mOrbitPivot = glm::vec3(0.0f);
     }
 
     void XJCameraController::UpdateCameraControl(
@@ -117,9 +139,19 @@ namespace XJ
             float yaw = transformComp.rotation.x;
             float pitch = transformComp.rotation.y;
 
+            const glm::vec3 oldForward = CameraMath::BuildForwardFromYawPitch(yaw, pitch);
+
             yaw += mouseDelta.x * mMouseSensitivity;
             pitch += mouseDelta.y * mMouseSensitivity;
             pitch = CameraMath::ClampPitch(pitch);
+
+            if (mHasOrbitPivot)
+            {
+                const glm::vec3 newForward = CameraMath::BuildForwardFromYawPitch(yaw, pitch);
+                const glm::mat3 rotationDelta =
+                    BuildCameraBasis(newForward) * glm::transpose(BuildCameraBasis(oldForward));
+                transformComp.position = mOrbitPivot + rotationDelta * (transformComp.position - mOrbitPivot);
+            }
 
             transformComp.rotation.x = yaw;
             transformComp.rotation.y = pitch;
@@ -139,6 +171,8 @@ namespace XJ
                 (right * -mouseDelta.x + up * mouseDelta.y) * mCameraMoveSpeed;
                     
             transformComp.position += moveVector;
+            if (mHasOrbitPivot)
+                mOrbitPivot += moveVector;
             transformComp.UpdateModelMatrix();
         }
     }

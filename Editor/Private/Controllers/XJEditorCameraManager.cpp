@@ -14,6 +14,7 @@
 #include "UI/Viewports/XJGamePreview.h"
 #include "UI/Viewports/XJScenePreview.h"
 
+#include <algorithm>
 
 namespace XJ
 {
@@ -67,6 +68,9 @@ namespace XJ
     {
         mScene = scene;
 
+        if (mCameraController)
+            mCameraController->ClearOrbitPivot();
+
         if (!scene)
         {
             ClearAllCameraReferences();
@@ -81,8 +85,11 @@ namespace XJ
 
         ApplyCameraBindings();
     }
-     void XJEditorCameraManager::ClearAllCameraReferences()
+    void XJEditorCameraManager::ClearAllCameraReferences()
     {
+        if (mCameraController)
+            mCameraController->ClearOrbitPivot();
+
         mScene = nullptr;
         mPreviewCameraId = XJ_INVALID_EDITOR_ENTITY_ID;
         mGameCameraId = XJ_INVALID_EDITOR_ENTITY_ID;
@@ -131,6 +138,35 @@ namespace XJ
             return;
 
         mCameraController->OnMouseScroll(yOffset, previewCamera);
+    }
+
+    void XJEditorCameraManager::SetPreviewOrbitPivotFromRay(
+        const glm::vec3& rayOrigin,
+        const glm::vec3& rayDirection,
+        float maxDistance)
+    {
+        if (!mScene || !mCameraController || maxDistance <= 0.0f)
+            return;
+
+        XJEditorSceneRaycastHit hit;
+        if (XJEditorSceneService::RaycastClosestSceneEntity(
+                *mScene,
+                rayOrigin,
+                rayDirection,
+                maxDistance,
+                hit))
+        {
+            mCameraController->SetOrbitPivot(hit.Position);
+            return;
+        }
+
+        const float directionLength = glm::length(rayDirection);
+        if (directionLength <= 0.000001f)
+            return;
+
+        constexpr float fallbackDistance = 5.0f;
+        mCameraController->SetOrbitPivot(
+            rayOrigin + (rayDirection / directionLength) * std::min(maxDistance, fallbackDistance));
     }
 
     void XJEditorCameraManager::UpdatePreviewCameraControl(

@@ -21,6 +21,8 @@ namespace XJ
         // 共享相机控制算法：只修改传入 camera entity 的组件，不关心 editor 或 runtime 场景。
         void UpdateCameraControl(float deltaTime, XJGlfwWindow* window, XJEntity* cameraEntity);
         void OnMouseScroll(float yOffset, XJEntity* cameraEntity);
+        void SetOrbitPivot(const glm::vec3& worldPosition);
+        void ClearOrbitPivot();
 
         void XJSetMouseSensitivity(float mouseSensitivity) { mMouseSensitivity = mouseSensitivity; }
         void XJSetCameraMoveSpeed(float cameraMoveSpeed) { mCameraMoveSpeed = cameraMoveSpeed; }
@@ -46,6 +48,8 @@ namespace XJ
 
         bool mLeftButtonDown = false;
         bool mRightButtonDown = false;
+        bool mHasOrbitPivot = false;
+        glm::vec3 mOrbitPivot{0.0f};
     };
 }
 

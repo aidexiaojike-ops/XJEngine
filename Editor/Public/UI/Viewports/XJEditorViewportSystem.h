@@ -46,6 +46,10 @@ namespace XJ
             void DrawUI();
             void Update(float deltaTime);
             void OnMouseScroll(float yOffset);
+            void SetPreviewOrbitPivotFromRay(
+                const glm::vec3& rayOrigin,
+                const glm::vec3& rayDirection,
+                float maxDistance);
 
             void Shutdown();
 

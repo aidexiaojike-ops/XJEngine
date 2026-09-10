@@ -10,20 +10,18 @@ namespace XJ
 {
     inline VkShaderStageFlags ToVkShaderStageFlags(XJShaderStage stage)
     {
-        switch (stage)
-        {
-            case XJShaderStage::Vertex:
-                return VK_SHADER_STAGE_VERTEX_BIT;
+        const uint32_t stages = static_cast<uint32_t>(stage);
+        VkShaderStageFlags result = 0;
+        if ((stages & static_cast<uint32_t>(XJShaderStage::Vertex)) != 0)
+            result |= VK_SHADER_STAGE_VERTEX_BIT;
+        if ((stages & static_cast<uint32_t>(XJShaderStage::Fragment)) != 0)
+            result |= VK_SHADER_STAGE_FRAGMENT_BIT;
+        if ((stages & static_cast<uint32_t>(XJShaderStage::Compute)) != 0)
+            result |= VK_SHADER_STAGE_COMPUTE_BIT;
 
-            case XJShaderStage::Fragment:
-                return VK_SHADER_STAGE_FRAGMENT_BIT;
-
-            case XJShaderStage::Compute:
-                return VK_SHADER_STAGE_COMPUTE_BIT;
-
-            default:
-                return VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
-        }
+        return result != 0
+            ? result
+            : VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
     }
 
     inline VkDescriptorType ToVkDescriptorType(XJShaderDescriptorType type)

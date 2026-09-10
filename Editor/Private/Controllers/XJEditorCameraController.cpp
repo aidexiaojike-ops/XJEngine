@@ -23,4 +23,14 @@ namespace XJ
     {
         mController.OnMouseScroll(yOffset, cameraEntity);
     }
+
+    void XJEditorCameraController::SetOrbitPivot(const glm::vec3& worldPosition)
+    {
+        mController.SetOrbitPivot(worldPosition);
+    }
+
+    void XJEditorCameraController::ClearOrbitPivot()
+    {
+        mController.ClearOrbitPivot();
+    }
 }

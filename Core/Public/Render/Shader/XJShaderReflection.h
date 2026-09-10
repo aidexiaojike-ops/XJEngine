@@ -19,10 +19,16 @@ namespace XJ
     enum class XJShaderStage//SHADER阶段？
     {
         Unknown = 0,
-        Vertex,
-        Fragment,
-        Compute
+        Vertex = 1 << 0,
+        Fragment = 1 << 1,
+        Compute = 1 << 2
     };
+
+    inline XJShaderStage operator|(XJShaderStage lhs, XJShaderStage rhs)
+    {
+        return static_cast<XJShaderStage>(
+            static_cast<uint32_t>(lhs) | static_cast<uint32_t>(rhs));
+    }
 
     struct XJShaderReflectedMember//反射成员
     {

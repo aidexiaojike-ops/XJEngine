@@ -31,6 +31,10 @@ namespace XJ
 
         mVertexCount = static_cast<uint32_t>(vertices.size());
         mIndexCount = static_cast<uint32_t>(indices.size());
+        mCpuPositions.reserve(vertices.size());
+        for (const XJVulkanVertex& vertex : vertices)
+            mCpuPositions.push_back(vertex.position);
+        mCpuIndices = indices;
 
         if(mIndexCount == 0)
         {

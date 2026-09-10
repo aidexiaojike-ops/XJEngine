@@ -133,6 +133,10 @@ namespace XJ
                 return mBounds;
             }
 
+            // 编辑器精确拾取使用；GPU Mesh 保留紧凑的位置和索引副本。
+            const std::vector<glm::vec3>& GetCpuPositions() const { return mCpuPositions; }
+            const std::vector<uint32_t>& GetCpuIndices() const { return mCpuIndices; }
+
         private:
             std::shared_ptr<XJVulkanBuffer> mVertexBuffer;
             std::shared_ptr<XJVulkanBuffer> mIndexBuffer;
@@ -143,6 +147,8 @@ namespace XJ
 
             std::vector<XJSubmesh> mSubmeshes;
             XJBoundingBox mBounds;//整体包围盒
+            std::vector<glm::vec3> mCpuPositions;
+            std::vector<uint32_t> mCpuIndices;
     };
 }
 

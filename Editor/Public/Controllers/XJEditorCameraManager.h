@@ -29,6 +29,10 @@ namespace XJ
             void ClearIfDeleted(XJScene& scene, const std::vector<XJEditorEntityId>& ids);  //清理摄像机 卸载
             void ValidateCameraPointers();  //验证摄像机
             void OnMouseScroll(float yOffset);  //控制
+            void SetPreviewOrbitPivotFromRay(
+                const glm::vec3& rayOrigin,
+                const glm::vec3& rayDirection,
+                float maxDistance);
             void UpdatePreviewCameraControl(float deltaTime, XJGlfwWindow* window); //更新编辑器摄像机
             void SetGameCameraLock(bool locked);   // Play 态锁定 GamePreview 相机，避免被编辑器相机覆盖
             

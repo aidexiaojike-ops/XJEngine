@@ -90,6 +90,14 @@ namespace XJ
                     const glm::vec3& rayDirection,
                     float maxDistance)
                 {
+                    if (mImpl->Viewports)
+                    {
+                        mImpl->Viewports->SetPreviewOrbitPivotFromRay(
+                            rayOrigin,
+                            rayDirection,
+                            maxDistance);
+                    }
+
                     if (mImpl->Workspace)
                     {
                         mImpl->Workspace->SelectEntityFromViewportRay(

@@ -20,6 +20,8 @@ namespace XJ
             // Editor Scene Preview 的调用入口，后续 editor-only 规则可集中加在这里。
             void UpdateCameraControl(float deltaTime, XJGlfwWindow* window, XJEntity* cameraEntity);
             void OnMouseScroll(float yOffset, XJEntity* cameraEntity);
+            void SetOrbitPivot(const glm::vec3& worldPosition);
+            void ClearOrbitPivot();
 
             XJCameraController& GetController() { return mController; }
             const XJCameraController& GetController() const { return mController; }

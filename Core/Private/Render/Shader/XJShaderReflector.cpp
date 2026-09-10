@@ -150,16 +150,28 @@ namespace XJ
 
         bool SameUboIdentity(const XJShaderReflectedUbo& a, const XJShaderReflectedUbo& b)//判断两个 UBO 是否相同
         {
-            return a.Name == b.Name &&
-                   a.Set == b.Set &&
-                   a.Binding == b.Binding;
+            return a.Set == b.Set && a.Binding == b.Binding;
         }
 
         bool SameSamplerIdentity(const XJShaderReflectedSampler& a, const XJShaderReflectedSampler& b)//判断两个采样器是否相同
         {
-            return a.Name == b.Name &&
-                   a.Set == b.Set &&
-                   a.Binding == b.Binding;
+            return a.Set == b.Set && a.Binding == b.Binding;
+        }
+
+        bool SameUboLayout(const XJShaderReflectedUbo& a, const XJShaderReflectedUbo& b)
+        {
+            if (a.DescriptorType != b.DescriptorType || a.Size != b.Size || a.Members.size() != b.Members.size())
+                return false;
+
+            for (size_t index = 0; index < a.Members.size(); ++index)
+            {
+                const auto& lhs = a.Members[index];
+                const auto& rhs = b.Members[index];
+                if (lhs.Offset != rhs.Offset || lhs.Size != rhs.Size)
+                    return false;
+            }
+
+            return true;
         }
 
         void MergeReflectionResult(XJShaderReflectionResult& dst, const XJShaderReflectionResult& src)//合并反射结果
@@ -169,11 +181,22 @@ namespace XJ
             for (const auto& ubo : src.Ubos)
             {
                 bool exists = false;
-                for (const auto& existing : dst.Ubos)
+                for (auto& existing : dst.Ubos)
                 {
                     if (SameUboIdentity(existing, ubo))
                     {
                         exists = true;
+                        if (!SameUboLayout(existing, ubo))
+                        {
+                            dst.Errors.push_back(
+                                "Shader stages declare incompatible UBO layouts at set=" +
+                                std::to_string(ubo.Set) + ", binding=" + std::to_string(ubo.Binding) +
+                                ", name='" + ubo.Name + "'.");
+                        }
+                        else
+                        {
+                            existing.Stage = existing.Stage | ubo.Stage;
+                        }
                         break;
                     }
                 }
@@ -185,11 +208,22 @@ namespace XJ
             for (const auto& sampler : src.Samplers)
             {
                 bool exists = false;
-                for (const auto& existing : dst.Samplers)
+                for (auto& existing : dst.Samplers)
                 {
                     if (SameSamplerIdentity(existing, sampler))
                     {
                         exists = true;
+                        if (existing.DescriptorType != sampler.DescriptorType)
+                        {
+                            dst.Errors.push_back(
+                                "Shader stages declare incompatible sampler types at set=" +
+                                std::to_string(sampler.Set) + ", binding=" + std::to_string(sampler.Binding) +
+                                ", name='" + sampler.Name + "'.");
+                        }
+                        else
+                        {
+                            existing.Stage = existing.Stage | sampler.Stage;
+                        }
                         break;
                     }
                 }

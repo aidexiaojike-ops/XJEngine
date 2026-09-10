@@ -23,8 +23,10 @@
 #include "Asset/Serialization/XJShaderAssetSerializer.h"
 #include "Render/Shader/XJShaderParameter.h"
 #include "Render/Material/XJSurfaceMaterialBindingUtils.h"
+#include "Render/XJLightSceneUtils.h"
 
 #include <algorithm>
+#include <cmath>
 #include <filesystem>
 #include <unordered_map>
 #include <unordered_set>
@@ -35,6 +37,97 @@ namespace XJ
     {
         constexpr uint32_t kMaxMaterialSlotCount = 64;
         constexpr size_t kMaterialInspectorCacheMaxEntries = 256;
+
+        bool IntersectRayTriangle(
+            const glm::vec3& origin,
+            const glm::vec3& direction,
+            const glm::vec3& v0,
+            const glm::vec3& v1,
+            const glm::vec3& v2,
+            float maxDistance,
+            XJRayAABBHit& outHit)
+        {
+            constexpr float epsilon = 0.000001f;
+            const glm::vec3 edge1 = v1 - v0;
+            const glm::vec3 edge2 = v2 - v0;
+            const glm::vec3 p = glm::cross(direction, edge2);
+            const float determinant = glm::dot(edge1, p);
+            if (std::abs(determinant) <= epsilon)
+                return false;
+
+            const float inverseDeterminant = 1.0f / determinant;
+            const glm::vec3 t = origin - v0;
+            const float u = glm::dot(t, p) * inverseDeterminant;
+            if (u < 0.0f || u > 1.0f)
+                return false;
+
+            const glm::vec3 q = glm::cross(t, edge1);
+            const float v = glm::dot(direction, q) * inverseDeterminant;
+            if (v < 0.0f || u + v > 1.0f)
+                return false;
+
+            const float distance = glm::dot(edge2, q) * inverseDeterminant;
+            if (distance < 0.0f || distance >= maxDistance)
+                return false;
+
+            const glm::vec3 normal = glm::cross(edge1, edge2);
+            outHit.Hit = true;
+            outHit.Distance = distance;
+            outHit.Position = origin + direction * distance;
+            outHit.Normal = glm::dot(normal, normal) > epsilon
+                ? glm::normalize(normal)
+                : glm::vec3(0.0f);
+            return true;
+        }
+
+        bool RaycastSubmeshTriangles(
+            const XJMesh& mesh,
+            const XJSubmesh& submesh,
+            const glm::mat4& model,
+            const glm::vec3& rayOrigin,
+            const glm::vec3& rayDirection,
+            float maxDistance,
+            XJRayAABBHit& outHit)
+        {
+            const auto& positions = mesh.GetCpuPositions();
+            const auto& indices = mesh.GetCpuIndices();
+            if (positions.empty() || indices.empty() || submesh.IndexCount < 3)
+                return false;
+
+            const uint32_t endIndex = submesh.FirstIndex + submesh.IndexCount;
+            if (endIndex > indices.size())
+                return false;
+
+            bool found = false;
+            float closestDistance = maxDistance;
+            for (uint32_t index = submesh.FirstIndex; index + 2 < endIndex; index += 3)
+            {
+                const uint32_t i0 = indices[index];
+                const uint32_t i1 = indices[index + 1];
+                const uint32_t i2 = indices[index + 2];
+                if (i0 >= positions.size() || i1 >= positions.size() || i2 >= positions.size())
+                    continue;
+
+                const glm::vec3 v0 = glm::vec3(model * glm::vec4(positions[i0], 1.0f));
+                const glm::vec3 v1 = glm::vec3(model * glm::vec4(positions[i1], 1.0f));
+                const glm::vec3 v2 = glm::vec3(model * glm::vec4(positions[i2], 1.0f));
+                XJRayAABBHit triangleHit;
+                if (IntersectRayTriangle(
+                        rayOrigin,
+                        rayDirection,
+                        v0,
+                        v1,
+                        v2,
+                        closestDistance,
+                        triangleHit))
+                {
+                    closestDistance = triangleHit.Distance;
+                    outHit = triangleHit;
+                    found = true;
+                }
+            }
+            return found;
+        }
 
         bool IsValidMeshAsset(XJAssetRegistry& assetRegistry, XJAssetHandle meshAsset)//是否有模型资产
         {
@@ -530,16 +623,18 @@ namespace XJ
         return meshRef.Mesh.IsValid() ? meshRef.Mesh.Handle : 0;
     }
 
-    XJEditorEntityId XJEditorSceneService::FindClosestMeshEntityFromRay(
+    bool XJEditorSceneService::RaycastClosestSceneEntity(
         XJScene& scene,
         const glm::vec3& rayOrigin,
         const glm::vec3& rayDirection,
-        float maxDistance)
+        float maxDistance,
+        XJEditorSceneRaycastHit& outHit)
     {
-        if (maxDistance <= 0.0f || glm::length(rayDirection) <= 0.000001f)
-            return XJ_INVALID_EDITOR_ENTITY_ID;
+        outHit = {};
 
-        XJEditorEntityId closestEntity = XJ_INVALID_EDITOR_ENTITY_ID;
+        if (maxDistance <= 0.0f || glm::length(rayDirection) <= 0.000001f)
+            return false;
+
         float closestDistance = maxDistance;
 
         const auto& registry = scene.XJGetEcsRegistry();
@@ -547,9 +642,6 @@ namespace XJ
 
         view.each([&](auto enttEntity, const XJTransformComponent& transform, const XJSurfaceMaterialComponent& renderComponent)
         {
-            bool entityHit = false;
-            float entityDistance = closestDistance;
-
             for (const auto& slot : renderComponent.XJGetSlots())
             {
                 if (!slot.Mesh)
@@ -560,34 +652,106 @@ namespace XJ
                     continue;
 
                 const XJBoundingBox worldBounds = submesh->Bounds.Transformed(transform.GetModelMatrix());
-                XJRayAABBHit hit;
+                XJRayAABBHit boundsHit;
 
                 if (XJIntersectRayAABB(
                         rayOrigin,
                         rayDirection,
                         worldBounds,
-                        entityDistance,
-                        hit) &&
-                    hit.Hit &&
-                    hit.Distance < entityDistance)
+                        closestDistance,
+                        boundsHit) &&
+                    boundsHit.Hit)
                 {
-                    entityDistance = hit.Distance;
-                    entityHit = true;
+                    XJRayAABBHit hit;
+                    if (!RaycastSubmeshTriangles(
+                            *slot.Mesh,
+                            *submesh,
+                            transform.GetModelMatrix(),
+                            rayOrigin,
+                            glm::normalize(rayDirection),
+                            closestDistance,
+                            hit))
+                    {
+                        continue;
+                    }
+
+                    XJEntity* entity = scene.GetEntity(enttEntity);
+                    if (!entity)
+                        continue;
+
+                    closestDistance = hit.Distance;
+                    outHit.Entity = static_cast<XJEditorEntityId>(entity->XJGetUUID());
+                    outHit.Distance = hit.Distance;
+                    outHit.Position = hit.Position;
+                    outHit.Normal = hit.Normal;
                 }
             }
+        });
 
-            if (!entityHit)
+        // Light gizmo 没有普通 MeshRenderer，按其可见线框范围构造拾取包围盒。
+        auto lightView = registry.view<XJTransformComponent, XJLightComponent>();
+        lightView.each([&](auto enttEntity, const XJTransformComponent& transform, const XJLightComponent& light)
+        {
+            XJBoundingBox bounds;
+            constexpr float pointRadius = 0.3f;
+            constexpr float directionalLength = 0.8f;
+            constexpr float directionalHeadRadius = 0.2f;
+            constexpr float spotLength = 0.8f;
+
+            if (light.XJGetLightType() == XJLightType::Point)
+            {
+                bounds.Min = transform.position - glm::vec3(pointRadius);
+                bounds.Max = transform.position + glm::vec3(pointRadius);
+            }
+            else
+            {
+                const glm::vec3 direction = XJLightSceneUtils::BuildDirection(transform);
+                const float radius = light.XJGetLightType() == XJLightType::Spot
+                    ? std::min(
+                        std::tan(glm::radians(light.XJGetOuterAngleDegrees())) * spotLength,
+                        1.0f)
+                    : directionalHeadRadius;
+                const float length = light.XJGetLightType() == XJLightType::Spot
+                    ? spotLength
+                    : directionalLength;
+                const glm::vec3 end = transform.position + direction * length;
+                bounds.Expand(transform.position - glm::vec3(0.08f));
+                bounds.Expand(transform.position + glm::vec3(0.08f));
+                bounds.Expand(end - glm::vec3(radius));
+                bounds.Expand(end + glm::vec3(radius));
+            }
+
+            XJRayAABBHit hit;
+            if (!XJIntersectRayAABB(rayOrigin, rayDirection, bounds, closestDistance, hit) ||
+                !hit.Hit || hit.Distance >= closestDistance)
+            {
                 return;
+            }
 
             XJEntity* entity = scene.GetEntity(enttEntity);
             if (!entity)
                 return;
 
-            closestDistance = entityDistance;
-            closestEntity = static_cast<XJEditorEntityId>(entity->XJGetUUID());
+            closestDistance = hit.Distance;
+            outHit.Entity = static_cast<XJEditorEntityId>(entity->XJGetUUID());
+            outHit.Distance = hit.Distance;
+            outHit.Position = hit.Position;
+            outHit.Normal = hit.Normal;
         });
 
-        return closestEntity;
+        return outHit.IsValid();
+    }
+
+    XJEditorEntityId XJEditorSceneService::FindClosestMeshEntityFromRay(
+        XJScene& scene,
+        const glm::vec3& rayOrigin,
+        const glm::vec3& rayDirection,
+        float maxDistance)
+    {
+        XJEditorSceneRaycastHit hit;
+        return RaycastClosestSceneEntity(scene, rayOrigin, rayDirection, maxDistance, hit)
+            ? hit.Entity
+            : XJ_INVALID_EDITOR_ENTITY_ID;
     }
 
     void XJEditorSceneService::DeleteEntities(XJScene& scene, const std::vector<XJEditorEntityId>& entityIds)
