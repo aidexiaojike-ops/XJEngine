@@ -321,7 +321,7 @@ namespace XJ
     }
     bool XJEditorWorkspace::HandleSceneAssetDrop(const XJAssetDragPayload& payload)
     {
-        if (!mImpl->Initialized || !mImpl->Scene || !mImpl->DefaultTexture || !mImpl->DefaultSampler)
+        if (!mImpl->Initialized || !mImpl->Scene || !mImpl->DefaultTexture || !mImpl->DefaultSampler || !CanMutateScene())
         {
             return false;
         }
@@ -333,7 +333,7 @@ namespace XJ
             [this, &payload]()
             {
                 return mImpl->SceneAssetDropController
-                    .CreateEntityFromDroppedAsset(
+                        .CreateEntityFromDroppedAsset(
                         *mImpl->Scene,
                         payload,
                         mImpl->AssetRegistry,

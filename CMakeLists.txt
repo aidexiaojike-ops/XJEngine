@@ -5,6 +5,8 @@ cmake_minimum_required(VERSION 3.10)
 # ------------------------------------------------------------
 project(XJEngine LANGUAGES CXX)
 
+option(XJ_BUILD_TESTS "Build XJEngine first-party tests" OFF)
+
 # ------------------------------------------------------------
 # 基础编译设置
 # ------------------------------------------------------------
@@ -64,6 +66,14 @@ if(EXISTS ${CMAKE_SOURCE_DIR}/Core/CMakeLists.txt)
     message(STATUS "Core module: ON")
 else()
     message(STATUS "Core module: OFF (Core/CMakeLists.txt not found)")
+endif()
+
+if(XJ_BUILD_TESTS)
+    enable_testing()
+    add_subdirectory(Tests)
+    message(STATUS "XJEngine tests: ON")
+else()
+    message(STATUS "XJEngine tests: OFF")
 endif()
 # ------------------------------------------------------------
 # Editor  模块（可选，如果存在）

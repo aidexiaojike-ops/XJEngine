@@ -113,6 +113,25 @@ namespace XJ
         std::string ParameterName;
     };
 
+    struct XJEditorAddScriptSlotRequest
+    {
+        XJEditorEntityId EntityId = XJ_INVALID_EDITOR_ENTITY_ID;
+        XJAssetHandle ScriptAsset = 0;
+    };
+
+    struct XJEditorRemoveScriptSlotRequest
+    {
+        XJEditorEntityId EntityId = XJ_INVALID_EDITOR_ENTITY_ID;
+        uint64_t SlotId = 0;
+    };
+
+    struct XJEditorSetScriptSlotEnabledRequest
+    {
+        XJEditorEntityId EntityId = XJ_INVALID_EDITOR_ENTITY_ID;
+        uint64_t SlotId = 0;
+        bool Enabled = true;
+    };
+
     struct XJEditorSceneRequestState//编辑器场景请求状态  这些请求由 UI 层设置，由控制器在合适的时机统一处理
     {
         bool RequestUndo = false;//撤销最近一次场景修改
@@ -163,6 +182,15 @@ namespace XJ
         
         bool RequestResetMaterialParameter = false;//重载材质参数请求
         XJEditorResetMaterialParameterRequest ResetMaterialParameter;
+
+        bool RequestAddScriptSlot = false;
+        XJEditorAddScriptSlotRequest AddScriptSlot;
+
+        bool RequestRemoveScriptSlot = false;
+        XJEditorRemoveScriptSlotRequest RemoveScriptSlot;
+
+        bool RequestSetScriptSlotEnabled = false;
+        XJEditorSetScriptSlotEnabledRequest SetScriptSlotEnabled;
     };
 
 

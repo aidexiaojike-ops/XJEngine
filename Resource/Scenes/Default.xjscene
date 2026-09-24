@@ -11,7 +11,7 @@
         "meshRenderer": {
           "materials": [
             "asset://3/8557768953746195919",
-            "asset://3/878030584296088097"
+            "asset://3/7727386359093277130"
           ],
           "mesh": "asset://1/6009562244236087423",
           "type": "MeshRendererComponent",
@@ -41,42 +41,6 @@
       "parent": null,
       "type": "Entity",
       "uuid": "4927998369279968349"
-    },
-    {
-      "children": [],
-      "components": {
-        "meshRenderer": {
-          "materials": [
-            "asset://3/7727386359093277130"
-          ],
-          "mesh": "asset://1/536870913",
-          "type": "MeshRendererComponent",
-          "uuid": "201326598"
-        },
-        "transform": {
-          "pos": [
-            0.0,
-            0.0,
-            0.0
-          ],
-          "rot": [
-            0.0,
-            0.0,
-            0.0
-          ],
-          "scale": [
-            1.0,
-            1.0,
-            1.0
-          ],
-          "type": "TransformComponent",
-          "uuid": "201326597"
-        }
-      },
-      "name": "Monkey",
-      "parent": null,
-      "type": "Entity",
-      "uuid": "805306371"
     },
     {
       "children": [],
@@ -126,6 +90,18 @@
           "type": "MeshRendererComponent",
           "uuid": "3627269125057395425"
         },
+        "script": {
+          "slots": [
+            {
+              "enabled": true,
+              "overrides": [],
+              "script": "asset://6/7839755330074132590",
+              "slotId": "10451898353213167625"
+            }
+          ],
+          "type": "ScriptComponent",
+          "uuid": "17567222802883048711"
+        },
         "transform": {
           "pos": [
             0.9510647654533386,
@@ -162,8 +138,8 @@
           ],
           "enabled": true,
           "innerAngleDegrees": 20.0,
-          "intensity": 7.849999904632568,
-          "lightType": 1,
+          "intensity": 7.199999809265137,
+          "lightType": 0,
           "outerAngleDegrees": 30.0,
           "range": 32.70000076293945,
           "type": "LightComponent",
@@ -176,7 +152,7 @@
             -2.5
           ],
           "rot": [
-            230.0,
+            394.0,
             206.0,
             -52.0
           ],
@@ -193,7 +169,159 @@
       "parent": null,
       "type": "Entity",
       "uuid": "13388089545597971824"
+    },
+    {
+      "children": [],
+      "components": {
+        "meshRenderer": {
+          "materials": [
+            "asset://3/7727386359093277130"
+          ],
+          "mesh": "asset://1/536870913",
+          "type": "MeshRendererComponent",
+          "uuid": "3148329357116340624"
+        },
+        "transform": {
+          "pos": [
+            -2.2802724838256836,
+            3.996796131134033,
+            4.066748142242432
+          ],
+          "rot": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "type": "TransformComponent",
+          "uuid": "9042589952075421591"
+        }
+      },
+      "name": "Monkey",
+      "parent": null,
+      "type": "Entity",
+      "uuid": "3747716590721348209"
+    },
+    {
+      "children": [],
+      "components": {
+        "meshRenderer": {
+          "materials": [
+            "asset://3/7727386359093277130"
+          ],
+          "mesh": "asset://1/536870913",
+          "type": "MeshRendererComponent",
+          "uuid": "201326598"
+        },
+        "transform": {
+          "pos": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "rot": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "type": "TransformComponent",
+          "uuid": "201326597"
+        }
+      },
+      "name": "Monkey",
+      "parent": null,
+      "type": "Entity",
+      "uuid": "805306371"
+    },
+    {
+      "children": [],
+      "components": {
+        "meshRenderer": {
+          "materials": [
+            "",
+            "asset://3/8557768953746195919"
+          ],
+          "mesh": "asset://1/6009562244236087423",
+          "type": "MeshRendererComponent",
+          "uuid": "3139487202627780760"
+        },
+        "transform": {
+          "pos": [
+            -1.4683642387390137,
+            3.1011195182800293,
+            4.968311309814453
+          ],
+          "rot": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "type": "TransformComponent",
+          "uuid": "5810206693225132506"
+        }
+      },
+      "name": "Plane",
+      "parent": null,
+      "type": "Entity",
+      "uuid": "15294854298286873248"
+    },
+    {
+      "children": [],
+      "components": {
+        "light": {
+          "color": [
+            0.0,
+            0.529411792755127,
+            1.0
+          ],
+          "enabled": true,
+          "innerAngleDegrees": 20.0,
+          "intensity": 0.949999988079071,
+          "lightType": 1,
+          "outerAngleDegrees": 30.0,
+          "range": 10.0,
+          "type": "LightComponent",
+          "uuid": "17870523401191578912"
+        },
+        "transform": {
+          "pos": [
+            -4.199999809265137,
+            3.4000000953674316,
+            3.799999952316284
+          ],
+          "rot": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "type": "TransformComponent",
+          "uuid": "643040399650632771"
+        }
+      },
+      "name": "Empty Entity",
+      "parent": null,
+      "type": "Entity",
+      "uuid": "4479818723624754720"
     }
   ],
-  "version": 2
+  "version": 3
 }

@@ -12,6 +12,7 @@ namespace XJ
         MeshRenderer,
         SceneAssetRef,
         Light,
+        Script,
     };
 }
 

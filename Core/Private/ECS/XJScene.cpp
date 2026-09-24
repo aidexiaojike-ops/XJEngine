@@ -120,7 +120,9 @@ namespace XJ
             return;
 
         const entt::entity ecsEntity = entity->GetEcsEntity();
-        if (!mEcsRegistry.valid(ecsEntity))
+        // 不接受其他 Scene 中数值相同的 EnTT ID。
+        auto it = mEntities.find(ecsEntity);
+        if (it == mEntities.end() || it->second.get() != entity || !mEcsRegistry.valid(ecsEntity))
             return;
 
         if (mPendingDestroySet.insert(ecsEntity).second)

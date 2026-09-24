@@ -8,7 +8,7 @@
 
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20Linux%20%7C%20macOS-brightgreen)](https://github.com/aidexiaojike-ops/XJEngine)
-[![C++](https://img.shields.io/badge/C++-17-blue.svg)](https://en.cppreference.com/w/cpp/17)
+[![C++](https://img.shields.io/badge/C++-20-blue.svg)](https://en.cppreference.com/w/cpp/20)
 [![Vulkan](https://img.shields.io/badge/Vulkan-1.2+-orange.svg)](https://www.vulkan.org/)
 [![CMake](https://img.shields.io/badge/CMake-3.10+-yellow.svg)](https://cmake.org/)
 
@@ -22,6 +22,7 @@ XJEngine is a lightweight modern game engine built with Vulkan and ECS architect
 | **Robust Swapchain Lifecycle** | Structured acquire/present results, resize-aware recreation, minimized per-frame blocking, and clearer device-lost handling |
 | **ECS Architecture** | High-performance Entity Component System using EnTT library |
 | **Event Driven System** | Complete input handling for window, mouse, keyboard events |
+| **Built-in Scripting** | `.xjs` language pipeline with lexer, parser, semantic analysis, verified bytecode, sandboxed runtime, ECS lifecycle, and editor integration |
 | **Modular Material System** | Extensible material pipeline with textures, samplers and uniform buffers |
 | **Shader Schema System** | JSON-defined shader parameters, schema validation, binding resolution, descriptor layout builder, SPIR-V reflection, material asset serialization |
 | **Surface Material System** | Schema-driven surface pipeline with shared Frame/Light UBOs, material parameter blocks, texture bindings, and dynamic descriptor pool expansion |
@@ -73,7 +74,7 @@ cd ../bin
 ```
 
 **Prerequisites:**
-- CMake 3.10+ and C++17 compatible compiler
+- CMake 3.10+ and C++20 compatible compiler
 - Vulkan SDK is resolved automatically by CMake: `VULKAN_SDK` environment variable -> `ThirdParty/VulkanSDK` cache -> auto-download LunarG Vulkan SDK 1.3.283.0
 
 ## 🏗️ Engine Architecture
@@ -142,10 +143,19 @@ Swapchain
 - **Component Storage**: Dense array storage for optimal cache performance
 - **Light Component**: `XJLightComponent` supports Directional/Point/Spot lights with enable toggle, color, intensity, range, and validated spot inner/outer cone angles
 - **System Scheduling**: Flexible system registration and execution order
-- **System Scheduler**: `XJSystemScheduler` manages system lifecycle (Start/Stop), drives `OnUpdate` + fixed-step `OnFixedUpdate` with configurable tick rate and max delta-time clamping
+- **System Scheduler**: `XJSystemScheduler` provides transactional Start/Stop lifecycle handling, configurable fixed-step updates, a per-frame fixed-step cap, and a safe-point callback for deferred runtime mutations
 - **Input Singleton**: `XJInput` polls GLFW every frame via `Update()`, exposing a read-only `XJInputState` snapshot with keyboard/mouse held/pressed/released queries, mouse position/delta/scroll, and WASD axis synthesis (`GetAxis(Horizontal|Vertical)`)
 - **XJMaterialSystem Base Class**: Dedicated base class for material systems with helper methods for device, scene, and camera matrix access
 - **Query System**: Efficient entity queries based on component composition
+
+#### **Script System**
+- **Language Pipeline**: `XJScriptLexer` -> `XJScriptParser` -> `XJScriptSemanticAnalyzer` -> `XJScriptCompiler` produces immutable bytecode modules with structured diagnostics
+- **Verified Runtime**: `XJScriptBytecodeVerifier` validates modules before execution; `XJScriptRuntime` enforces instruction budgets, call-depth limits, type/overflow checks, fault isolation, stack traces, and re-entrancy protection
+- **ECS Lifecycle**: `XJScriptSystem` creates per-entity script instances and dispatches `OnCreate`, `OnUpdate`, `OnFixedUpdate`, and `OnDestroy` through `XJSystemScheduler`
+- **Script Components**: `XJScriptComponent` supports multiple enabled/disabled script slots per entity, stable slot UUIDs, and per-field overrides keyed by `[[FieldId("...")]]`
+- **Native Bridge**: `XJEcsScriptNativeInvoker` exposes controlled ECS operations to scripts; the initial native API includes `Transform.RotateY`
+- **Assets and Persistence**: `.xjs` files are registered as `XJAssetType::Script`, compiled/cached by `XJScriptAssetCompiler`/`Loader`, and serialized in scenes with slot IDs, enabled state, references, and field overrides
+- **Editor Integration**: Content Browser and Inspector flows support creating, compiling, assigning, reordering, configuring, and validating script assets/components
 
 #### **Material System**
 - **XJMaterialSystem Base Class**: Provides helper methods (`XJGetDevice`, `XJGetProjMat`, `XJGetViewMat`, `XJGetScene`, `XJGetApp`) for material systems
@@ -225,7 +235,7 @@ Swapchain
 
 ### Development Environment
 - **CMake** 3.10 or higher
-- **C++17** compatible compiler (MSVC, GCC, Clang)
+- **C++20** compatible compiler (MSVC, GCC, Clang)
 - **Vulkan SDK**: optional manual install. CMake auto-resolves `VULKAN_SDK`, `ThirdParty/VulkanSDK`, or downloads LunarG Vulkan SDK 1.3.283.0.
 
 ### Supported Platforms
@@ -299,6 +309,16 @@ make -j$(sysctl -n hw.ncpu)
 | `-DXJ_ENABLE_VALIDATION=ON` | Enable Vulkan validation layers | `OFF` |
 | `-DXJ_USE_IMGUI=ON` | Enable Dear ImGui integration | `ON` |
 
+### Tests
+
+The first-party CTest suite currently covers the complete scripting path: lexer, parser, semantic analysis, compiler, bytecode verifier, runtime, native ECS bridge, asset compiler/loader, component behavior, scene serialization, editor asset operations, and script system lifecycle.
+
+```bash
+cmake -S . -B build -DXJ_BUILD_TESTS=ON
+cmake --build build --config Release
+ctest --test-dir build -C Release --output-on-failure
+```
+
 ### Vulkan SDK Resolution
 
 CMake resolves Vulkan SDK in this order:
@@ -330,11 +350,13 @@ XJEngine/
 │   │   │   │   ├── XJCameraComponent.h
 │   │   │   │   ├── XJTransformComponent.h
 │   │   │   │   ├── XJLightComponent.h       # 灯光组件（Directional/Point/Spot）
+│   │   │   │   ├── XJScriptComponent.h      # 多槽脚本组件与字段覆盖
 │   │   │   │   └── Material/       # 材质组件
 │   │   │   │       ├── XJBaseMaterialComponent.h
 │   │   │   │       └── XJSurfaceMaterialComponent.h
 │   │   │   └── System/             # 具体系统
-│   │   │       └── XJCameraSystem.h
+│   │   │       ├── XJCameraSystem.h
+│   │   │       └── XJScriptSystem.h
 │   │   ├── Camera/          # 摄像机模块（独立于 ECS）
 │   │   │   ├── XJCameraController.h
 │   │   │   └── XJCameraMath.h
@@ -343,6 +365,11 @@ XJEngine/
 │   │   │   └── XJRayIntersection.h  # 射线-AABB 相交检测
 │   │   ├── Input/           # 输入系统
 │   │   │   └── XJInput.h            # 输入单例（键盘/鼠标/轴向轮询）
+│   │   ├── Script/          # 内置脚本语言
+│   │   │   ├── Language/            # Lexer / Parser / AST / SemanticAnalyzer
+│   │   │   ├── Compiler/            # AST + semantic result -> bytecode
+│   │   │   ├── Bytecode/            # Module model + verifier
+│   │   │   └── Runtime/             # VM, execution limits, native ECS bridge
 │   │   └── Render/         # 渲染相关
 │   │       ├── XJSampler.h
 │   │       ├── XJRenderTarget.h
@@ -379,13 +406,16 @@ XJEngine/
 │   │       ├── XJTextureAsset.h
 │   │       ├── XJMaterialAsset.h
 │   │       ├── XJSceneAsset.h
+│   │       ├── XJScriptAsset.h
 │   │       ├── XJSceneRuntimeUtil.h
 │   │       ├── Importer/    # 格式导入器
 │   │       │   ├── XJModelImporter.h
 │   │       │   ├── XJTextureImporter.h
-│   │       │   └── XJMaterialImporter.h
+│   │       │   ├── XJMaterialImporter.h
+│   │       │   └── XJScriptAssetCompiler.h
 │   │       ├── Loader/      # 资产加载器
-│   │       │   └── XJMeshAssetLoader.h
+│   │       │   ├── XJMeshAssetLoader.h
+│   │       │   └── XJScriptAssetLoader.h
 │   │       ├── Serialization/ # 场景/材质/Shader 序列化
 │   │       │   ├── XJJsonIO.h                 # JSON 读写工具与原子写入
 │   │       │   ├── XJSceneAssetSerializer.h
@@ -433,8 +463,11 @@ XJEngine/
 │   ├── Texture/            # 纹理图像
 │   ├── Mesh/               # 网格数据 (.glb)
 │   ├── Material/           # 材质资产 (.xjmat)
+│   ├── Script/             # 脚本源码与元数据 (.xjs, .xjmeta)
 │   ├── Config/             # 配置文件 (AssetRegistry.json, EditorUI.json)
 │   └── Scenes/             # 场景文件 (.xjscene)
+│
+├── Tests/                  # CTest 脚本语言、运行时、ECS 与编辑器测试
 │
 ├── bin/                    # 运行时输出目录（构建后生成）
 │   ├── Resource/           # 复制的资源文件
@@ -537,6 +570,22 @@ for (auto& entity : entities) {
 }
 ```
 
+### Script Example
+
+```cpp
+class Rotate : ScriptBehaviour
+{
+    public:
+        [[FieldId("1000000001")]]
+        float speed = 180.0f;
+
+        void OnUpdate(float dt)
+        {
+            Transform.RotateY(speed * dt);
+        }
+};
+```
+
 ### Event Handling
 ```cpp
 mObserver->OnEvent<XJ::XJFrameBufferResizeEvent>([this](const XJ::XJFrameBufferResizeEvent& event) {
@@ -636,6 +685,7 @@ mUIContext->Shutdown();
 - [x] ~~Improve Vulkan sampler ownership and render context shutdown order~~
 - [ ] Review remaining higher-level resource ownership paths
 - [ ] Implement editor panels (Viewport, Hierarchy, Inspector, Stats)
+- [x] ~~Add first-party tests for the script language, runtime, ECS integration, serialization, and editor assets~~
 - [ ] Add unit tests for core systems
 - [ ] Enhance documentation with API references
 - [ ] Optimize rendering performance for large scenes

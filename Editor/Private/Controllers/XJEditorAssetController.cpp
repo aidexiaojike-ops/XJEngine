@@ -56,6 +56,8 @@ namespace XJ
                 createdHandle = XJEditorAssetService::CreateMaterialAsset(*mAssetRegistry, request.Directory, mRegistryPath);
             else if (request.Type == XJEditorCreateAssetType::Scene)
                 createdHandle = XJEditorAssetService::CreateSceneAsset(*mAssetRegistry, request.Directory, mRegistryPath);
+            else if (request.Type == XJEditorCreateAssetType::Script)
+                createdHandle = XJEditorAssetService::CreateScriptAsset(*mAssetRegistry, request.Directory, mRegistryPath);
             // 创建成功时自动选中新资产，并清除实体选中和高亮
             if (createdHandle != 0)
             {
@@ -63,6 +65,11 @@ namespace XJ
                 uiState.Selection.SelectedEntity = XJ_INVALID_EDITOR_ENTITY_ID;
                 uiState.Selection.HighlightedEntities.clear();
                 ++uiState.AssetDetailEpoch; 
+                if (request.Type == XJEditorCreateAssetType::Script)
+                {
+                    uiState.RequestOpenScriptEditor = true;
+                    uiState.RequestedScriptEditorAsset = createdHandle;
+                }
             }
         }
         // ---------- 重命名资产 ----------
@@ -171,6 +178,25 @@ namespace XJ
             if (importedAny)
             {
                 ++uiState.AssetDetailEpoch;                    
+            }
+        }
+
+        if (uiState.AssetRequests.RequestSaveScriptSource)
+        {
+            auto request = std::move(uiState.AssetRequests.SaveScriptSource);
+            uiState.AssetRequests.RequestSaveScriptSource = false;
+            uiState.AssetRequests.SaveScriptSource = {};
+            uiState.AssetRequests.ScriptOperationError.clear();
+
+            std::string error;
+            if (XJEditorAssetService::SaveScriptSource(
+                    *mAssetRegistry, request.Handle, request.Source, error))
+            {
+                ++uiState.AssetDetailEpoch;
+            }
+            else
+            {
+                uiState.AssetRequests.ScriptOperationError = std::move(error);
             }
         }
     }

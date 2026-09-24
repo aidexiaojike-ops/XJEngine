@@ -135,9 +135,9 @@ namespace XJ
             return false;
         }
 
-        // Snapshot current scene before InstantiateSceneAsset mutates mScene.
-        // XJSceneInstantiator::Instantiate clears the target scene internally.
-        std::shared_ptr<XJSceneAsset> previousSceneAsset =
+        // 正式资产记录保存 Handle/Name/Path；运行时快照只用于失败回滚。
+        std::shared_ptr<XJSceneAsset> previousSceneAssetRecord = mSceneAsset;
+        std::shared_ptr<XJSceneAsset> previousRuntimeSnapshot =
             XJSceneAssetSerializer::BuildFromScene(*mScene);
 
         const std::filesystem::path previousScenePath = mCurrentScenePath;
@@ -150,20 +150,21 @@ namespace XJ
         if (mBeforeOpenSceneCallback)
             mBeforeOpenSceneCallback();
 
-        if (!InstantiateSceneAsset(sceneAsset, sceneHandle))
+        bool targetSceneModified = false;
+        if (!InstantiateSceneAsset(sceneAsset, sceneHandle, &targetSceneModified))
         {
             spdlog::error("Failed to instantiate scene: {}", scenePath.string());
 
-            if (previousSceneAsset)
+            if (targetSceneModified && previousRuntimeSnapshot)
             {
                 // Roll back to the scene that was visible before the failed open.
-                if (!InstantiateSceneAsset(previousSceneAsset, previousSceneHandle))
+                if (!InstantiateSceneAsset(previousRuntimeSnapshot, previousSceneHandle))
                 {
                     spdlog::error("Failed to roll back previous scene after open failure.");
                 }
             }
 
-            mSceneAsset = previousSceneAsset;
+            mSceneAsset = previousSceneAssetRecord;
             mCurrentScenePath = previousScenePath;
             mSceneDirty = previousSceneDirty;
 
@@ -469,6 +470,9 @@ namespace XJ
             uiState.SceneRequests.RequestUpdateTransform ||
             uiState.SceneRequests.RequestUpdateCamera ||
             uiState.SceneRequests.RequestUpdateLight ||
+            uiState.SceneRequests.RequestAddScriptSlot ||
+            uiState.SceneRequests.RequestRemoveScriptSlot ||
+            uiState.SceneRequests.RequestSetScriptSlotEnabled ||
             !uiState.SceneRequests.RequestDeleteEntities.empty();
 
         std::vector<XJAssetHandle> changedMaterialHandles;
@@ -566,6 +570,42 @@ namespace XJ
                 uiState.Selection.HighlightedEntities.clear();
                 uiState.SelectedEntityDetails = {};
 
+                NotifyAfterMutation();
+            }
+        }
+
+        if (uiState.SceneRequests.RequestAddScriptSlot)
+        {
+            const auto request = uiState.SceneRequests.AddScriptSlot;
+            uiState.SceneRequests.RequestAddScriptSlot = false;
+            uiState.SceneRequests.AddScriptSlot = {};
+            if (mAssetRegistry && XJEditorSceneService::AddScriptSlot(
+                    *mScene, request.EntityId, request.ScriptAsset, *mAssetRegistry))
+            {
+                NotifyAfterMutation();
+            }
+        }
+
+        if (uiState.SceneRequests.RequestRemoveScriptSlot)
+        {
+            const auto request = uiState.SceneRequests.RemoveScriptSlot;
+            uiState.SceneRequests.RequestRemoveScriptSlot = false;
+            uiState.SceneRequests.RemoveScriptSlot = {};
+            if (XJEditorSceneService::RemoveScriptSlot(
+                    *mScene, request.EntityId, request.SlotId))
+            {
+                NotifyAfterMutation();
+            }
+        }
+
+        if (uiState.SceneRequests.RequestSetScriptSlotEnabled)
+        {
+            const auto request = uiState.SceneRequests.SetScriptSlotEnabled;
+            uiState.SceneRequests.RequestSetScriptSlotEnabled = false;
+            uiState.SceneRequests.SetScriptSlotEnabled = {};
+            if (XJEditorSceneService::SetScriptSlotEnabled(
+                    *mScene, request.EntityId, request.SlotId, request.Enabled))
+            {
                 NotifyAfterMutation();
             }
         }
@@ -836,6 +876,13 @@ namespace XJ
 
         uiState.SceneRequests.RequestResetMaterialParameter = false;
         uiState.SceneRequests.ResetMaterialParameter = {};
+
+        uiState.SceneRequests.RequestAddScriptSlot = false;
+        uiState.SceneRequests.AddScriptSlot = {};
+        uiState.SceneRequests.RequestRemoveScriptSlot = false;
+        uiState.SceneRequests.RemoveScriptSlot = {};
+        uiState.SceneRequests.RequestSetScriptSlotEnabled = false;
+        uiState.SceneRequests.SetScriptSlotEnabled = {};
     }
 
     void XJEditorSceneController::ResetSelectionForScene(XJEditorUIState& uiState, XJAssetHandle sceneHandle)
@@ -847,18 +894,36 @@ namespace XJ
         uiState.SelectedEntityDetails = {};//删除选择数据
     }
     
-    bool XJEditorSceneController::InstantiateSceneAsset(std::shared_ptr<XJSceneAsset> sceneAsset, XJAssetHandle sceneHandle)
+    bool XJEditorSceneController::InstantiateSceneAsset(
+        std::shared_ptr<XJSceneAsset> sceneAsset,
+        XJAssetHandle sceneHandle,
+        bool* outSceneModified)
     {
+        if (outSceneModified)
+            *outSceneModified = false;
+
         if(!mScene || !sceneAsset || !mAssetRegistry)
             return false;
 
-        mInstantiateContext = {};
-        mInstantiateContext.Registry = mAssetRegistry;
-        mInstantiateContext.SourceScene = { sceneHandle, XJAssetType::Scene };
-        mInstantiateContext.DefaultTexture = mDefaultTexture;
-        mInstantiateContext.DefaultSampler = mDefaultSampler;
+        XJSceneInstantiateContext nextContext;
+        nextContext.Registry = mAssetRegistry;
+        nextContext.SourceScene = { sceneHandle, XJAssetType::Scene };
+        nextContext.DefaultTexture = mDefaultTexture;
+        nextContext.DefaultSampler = mDefaultSampler;
 
-        XJSceneInstantiator::Instantiate(*sceneAsset, *mScene, &mInstantiateContext);
+        // EntityMap 仅供实例化过程使用。开始潜在的 Scene 替换前，先清除旧裸指针。
+        mInstantiateContext.EntityMap.clear();
+
+        if (!XJSceneInstantiator::Instantiate(*sceneAsset, *mScene, &nextContext))
+        {
+            if (outSceneModified)
+                *outSceneModified = nextContext.TargetSceneModified;
+            return false;
+        }
+
+        mInstantiateContext = std::move(nextContext);
+        if (outSceneModified)
+            *outSceneModified = true;
         return true;
     }
 

@@ -43,7 +43,18 @@ namespace XJ
         if (!object.is_object() || !object.contains(key) || !object[key].is_number_integer())
             return fallback;
 
-        return object[key].get<int>();
+        try
+        {
+            const int64_t value = object[key].get<int64_t>();
+            if (value < std::numeric_limits<int>::min() ||
+                value > std::numeric_limits<int>::max())
+                return fallback;
+            return static_cast<int>(value);
+        }
+        catch (const nlohmann::json::exception&)
+        {
+            return fallback;
+        }
     }
 
     inline std::string JsonReadStringOr(const nlohmann::json& object, const char* key, const std::string& fallback = {})
@@ -219,6 +230,36 @@ namespace XJ
             return true;
 
         std::filesystem::remove(tempPath);
+        return false;
+    }
+
+    inline bool WriteTextFileAtomic(const std::filesystem::path& path, const std::string& text)
+    {
+        if (path.has_parent_path())
+            std::filesystem::create_directories(path.parent_path());
+
+        const std::filesystem::path tempPath = path.string() + ".tmp";
+        {
+            std::ofstream out(tempPath, std::ios::binary | std::ios::trunc);
+            if (!out.is_open())
+                return false;
+            out.write(text.data(), static_cast<std::streamsize>(text.size()));
+            if (!out.good())
+                return false;
+        }
+
+        std::error_code ec;
+        std::filesystem::rename(tempPath, path, ec);
+        if (!ec)
+            return true;
+
+        std::filesystem::remove(path, ec);
+        ec.clear();
+        std::filesystem::rename(tempPath, path, ec);
+        if (!ec)
+            return true;
+
+        std::filesystem::remove(tempPath, ec);
         return false;
     }
 }

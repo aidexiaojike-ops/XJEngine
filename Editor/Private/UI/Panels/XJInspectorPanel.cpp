@@ -26,6 +26,7 @@ namespace XJ
             case XJAssetType::Material: return "Material";
             case XJAssetType::Scene: return "Scene";
             case XJAssetType::Shader: return "Shader";
+            case XJAssetType::Script:return "Script";
             default: return "Unknown";
         }
     }
@@ -167,6 +168,9 @@ namespace XJ
 
         if (showLight && details.Light.Valid)
             DrawLightComponent(details);
+
+        if (details.Script.Valid)
+            DrawScriptComponent(details);
 
         DrawAddComponentButton(details);
     }
@@ -383,6 +387,13 @@ namespace XJ
                     RequestAddComponent(details, XJEditorComponentType::Light);
             }
 
+            if (!details.Script.Valid)
+            {
+                hasAnyAvailable = true;
+                if (ImGui::MenuItem("Script"))
+                    RequestAddComponent(details, XJEditorComponentType::Script);
+            }
+
             if (!hasAnyAvailable)
                 ImGui::TextDisabled("No components available");
 
@@ -533,6 +544,16 @@ namespace XJ
                     details.Light.Range,
                     details.Light.InnerAngleDegrees,
                     details.Light.OuterAngleDegrees);
+                return buffer;
+            }
+
+            case XJEditorComponentType::Script:
+            {
+                std::snprintf(
+                    buffer,
+                    sizeof(buffer),
+                    "Script\nSlots: %zu",
+                    details.Script.Slots.size());
                 return buffer;
             }
 
@@ -1296,6 +1317,108 @@ namespace XJ
             mState.SceneRequests.UpdateLight.Range = range;
             mState.SceneRequests.UpdateLight.InnerAngleDegrees = innerAngleDegrees;
             mState.SceneRequests.UpdateLight.OuterAngleDegrees = outerAngleDegrees;
+        }
+
+        ImGui::TreePop();
+    }
+
+    void XJInspectorPanel::DrawScriptComponent(const XJEditorEntityDetailsView& details)
+    {
+        if (!DrawComponentFrame("Script", XJEditorComponentType::Script, details))
+            return;
+
+        auto requestAddScript = [&](XJAssetHandle handle)
+        {
+            if (handle == 0)
+                return;
+            mState.SceneRequests.RequestAddScriptSlot = true;
+            mState.SceneRequests.AddScriptSlot.EntityId = details.Id;
+            mState.SceneRequests.AddScriptSlot.ScriptAsset = handle;
+        };
+
+        if (details.Script.Slots.empty())
+        {
+            ImGui::TextDisabled("No scripts attached");
+        }
+        else
+        {
+            for (size_t index = 0; index < details.Script.Slots.size(); ++index)
+            {
+                const auto& slot = details.Script.Slots[index];
+                ImGui::PushID(static_cast<int>(index));
+                const std::string label = "Slot " + std::to_string(index);
+                ImGui::SeparatorText(label.c_str());
+                ImGui::LabelText("Script", "%s", slot.DisplayName.c_str());
+                ImGui::LabelText("Asset", "0x%016llX",
+                                 static_cast<unsigned long long>(slot.ScriptAsset));
+                ImGui::LabelText("Slot UUID", "0x%016llX",
+                                 static_cast<unsigned long long>(slot.SlotId));
+                bool enabled = slot.Enabled;
+                if (ImGui::Checkbox("Enabled", &enabled))
+                {
+                    mState.SceneRequests.RequestSetScriptSlotEnabled = true;
+                    mState.SceneRequests.SetScriptSlotEnabled.EntityId = details.Id;
+                    mState.SceneRequests.SetScriptSlotEnabled.SlotId = slot.SlotId;
+                    mState.SceneRequests.SetScriptSlotEnabled.Enabled = enabled;
+                }
+                ImGui::LabelText("Overrides", "%u", slot.OverrideCount);
+                if (ImGui::SmallButton("Remove"))
+                {
+                    mState.SceneRequests.RequestRemoveScriptSlot = true;
+                    mState.SceneRequests.RemoveScriptSlot.EntityId = details.Id;
+                    mState.SceneRequests.RemoveScriptSlot.SlotId = slot.SlotId;
+                }
+                ImGui::PopID();
+            }
+        }
+
+        ImGui::Spacing();
+        if (ImGui::Button("Add Script", ImVec2(-1.0f, 0.0f)))
+            ImGui::OpenPopup("AddScriptSlotPopup");
+
+        if (ImGui::BeginPopup("AddScriptSlotPopup"))
+        {
+            std::vector<XJAssetMeta> scripts;
+            if (mState.AssetRegistry)
+            {
+                for (const auto& [handle, meta] : mState.AssetRegistry->XJGetAllMetas())
+                {
+                    (void)handle;
+                    if (meta.Type == XJAssetType::Script)
+                        scripts.push_back(meta);
+                }
+            }
+            std::sort(scripts.begin(), scripts.end(),
+                [](const XJAssetMeta& left, const XJAssetMeta& right)
+                {
+                    return left.Name < right.Name;
+                });
+
+            if (scripts.empty())
+                ImGui::TextDisabled("No Script assets found");
+            for (const auto& script : scripts)
+            {
+                if (ImGui::Selectable(script.Name.c_str()))
+                {
+                    requestAddScript(script.Handle);
+                    ImGui::CloseCurrentPopup();
+                }
+            }
+            ImGui::EndPopup();
+        }
+
+        if (ImGui::BeginDragDropTarget())
+        {
+            if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload(XJ_ASSET_PAYLOAD_NAME))
+            {
+                if (payload->DataSize == sizeof(XJEditorAssetDragPayload))
+                {
+                    const auto* asset = static_cast<const XJEditorAssetDragPayload*>(payload->Data);
+                    if (asset && asset->Type == XJAssetType::Script)
+                        requestAddScript(asset->Handle);
+                }
+            }
+            ImGui::EndDragDropTarget();
         }
 
         ImGui::TreePop();

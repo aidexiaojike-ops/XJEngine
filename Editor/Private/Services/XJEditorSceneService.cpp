@@ -11,6 +11,7 @@
 #include "ECS/Component/Material/XJSurfaceMaterialComponent.h"
 #include "ECS/Component/XJSceneAssetComponents.h"
 #include "ECS/Component/XJLightComponent.h"
+#include "ECS/Component/XJScriptComponent.h"
 
 #include "Asset/Loader/XJMeshAssetLoader.h"
 #include "Asset/XJAssetRegistry.h"
@@ -287,6 +288,7 @@ namespace XJ
             view.HasLight = entity->HasComponent<XJLightComponent>();
             view.HasCamera = entity->HasComponent<XJCameraComponent>();
             view.HasSceneRef = entity->HasComponent<XJSceneAssetRefComponent>();
+            view.HasScript = entity->HasComponent<XJScriptComponent>();
             //查看信息
             if (view.HasMesh)
             {
@@ -610,6 +612,26 @@ namespace XJ
             result.push_back(static_cast<XJEditorEntityId>(xjEntity->XJGetUUID()));
         }
 
+        auto scriptView = registry.view<XJScriptComponent>();
+        for (auto entity : scriptView)
+        {
+            const auto& scripts = scriptView.get<XJScriptComponent>(entity);
+            bool usesAsset = false;
+            for (const auto& slot : scripts.GetSlots())
+            {
+                if (slot.Script.Handle == assetHandle)
+                {
+                    usesAsset = true;
+                    break;
+                }
+            }
+            if (!usesAsset)
+                continue;
+            XJEntity* xjEntity = scene.GetEntity(entity);
+            if (xjEntity)
+                result.push_back(static_cast<XJEditorEntityId>(xjEntity->XJGetUUID()));
+        }
+
         return result;
     }
 
@@ -895,6 +917,29 @@ namespace XJ
             details.Light.OuterAngleDegrees = light.XJGetOuterAngleDegrees();
         }
 
+        if (entity->HasComponent<XJScriptComponent>())
+        {
+            const auto& component = entity->GetComponent<XJScriptComponent>();
+            details.Script.Valid = true;
+            for (const auto& slot : component.GetSlots())
+            {
+                XJEditorScriptSlotView view;
+                view.SlotId = static_cast<uint64_t>(slot.SlotId);
+                view.Enabled = slot.Enabled;
+                view.ScriptAsset = slot.Script.Handle;
+                view.ScriptUri = slot.Script.ToUri();
+                view.DisplayName = view.ScriptUri;
+                view.OverrideCount = static_cast<uint32_t>(slot.FieldOverrides.size());
+                if (assetRegistry && slot.Script.IsValid())
+                {
+                    const auto meta = assetRegistry->GetMeta(slot.Script.Handle);
+                    if (meta && meta->Type == XJAssetType::Script)
+                        view.DisplayName = meta->Name;
+                }
+                details.Script.Slots.push_back(std::move(view));
+            }
+        }
+
         return details;
     }
 
@@ -1035,6 +1080,14 @@ namespace XJ
                 return true;
             }
 
+            case XJEditorComponentType::Script:
+            {
+                if (entity->HasComponent<XJScriptComponent>())
+                    return false;
+                entity->AddComponent<XJScriptComponent>();
+                return true;
+            }
+
             default:
                 return false;
         }
@@ -1106,9 +1159,56 @@ namespace XJ
                     return true;
             }
 
+            case XJEditorComponentType::Script:
+            {
+                if (!entity->HasComponent<XJScriptComponent>())
+                    return false;
+                entity->RemoveComponent<XJScriptComponent>();
+                return true;
+            }
+
             default:
                 return false;
         }
+    }
+
+    bool XJEditorSceneService::AddScriptSlot(
+        XJScene& scene,
+        XJEditorEntityId entityId,
+        XJAssetHandle scriptAsset,
+        XJAssetRegistry& assetRegistry)
+    {
+        XJEntity* entity = FindEntityById(scene, entityId);
+        if (!entity || !entity->IsValid() || !entity->HasComponent<XJScriptComponent>())
+            return false;
+        const auto meta = assetRegistry.GetMeta(scriptAsset);
+        if (!meta || meta->Type != XJAssetType::Script)
+            return false;
+        auto& component = entity->GetComponent<XJScriptComponent>();
+        return component.AddSlot({scriptAsset, XJAssetType::Script}) != nullptr;
+    }
+
+    bool XJEditorSceneService::RemoveScriptSlot(
+        XJScene& scene,
+        XJEditorEntityId entityId,
+        uint64_t slotId)
+    {
+        XJEntity* entity = FindEntityById(scene, entityId);
+        if (!entity || !entity->IsValid() || !entity->HasComponent<XJScriptComponent>() || slotId == 0)
+            return false;
+        return entity->GetComponent<XJScriptComponent>().RemoveSlot(XJUUID{slotId});
+    }
+
+    bool XJEditorSceneService::SetScriptSlotEnabled(
+        XJScene& scene,
+        XJEditorEntityId entityId,
+        uint64_t slotId,
+        bool enabled)
+    {
+        XJEntity* entity = FindEntityById(scene, entityId);
+        if (!entity || !entity->IsValid() || !entity->HasComponent<XJScriptComponent>() || slotId == 0)
+            return false;
+        return entity->GetComponent<XJScriptComponent>().SetSlotEnabled(XJUUID{slotId}, enabled);
     }
 
     bool XJEditorSceneService::AddMeshRendererComponent(XJScene& scene, XJEditorEntityId entityId, XJAssetHandle defaultMeshAsset, XJAssetRegistry& assetRegistry, XJSceneInstantiateContext& instantiateContext, const std::shared_ptr<XJTexture>& defaultTexture, const std::shared_ptr<XJSampler>& defaultSampler)

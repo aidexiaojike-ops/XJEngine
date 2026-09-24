@@ -22,6 +22,7 @@ namespace XJ
         bool HasCamera = false;
         bool HasSceneRef = false;
         bool HasLight = false;
+        bool HasScript = false;
 
         XJAssetHandle MeshAsset = 0;
         std::string SourceSceneUri;
@@ -110,6 +111,22 @@ namespace XJ
         uint64_t SourceEntity = 0;
     };
 
+    struct XJEditorScriptSlotView
+    {
+        uint64_t SlotId = 0;
+        bool Enabled = true;
+        XJAssetHandle ScriptAsset = 0;
+        std::string ScriptUri;
+        std::string DisplayName;
+        uint32_t OverrideCount = 0;
+    };
+
+    struct XJEditorScriptView
+    {
+        bool Valid = false;
+        std::vector<XJEditorScriptSlotView> Slots;
+    };
+
     struct XJEditorEntityDetailsView//所有的组件  id 名字  状态
     {
         bool Valid = false;
@@ -122,6 +139,7 @@ namespace XJ
         XJEditorMeshAssetRefView Mesh;
         XJEditorSceneAssetRefView SceneRef;
         XJEditorLightView Light;   
+        XJEditorScriptView Script;
     };
 
 }

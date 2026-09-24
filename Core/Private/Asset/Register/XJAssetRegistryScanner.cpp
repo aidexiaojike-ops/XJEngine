@@ -42,6 +42,8 @@ namespace XJ
                     return "SceneSerializer";
                 case XJAssetType::Shader:
                     return "ShaderSerializer";
+                case XJAssetType::Script:
+                    return "ScriptCompiler";
                 default:
                     return "";
             }
@@ -72,6 +74,9 @@ namespace XJ
 
         if (ext == ".xjshader")//读取shader
              return XJAssetType::Shader;
+        
+        if (ext == ".xjs")//脚本
+            return XJAssetType::Script;
 
         return XJAssetType::None;
     }

@@ -14,6 +14,8 @@
 #include "Asset/Serialization/XJMaterialAssetSerializer.h"
 #include "Asset/Serialization/XJSceneAssetSerializer.h"
 #include "Asset/Serialization/XJShaderAssetSerializer.h"
+#include "Asset/Serialization/XJJsonIO.h"
+#include "Asset/Importer/XJScriptAssetCompiler.h"
 #include "Asset/XJMeshAsset.h"  
 #include "Geometry/XJBoundingBox.h" 
 #include "Render/Shader/XJShaderValidation.h"
@@ -232,6 +234,7 @@ namespace XJ
                 case XJAssetType::Material: return "MaterialSerializer";
                 case XJAssetType::Scene:    return "SceneSerializer";
                 case XJAssetType::Shader:   return "ShaderSerializer";
+                case XJAssetType::Script:   return "ScriptCompiler";
                 default:                    return "";
             }
         }
@@ -798,6 +801,66 @@ namespace XJ
             return 0;
 
         return handle;
+    }
+
+    XJAssetHandle XJEditorAssetService::CreateScriptAsset(
+        XJAssetRegistry& assetRegistry,
+        const std::filesystem::path& directory,
+        const std::filesystem::path& registryPath)
+    {
+        const std::filesystem::path path =
+            BuildUniqueAssetPath(assetRegistry, directory, "ScriptName", ".xjs");
+        if (path.empty())
+            return 0;
+
+        const XJAssetHandle handle = GeneratePersistentAssetHandle(assetRegistry);
+        if (handle == XJAsset::InvalidHandle)
+            return 0;
+
+        const std::string className = path.stem().string();
+        const std::string source =
+            "class " + className + " : ScriptBehaviour\n"
+            "{\n"
+            "}\n";
+
+        if (!WriteTextFileAtomic(path, source))
+        {
+            RemoveFileForRollback(path);
+            return 0;
+        }
+
+        if (!RegisterCreatedAsset(assetRegistry, path, XJAssetType::Script, handle, registryPath))
+            return 0;
+        return handle;
+    }
+
+    bool XJEditorAssetService::SaveScriptSource(
+        XJAssetRegistry& assetRegistry,
+        XJAssetHandle handle,
+        const std::string& source,
+        std::string& outError)
+    {
+        outError.clear();
+        const auto meta = assetRegistry.GetMeta(handle);
+        if (!meta || meta->Type != XJAssetType::Script)
+        {
+            outError = "Selected asset is not a Script.";
+            return false;
+        }
+        if (!WriteTextFileAtomic(meta->SourcePath, source))
+        {
+            outError = "Failed to save script source.";
+            return false;
+        }
+
+        // 保存允许暂时存在语法错误；Play 的严格预检会阻止坏脚本运行。
+        const auto compiled = XJScriptAssetCompiler::CompileSource(source, meta->SourcePath);
+        if (compiled && !compiled->IsCompiled() && !compiled->Diagnostics.empty())
+        {
+            spdlog::warn("Saved script '{}' with {} compile diagnostics.",
+                         meta->SourcePath.string(), compiled->Diagnostics.size());
+        }
+        return true;
     }
 
     bool XJEditorAssetService::DeleteAsset(XJAssetRegistry& assetRegistry, XJAssetHandle handle, const std::filesystem::path& registryPath)

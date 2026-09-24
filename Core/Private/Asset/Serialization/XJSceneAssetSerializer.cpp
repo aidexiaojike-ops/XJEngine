@@ -5,14 +5,20 @@
 #include "ECS/Component/XJSceneAssetComponents.h"
 #include "ECS/Component/XJTransformComponent.h"
 #include "ECS/Component/XJLightComponent.h"
+#include "ECS/Component/XJScriptComponent.h"
 #include "ECS/XJEntity.h"
 #include "ECS/XJScene.h"
 #include "Asset/Serialization/XJJsonIO.h"
 #include "ECS/XJReservedUUID.h"
 
 #include <fstream>
+#include <algorithm>
+#include <charconv>
+#include <cmath>
 #include <nlohmann/json.hpp>
+#include <optional>
 #include <string>
+#include <unordered_set>
 
 namespace XJ
 {
@@ -94,6 +100,102 @@ namespace XJ
         };
     }
 
+    static nlohmann::json SerializeScriptValue(const XJScriptValue& value)
+    {
+        if (const auto* boolean = std::get_if<bool>(&value))
+            return {{"type", "bool"}, {"value", *boolean}};
+        if (const auto* integer = std::get_if<int64_t>(&value))
+            return {{"type", "int"}, {"value", std::to_string(*integer)}};
+        if (const auto* real = std::get_if<double>(&value))
+            return {{"type", "float"}, {"value", *real}};
+        return {{"type", "string"}, {"value", std::get<std::string>(value)}};
+    }
+
+    static std::optional<XJScriptValue> DeserializeScriptValue(const nlohmann::json& json)
+    {
+        if (!json.is_object())
+            return std::nullopt;
+        const std::string type = JsonReadStringOr(json, "type");
+        if (!json.contains("value"))
+            return std::nullopt;
+        const auto& value = json["value"];
+
+        if (type == "bool" && value.is_boolean())
+            return XJScriptValue{value.get<bool>()};
+        if (type == "string" && value.is_string())
+            return XJScriptValue{value.get<std::string>()};
+        if (type == "float" && value.is_number())
+        {
+            const double real = value.get<double>();
+            return std::isfinite(real) ? std::optional<XJScriptValue>{real} : std::nullopt;
+        }
+        if (type == "int" && value.is_string())
+        {
+            const std::string text = value.get<std::string>();
+            int64_t integer = 0;
+            const auto parsed = std::from_chars(text.data(), text.data() + text.size(), integer);
+            if (parsed.ec == std::errc{} && parsed.ptr == text.data() + text.size())
+                return XJScriptValue{integer};
+        }
+        return std::nullopt;
+    }
+
+    static nlohmann::json SerializeScript(const XJSceneScriptData& script)
+    {
+        nlohmann::json slots = nlohmann::json::array();
+        for (const auto& slot : script.Slots)
+        {
+            nlohmann::json overrides = nlohmann::json::array();
+            std::vector<uint64_t> fieldIds;
+            fieldIds.reserve(slot.FieldOverrides.size());
+            for (const auto& [fieldId, value] : slot.FieldOverrides)
+                fieldIds.push_back(fieldId);
+            std::sort(fieldIds.begin(), fieldIds.end());
+            for (uint64_t fieldId : fieldIds)
+            {
+                overrides.push_back({
+                    {"fieldId", std::to_string(fieldId)},
+                    {"value", SerializeScriptValue(slot.FieldOverrides.at(fieldId))}
+                });
+            }
+
+            slots.push_back({
+                {"slotId", UUIDToString(slot.SlotId)},
+                {"enabled", slot.Enabled},
+                {"script", slot.Script.ToUri()},
+                {"overrides", std::move(overrides)}
+            });
+        }
+
+        return {
+            {"uuid", UUIDToString(script.UUID)},
+            {"type", "ScriptComponent"},
+            {"slots", std::move(slots)}
+        };
+    }
+
+    static bool IsScriptDataSerializable(const XJSceneScriptData& script)
+    {
+        if (!script.Valid || script.UUID == 0)
+            return false;
+        std::unordered_set<uint64_t> slotIds;
+        for (const auto& slot : script.Slots)
+        {
+            const uint64_t slotId = static_cast<uint64_t>(slot.SlotId);
+            if (slotId == 0 || !slot.Script.IsValid() || slot.Script.Type != XJAssetType::Script ||
+                !slotIds.insert(slotId).second)
+                return false;
+            for (const auto& [fieldId, value] : slot.FieldOverrides)
+            {
+                if (fieldId == 0)
+                    return false;
+                if (const auto* real = std::get_if<double>(&value); real && !std::isfinite(*real))
+                    return false;
+            }
+        }
+        return true;
+    }
+
     static nlohmann::json SerializeEntity(const XJSceneEntityData& e)
     {
         nlohmann::json j;
@@ -124,6 +226,11 @@ namespace XJ
 
         if (e.HasLight)
             j["components"]["light"] = SerializeLight(e.Light);
+
+        if (e.HasScript)
+        {
+            j["components"]["script"] = SerializeScript(e.Script);
+        }
 
         return j;
     }
@@ -191,6 +298,58 @@ namespace XJ
         return l;
     }
 
+    static XJSceneScriptData DeserializeScript(const nlohmann::json& json)
+    {
+        XJSceneScriptData result;
+        result.UUID = ReadUUID(json, "uuid");
+        if (!json.is_object() || result.UUID == 0 ||
+            !json.contains("slots") || !json["slots"].is_array())
+        {
+            result.Valid = false;
+            return result;
+        }
+
+        std::unordered_set<uint64_t> slotIds;
+        for (const auto& slotJson : json["slots"])
+        {
+            XJSceneScriptSlotData slot;
+            slot.SlotId = ReadUUID(slotJson, "slotId");
+            slot.Enabled = JsonReadBoolOr(slotJson, "enabled", true);
+            slot.Script = XJAssetRef::FromUri(
+                JsonReadStringOr(slotJson, "script"), XJAssetType::Script);
+
+            const uint64_t slotId = static_cast<uint64_t>(slot.SlotId);
+            if (!slotJson.is_object() || slotId == 0 || !slot.Script.IsValid() ||
+                !slotIds.insert(slotId).second)
+            {
+                result.Valid = false;
+            }
+
+            if (slotJson.contains("overrides") && slotJson["overrides"].is_array())
+            {
+                for (const auto& overrideJson : slotJson["overrides"])
+                {
+                    const uint64_t fieldId = JsonReadUInt64Or(overrideJson, "fieldId", 0);
+                    const auto value = overrideJson.contains("value")
+                        ? DeserializeScriptValue(overrideJson["value"])
+                        : std::nullopt;
+                    if (fieldId == 0 || !value || !slot.FieldOverrides.emplace(fieldId, *value).second)
+                    {
+                        result.Valid = false;
+                        continue;
+                    }
+                }
+            }
+            else if (slotJson.contains("overrides"))
+            {
+                result.Valid = false;
+            }
+
+            result.Slots.push_back(std::move(slot));
+        }
+        return result;
+    }
+
     static XJSceneEntityData DeserializeEntity(const nlohmann::json& j)
     {
         XJSceneEntityData e;
@@ -240,13 +399,24 @@ namespace XJ
             e.Light = DeserializeLight(components["light"]);
         }
 
+        if (components.contains("script"))
+        {
+            e.HasScript = true;
+            e.Script = DeserializeScript(components["script"]);
+        }
         return e;
     }
 
     bool XJSceneAssetSerializer::SaveToFile(const XJSceneAsset& sceneAsset, const std::filesystem::path& path)
     {
+        for (const auto& entity : sceneAsset.Entities)
+        {
+            if (entity.HasScript && !IsScriptDataSerializable(entity.Script))
+                return false;
+        }
+
         nlohmann::json root;
-        root["version"] = 2;
+        root["version"] = 3;
         root["asset"] = {
             {"handle", std::to_string(sceneAsset.mHandle)},
             {"type", "Scene"},
@@ -276,7 +446,8 @@ namespace XJ
             return nullptr;
         }
     
-        if (JsonReadIntOr(j, "version", 0) != 2)
+        const int version = JsonReadIntOr(j, "version", 0);
+        if (version != 2 && version != 3)
             return nullptr;
     
         auto asset = std::make_shared<XJSceneAsset>();
@@ -383,6 +554,25 @@ namespace XJ
             data.Light.Range = l.XJGetRange();
             data.Light.InnerAngleDegrees = l.XJGetInnerAngleDegrees();
             data.Light.OuterAngleDegrees = l.XJGetOuterAngleDegrees();
+        }
+
+        if (entity.HasComponent<XJScriptComponent>())
+        {
+            const auto& component = entity.GetComponent<XJScriptComponent>();
+        
+            data.HasScript = true;
+            data.Script.UUID = component.XJGetUUID();
+        
+            for (const auto& slot : component.GetSlots())
+            {
+                XJSceneScriptSlotData item;
+                item.SlotId = slot.SlotId;
+                item.Enabled = slot.Enabled;
+                item.Script = slot.Script;
+                item.FieldOverrides = slot.FieldOverrides;
+            
+                data.Script.Slots.push_back(std::move(item));
+            }
         }
 
         return data;

@@ -25,6 +25,8 @@ namespace XJ
                     return "Scene";
                 case XJAssetType::Shader:
                     return "Shader";
+                case XJAssetType::Script:
+                    return "Script";
                 default:
                     return "None";
             }
@@ -42,6 +44,8 @@ namespace XJ
                 return XJAssetType::Scene;
             if (value == "Shader")
                 return XJAssetType::Shader;
+            if (value == "Script")
+                return XJAssetType::Script;
 
             return std::nullopt;
         }

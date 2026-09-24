@@ -47,6 +47,8 @@ namespace XJ
 
         bool RequestSelectAssetInContentBrowser = false;
         XJAssetHandle RequestedContentBrowserAsset = 0;
+        bool RequestOpenScriptEditor = false;
+        XJAssetHandle RequestedScriptEditorAsset = 0;
         uint64_t AssetDetailEpoch = 0;    // 资产详情快照的失效版本号，资产变更时自增
 
         XJEditorSceneViewModel SceneView;

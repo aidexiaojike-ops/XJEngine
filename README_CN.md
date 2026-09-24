@@ -8,7 +8,7 @@
 
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20Linux%20%7C%20macOS-brightgreen)](https://github.com/aidexiaojike-ops/XJEngine)
-[![C++](https://img.shields.io/badge/C++-17-blue.svg)](https://en.cppreference.com/w/cpp/17)
+[![C++](https://img.shields.io/badge/C++-20-blue.svg)](https://en.cppreference.com/w/cpp/20)
 [![Vulkan](https://img.shields.io/badge/Vulkan-1.2+-orange.svg)](https://www.vulkan.org/)
 [![CMake](https://img.shields.io/badge/CMake-3.10+-yellow.svg)](https://cmake.org/)
 
@@ -22,6 +22,7 @@ XJEngine 是一个基于 Vulkan 和 ECS 架构的轻量级现代游戏引擎，�
 | **稳健的 Swapchain 生命周期** | 结构化 acquire/present 结果、窗口尺寸变化重建、减少逐帧阻塞，并明确处理 device-lost 状态 |
 | **ECS 架构** | 基于 EnTT 的高性能实体组件系统 |
 | **事件驱动系统** | 完整的窗口、鼠标、键盘事件处理 |
+| **内置脚本系统** | `.xjs` 语言支持 Lexer、Parser、语义分析、验证字节码、受限运行时、ECS 生命周期和编辑器集成 |
 | **模块化材质系统** | 可扩展的纹理、采样器、UBO 管线 |
 | **Shader Schema 系统** | JSON 定义着色器参数，Schema 验证、绑定解析、描述符布局构建、SPIR-V 反射、材质资产序列化 |
 | **Surface 材质系统** | Schema 驱动的 Surface 管线，共享 Frame/Light UBO、材质参数块、纹理绑定与动态描述符池扩容 |
@@ -61,7 +62,7 @@ cd ../bin
 
 **前置要求：**
 - CMake 3.10+
-- 支持 C++17 的编译器
+- 支持 C++20 的编译器
 - Vulkan SDK 可选手动安装；CMake 会自动按顺序解析：`VULKAN_SDK` 环境变量 -> `ThirdParty/VulkanSDK` 本地缓存 -> 自动下载 LunarG Vulkan SDK 1.3.283.0
 
 ## 🏗️ 引擎架构
@@ -96,6 +97,16 @@ File -> Importer -> Asset (CPU) -> Factory -> Resource (GPU) -> Renderer
 - **原子 JSON IO**：`XJJsonIO` 统一提供 JSON 读取辅助（float/vec2/vec3/vec4/uint64）与原子文件写入（临时文件 + rename），供所有资产序列化器使用
 - **引导程序**：`XJAssetBootstrap` 管理默认资产注册和场景创建
 - **运行时工具**：`XJSceneRuntimeUtil` 提供主摄像机查找等运行时辅助功能
+
+### 脚本系统
+
+- **语言管线**：`XJScriptLexer` -> `XJScriptParser` -> `XJScriptSemanticAnalyzer` -> `XJScriptCompiler`，生成带结构化诊断的不可变字节码模块
+- **验证运行时**：`XJScriptBytecodeVerifier` 在执行前验证模块；`XJScriptRuntime` 限制指令预算和调用深度，并处理类型错误、溢出、故障隔离、堆栈跟踪及重入保护
+- **ECS 生命周期**：`XJScriptSystem` 创建实体脚本实例，通过 `XJSystemScheduler` 调度 `OnCreate`、`OnUpdate`、`OnFixedUpdate`、`OnDestroy`
+- **脚本组件**：`XJScriptComponent` 支持每个实体挂载多个可启停脚本槽、稳定槽 UUID，以及基于 `[[FieldId("...")]]` 的字段覆盖
+- **原生桥接**：`XJEcsScriptNativeInvoker` 向脚本暴露受控 ECS 操作，首批原生 API 包含 `Transform.RotateY`
+- **资产与持久化**：`.xjs` 注册为 `XJAssetType::Script`，由 `XJScriptAssetCompiler`/`Loader` 编译缓存；场景保存脚本槽 ID、启用状态、资产引用和字段覆盖
+- **编辑器集成**：Content Browser 与 Inspector 支持脚本创建、编译、分配、排序、字段配置和错误验证
 
 - **Shader Schema 系统**：JSON 定义的着色器参数，`XJShaderSchemaValidator` 验证 + `XJShaderSchemaBindingResolver` 绑定解析 + `XJShaderDescriptorLayoutBuilder` 描述符布局构建
 - **Lit 材质参数**：`Lit.schema` 提供基础颜色、Albedo 纹理、高光强度和光泽度，并复用通用 SurfaceMaterial 运行时
@@ -134,7 +145,7 @@ File -> Importer -> Asset (CPU) -> Factory -> Resource (GPU) -> Renderer
 - **材质系统**：`XJBaseMaterialSystem`、`XJSurfaceMaterialSystem`、`XJMaterialRenderSystemBase`、`XJSurfaceMaterialComponent`、`XJMaterialParameterBlock`/`Builder`/`Writer`
 - **摄像机系统**：`XJCameraController`（Core/Camera）、`XJCameraMath`（数学工具）、`XJCameraSystem`（ECS 适配）
 - **资产系统**：`XJModelImporter`、`XJTextureImporter`、`XJAssetRegistry`、`XJAssetRegistryScanner`、`XJAssetBootstrap`、`XJSceneRuntimeUtil`、`XJMeshAssetLoader`、`XJJsonIO`
-- **ECS 基础**：`XJEntity` 通过场景生命周期 token 校验避免悬垂访问；`XJReservedUUID` 定义引擎/编辑器保留 UUID 区间，用户 UUID 生成自动避开；`XJSystemScheduler` 管理系统生命周期（Start/Stop），驱动 `OnUpdate` + 固定步进 `OnFixedUpdate`；`XJInput` 输入单例每帧轮询 GLFW，提供键盘/鼠标按住/按下/释放查询、鼠标位置/增量/滚轮、WASD 轴向合成；`XJLightComponent` 支持 Directional/Point/Spot 灯光（开关、颜色、强度、范围及聚光灯内外锥角）
+- **ECS 基础**：`XJEntity` 通过场景生命周期 token 校验避免悬垂访问；`XJReservedUUID` 定义引擎/编辑器保留 UUID 区间，用户 UUID 生成自动避开；`XJSystemScheduler` 提供事务式 Start/Stop、固定步进上限和安全点回调；`XJInput` 输入单例每帧轮询 GLFW，提供键盘/鼠标边沿查询、鼠标增量/滚轮和 WASD 轴向；`XJLightComponent` 支持 Directional/Point/Spot 灯光
 - **编辑器系统**：`XJEditorSceneController`、`XJEditorCameraManager`、`XJEditorSceneService`、`XJUIContext`、`XJEditorRenderer`、`XJEditorUILayer`、编辑器面板
 - **Vulkan 平台层**：`XJSwapchainAcquireResult`/`XJSwapchainPresentResult` 区分成功、重建和设备丢失状态；`XJVulkanInstance` 自动选择最高支持到 Vulkan 1.3 的 API 版本；`XJVulkanSurface`、`XJGlfwWindow`、`XJVulkanTextureSampler` 增加句柄校验、生命周期顺序和 RAII 释放
 
@@ -162,15 +173,26 @@ cmake .. -DCMAKE_BUILD_TYPE=Release
 make -j$(nproc)
 ```
 
+### 测试
+
+第一方 CTest 当前覆盖脚本 Lexer、Parser、语义分析、编译器、字节码验证器、运行时、ECS 原生桥接、资产编译/加载、组件行为、场景序列化、编辑器资产操作和脚本系统生命周期。
+
+```bash
+cmake -S . -B build -DXJ_BUILD_TESTS=ON
+cmake --build build --config Release
+ctest --test-dir build -C Release --output-on-failure
+```
+
 ## 📁 项目结构
 
 ```text
 XJEngine/
 ├── Core/                    # 引擎核心：ECS、渲染、资产、摄像机
-│   ├── Public/ECS/          # 实体组件系统（Entity、Component、System、SystemScheduler）
+│   ├── Public/ECS/          # 实体组件系统（含 ScriptComponent / ScriptSystem）
 │   ├── Public/Camera/       # 摄像机模块（独立于 ECS）
 │   ├── Public/Geometry/     # 几何工具（AABB 包围盒、射线相交检测）
 │   ├── Public/Input/        # 输入系统（键盘/鼠标/轴向轮询）
+│   ├── Public/Script/       # Lexer/Parser/语义分析/编译器/字节码/运行时
 │   ├── Public/Asset/        # Asset 层（CPU）
 │   │   ├── Importer/        # 模型/纹理/材质导入器
 │   │   ├── Loader/          # 资产加载器
@@ -193,7 +215,8 @@ XJEngine/
 │   └── Public/Services/     # 编辑器服务层
 ├── Src/                     # 应用入口
 ├── cmake/                    # CMake 模块
-├── Resource/                # Shader、Mesh、Material、Scenes、Config
+├── Resource/                # Shader、Mesh、Material、Script、Scenes、Config
+├── Tests/                   # CTest 脚本语言、运行时、ECS 与编辑器测试
 └── bin/                     # 运行时输出
 ```
 
@@ -207,6 +230,22 @@ surfaceMat->SetBaseColor(glm::vec4(1.0f, 0.0f, 0.0f, 1.0f));
 
 auto& surfaceComp = entity->AddComponent<XJ::XJSurfaceMaterialComponent>();
 surfaceComp.AddMesh(mesh, surfaceMat);
+```
+
+### 脚本示例
+
+```cpp
+class Rotate : ScriptBehaviour
+{
+    public:
+        [[FieldId("1000000001")]]
+        float speed = 180.0f;
+
+        void OnUpdate(float dt)
+        {
+            Transform.RotateY(speed * dt);
+        }
+};
 ```
 
 ### 编辑器 UI 集成
@@ -271,6 +310,7 @@ cmake .. -DXJ_VULKAN_SDK_URL=<url> -DXJ_VULKAN_DOWNLOAD_TIMEOUT=3600
 - [ ] 完善编辑器面板（Hierarchy / Inspector / Stats）
 - [x] ~~完善 Vulkan Sampler 所有权与 RenderContext 销毁顺序~~
 - [ ] 审查剩余高层资源所有权路径
+- [x] ~~增加脚本语言、运行时、ECS 集成、序列化和编辑器资产的第一方测试~~
 - [ ] 增加核心系统单元测试
 - [ ] 补充 API 文档
 

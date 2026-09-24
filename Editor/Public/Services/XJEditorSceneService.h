@@ -66,6 +66,9 @@ namespace XJ
             static XJEditorEntityId CreateEmptyEntity(XJScene& scene, const std::string& name, XJEditorEntityId parentId);//创建一个空的实体
             static bool AddComponent(XJScene& scene, XJEditorEntityId entityId, XJEditorComponentType componentType, const XJAssetRef& sourceScene);//添加组件
             static bool DeleteComponent(XJScene& scene, XJEditorEntityId entityId, XJEditorComponentType componentType);//删除组件
+            static bool AddScriptSlot(XJScene& scene, XJEditorEntityId entityId, XJAssetHandle scriptAsset, XJAssetRegistry& assetRegistry);
+            static bool RemoveScriptSlot(XJScene& scene, XJEditorEntityId entityId, uint64_t slotId);
+            static bool SetScriptSlotEnabled(XJScene& scene, XJEditorEntityId entityId, uint64_t slotId, bool enabled);
             static bool AddMeshRendererComponent(XJScene& scene, XJEditorEntityId entityId, XJAssetHandle defaultMeshAsset, XJAssetRegistry& assetRegistry, XJSceneInstantiateContext& instantiateContext, const std::shared_ptr<XJTexture>& defaultTexture, const std::shared_ptr<XJSampler>& defaultSampler);//添加mesh组件
             static bool SetMeshRendererMesh(XJScene& scene, XJEditorEntityId entityId, XJAssetHandle meshAsset, XJAssetRegistry& assetRegistry, XJSceneInstantiateContext& instantiateContext, const std::shared_ptr<XJTexture>& defaultTexture, const std::shared_ptr<XJSampler>& defaultSampler);//设置mesh
             static bool SetMeshRendererMaterial(XJScene& scene, XJEditorEntityId entityId, uint32_t slotIndex, XJAssetHandle materialAsset, XJAssetRegistry& assetRegistry, XJSceneInstantiateContext& instantiateContext, const std::shared_ptr<XJTexture>& defaultTexture, const std::shared_ptr<XJSampler>& defaultSampler);//设置材质

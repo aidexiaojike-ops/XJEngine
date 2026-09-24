@@ -49,6 +49,8 @@ namespace XJ
             void TryCreateFolder(const std::filesystem::path& parent, const std::string& folderName);//尝试创建新文件夹，检查名称合法性和是否已存在同名文件夹，如果成功则在父目录下创建新文件夹
             void TryDeleteFolder(const std::filesystem::path& folderPath);//尝试删除文件夹，检查文件夹是否为空或是否存在，如果成功则删除指定路径的文件夹    
             void RequestCreateAsset(XJEditorCreateAssetType type, const std::filesystem::path& directory);//请求创建资产
+            void OpenScriptEditor(const XJAssetMeta& meta);
+            void DrawScriptEditor();
            
            
             static const char* AssetTypeToString(XJAssetType type);//将资产类型枚举转换为字符串，供 UI 显示使用
@@ -80,6 +82,14 @@ namespace XJ
 
             std::unordered_map<std::string, std::vector<std::filesystem::path>> mFolderChildrenCache;// key=规范化路径 -> 子目录列表
             uint64_t mLastSeenAssetEpoch = UINT64_MAX;                            // 用于检测资产变更，触发文件夹缓存失效
+
+            bool mScriptEditorOpen = false;
+            bool mScriptEditorDirty = false;
+            XJAssetHandle mScriptEditorHandle = 0;
+            std::filesystem::path mScriptEditorPath;
+            std::string mScriptEditorName;
+            std::string mScriptEditorSource;
+            std::vector<std::string> mScriptEditorDiagnostics;
         
             
     };

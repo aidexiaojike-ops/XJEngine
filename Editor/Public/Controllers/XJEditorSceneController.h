@@ -124,7 +124,10 @@ namespace XJ
 
             void ResetSceneRequestState(XJEditorUIState& uiState);// 重置场景请求状态
             void ResetSelectionForScene(XJEditorUIState& uiState, XJAssetHandle sceneHandle);// 重置与场景相关的选中状态
-            bool InstantiateSceneAsset(std::shared_ptr<XJSceneAsset> sceneAsset, XJAssetHandle sceneHandle);// 将场景资产实例化为运行时的 XJScene
+            bool InstantiateSceneAsset(
+                std::shared_ptr<XJSceneAsset> sceneAsset,
+                XJAssetHandle sceneHandle,
+                bool* outSceneModified = nullptr);// 将场景资产实例化为运行时的 XJScene
             void NotifyAfterMutation();// 触发“修改后”回调（通知外部 UI 更新）
 
             XJScene* mScene = nullptr;

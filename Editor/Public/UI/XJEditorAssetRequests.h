@@ -13,7 +13,8 @@ namespace XJ
     {
         None = 0,
         Material,
-        Scene
+        Scene,
+        Script
     };
 
     struct XJEditorCreateAssetRequest
@@ -44,6 +45,12 @@ namespace XJ
         std::vector<std::filesystem::path> SourcePaths;
     };
 
+    struct XJEditorSaveScriptSourceRequest
+    {
+        XJAssetHandle Handle = 0;
+        std::string Source;
+    };
+
     struct XJEditorAssetRequestState
     {
         bool RequestRefreshRegistry = false;
@@ -63,7 +70,11 @@ namespace XJ
         bool RequestImportExternalFiles = false;
         XJEditorImportExternalFilesRequest ImportExternalFiles;
 
+        bool RequestSaveScriptSource = false;
+        XJEditorSaveScriptSourceRequest SaveScriptSource;
+
         std::string FolderOperationError;
+        std::string ScriptOperationError;
     };
 }
 

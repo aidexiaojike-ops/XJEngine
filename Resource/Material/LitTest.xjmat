@@ -1,14 +1,13 @@
 {
   "parameters": {
-    "AlbedoTexture": 2358456653288204257,
     "BaseColor": [
       1.0,
-      1.0,
-      1.0,
+      0.7647058963775635,
+      0.7647058963775635,
       1.0
     ],
     "Shininess": 77.20700073242188,
-    "SpecularStrength": 0.4339999854564667
+    "SpecularStrength": 0.0
   },
   "shader": "Resource/Shader/Lit.xjshader",
   "version": 2

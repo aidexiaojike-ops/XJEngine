@@ -7,6 +7,7 @@
 #include "ECS/Component/XJCameraComponent.h"
 #include "ECS/Component/XJTransformComponent.h"
 #include "ECS/System/XJSystemScheduler.h"
+#include "ECS/System/XJScriptSystem.h"
 #include "ECS/XJEntity.h"
 #include "ECS/XJScene.h"
 
@@ -20,6 +21,15 @@ namespace XJ
     class XJEditorPlayController::Impl
     {
         public:
+            Impl()
+                : Scheduler(XJSystemSchedulerConfig{
+                    .FixedDeltaTime = 1.0f / 60.0f,
+                    .MaxDeltaTime = 0.25f,
+                    .MaxFixedStepsPerFrame = 8
+                })
+            {
+            }
+
             std::unique_ptr<XJScene> RuntimeScene;
             XJSystemScheduler Scheduler;
             std::vector<SystemFactory> SystemFactories;
@@ -59,6 +69,8 @@ namespace XJ
         context.DefaultTexture = defaultTexture;
         context.DefaultSampler = defaultSampler;
         context.SourceScene = {};
+        context.MaterialPolicy = XJSceneMaterialPolicy::IsolatedScene;
+        context.RequireCompiledScripts = true;
 
         if (!XJSceneInstantiator::Instantiate(*snapshot, *candidateScene, &context))
         {
@@ -85,7 +97,11 @@ namespace XJ
         }
 
         std::vector<std::shared_ptr<XJSystem>> systems;
-        systems.reserve(mImpl->SystemFactories.size());
+        systems.reserve(mImpl->SystemFactories.size() + 1);
+        systems.push_back(std::make_shared<XJScriptSystem>(
+            *candidateScene,
+            registry,
+            std::move(context.ScriptCache)));
         for (const SystemFactory& factory : mImpl->SystemFactories)
         {
             if (!factory)
@@ -105,8 +121,45 @@ namespace XJ
         mImpl->RuntimeScene = std::move(candidateScene);
         mImpl->Scheduler.Clear();
         for (auto& system : systems)
-            mImpl->Scheduler.AddSystem(std::move(system));
-        mImpl->Scheduler.Start();
+        {
+            if (!mImpl->Scheduler.AddSystem(std::move(system)))
+            {
+                spdlog::error(
+                    "Play failed: runtime system "
+                    "could not be registered.");
+
+                mImpl->Scheduler.Clear();
+                mImpl->RuntimeScene.reset();
+                mImpl->RuntimeCameraId = XJUUID{0};
+                return false;
+            }
+        }
+        XJScene* runtimeScene = mImpl->RuntimeScene.get();
+
+        if (!mImpl->Scheduler.SetSafePointCallback(
+            [runtimeScene]()
+            {
+                if (runtimeScene)
+                    runtimeScene->FlushDestroyQueue();
+            }))
+        {
+            spdlog::error("Play failed: scheduler safe point " "could not be configured.");
+
+            mImpl->Scheduler.Clear();
+            mImpl->RuntimeScene.reset();
+            mImpl->RuntimeCameraId = XJUUID{0};
+            return false;
+        }
+
+        if (!mImpl->Scheduler.Start())
+        {
+            spdlog::error("Play failed: scheduler could not start.");
+
+            mImpl->Scheduler.Clear();
+            mImpl->RuntimeScene.reset();
+            mImpl->RuntimeCameraId = XJUUID{0};
+            return false;
+        }
         mImpl->State = XJEditorPlayState::Playing;
         return true;
     }

@@ -4,6 +4,8 @@
 //资产数据结构  FindEntity对UUID找到实体
 
 #include "Asset/XJAsset.h"
+#include "Script/Bytecode/XJScriptBytecode.h"
+#include <unordered_map>
 #include "Asset/XJAssetRef.h"
 #include "ECS/XJUUID.h"
 #include <glm/glm.hpp>
@@ -49,6 +51,30 @@ namespace XJ
         float OuterAngleDegrees = 30.0f;
     };
 
+    //脚本
+    struct XJSceneScriptSlotData
+    {
+        XJUUID SlotId{0};
+        bool Enabled = true;
+        XJAssetRef Script;
+
+        std::unordered_map<
+            uint64_t,
+            XJScriptValue>
+            FieldOverrides;
+    };
+
+    struct XJSceneScriptData
+    {
+        XJUUID UUID{0};
+        // 只用于加载阶段传播坏 JSON；不写入磁盘。
+        bool Valid = true;
+
+        std::vector<
+            XJSceneScriptSlotData>
+            Slots;
+    };
+
     struct XJSceneEntityData//场景 资产的entity
     {
         XJUUID UUID = 0;
@@ -62,11 +88,13 @@ namespace XJ
         bool HasMeshRenderer = false;
         bool HasCamera = false;
         bool HasLight = false;
+        bool HasScript = false;
 
         XJSceneTransformData Transform;
         XJSceneMeshRendererData MeshRenderer;
         XJSceneCameraData Camera;
         XJSceneLightData Light;
+        XJSceneScriptData Script;
     };
 
     class XJSceneAsset : public XJAsset

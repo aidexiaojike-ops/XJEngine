@@ -13,6 +13,20 @@
     "source": "Mesh/Cube.glb",
     "type": 1
   },
+  "1526164114675906749": {
+    "handle": 1526164114675906749,
+    "imported": "",
+    "name": "Transform",
+    "source": "Script/Transform.xjs",
+    "type": 6
+  },
+  "2208031170186802523": {
+    "handle": 2208031170186802523,
+    "imported": "",
+    "name": "Lifecycle",
+    "source": "Script/Lifecycle.xjs",
+    "type": 6
+  },
   "2358456653288204257": {
     "handle": 2358456653288204257,
     "imported": "",
@@ -61,6 +75,13 @@
     "name": "LitTest",
     "source": "Material/LitTest.xjmat",
     "type": 3
+  },
+  "7839755330074132590": {
+    "handle": 7839755330074132590,
+    "imported": "",
+    "name": "Rotate",
+    "source": "Script/Rotate.xjs",
+    "type": 6
   },
   "7949313787214589732": {
     "handle": 7949313787214589732,

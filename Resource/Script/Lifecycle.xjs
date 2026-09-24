@@ -1,0 +1,27 @@
+class Lifecycle : ScriptBehaviour
+{
+    public:
+        [[FieldId("1001")]]
+        float speed = 10.0f;
+
+        void OnCreate()
+        {
+            Transform.RotateY(1.0f);
+        }
+
+        void OnUpdate(float dt)
+        {
+            Transform.RotateY(
+                speed * dt);
+        }
+
+        void OnFixedUpdate(float dt)
+        {
+            Transform.RotateY(2.0f);
+        }
+
+        void OnDestroy()
+        {
+            Transform.RotateY(4.0f);
+        }
+};

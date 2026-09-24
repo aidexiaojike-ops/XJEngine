@@ -51,6 +51,7 @@ namespace XJ
             fallbackSubmesh.FirstIndex = 0;
             fallbackSubmesh.IndexCount = static_cast<uint32_t>(asset.mIndices.size());
             fallbackSubmesh.MaterialSlot = 0;
+            fallbackSubmesh.SourceMaterialIndex = -1;
 
             submeshes.push_back(fallbackSubmesh);
         }
@@ -74,15 +75,15 @@ namespace XJ
 
                     return nullptr;
                 }
-
+                ///复制原始材质编号
                 XJSubmesh submesh;
                 submesh.FirstIndex = primitive.FirstIndex;
                 submesh.IndexCount = primitive.IndexCount;
                 submesh.MaterialSlot = primitive.MaterialSlot;
+                submesh.SourceMaterialIndex = primitive.SourceMaterialIndex;
                 submesh.Bounds = primitive.Bounds;
 
-
-                submeshes.push_back(submesh);
+                submeshes.push_back(std::move(submesh));
             }
         }
 
@@ -129,6 +130,7 @@ namespace XJ
             cubeSubmesh.FirstIndex = 0;
             cubeSubmesh.IndexCount = static_cast<uint32_t>(indices.size());
             cubeSubmesh.MaterialSlot = 0;
+            cubeSubmesh.SourceMaterialIndex = -1;
 
             submeshes.push_back(cubeSubmesh);
 

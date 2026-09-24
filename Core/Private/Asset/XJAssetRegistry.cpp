@@ -13,7 +13,7 @@ namespace XJ
         bool IsValidAssetTypeInt(int value)
         {
             return value >= static_cast<int>(XJAssetType::None) &&
-                   value <= static_cast<int>(XJAssetType::Shader);
+                   value <= static_cast<int>(XJAssetType::Script);
         }
 
         // builtin:// 等虚拟来源不是文件路径，序列化与解析都原样保留。

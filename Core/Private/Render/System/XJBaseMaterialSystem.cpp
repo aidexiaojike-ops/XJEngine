@@ -271,36 +271,44 @@ namespace XJ
      
         // descriptor set 在 OnInit 写入一次；每帧只更新 UBO buffer 内容。
 
-        uint32_t kEntityIndex = 0; // 实体索引，用于动态UBO偏移计算
+        uint32_t drawIndex = 0; // 实体索引，用于动态UBO偏移计算
         //setup custiom params
-        kView.each([this, &cmdBuffer, &kEntityIndex, frameSlot](const auto &entity, const XJTransformComponent& transComp, const XJBaseMaterialComponent& matComp)
+        kView.each([this, &cmdBuffer, &drawIndex, frameSlot](const auto &entity, const XJTransformComponent& transComp, const XJBaseMaterialComponent& matComp)
         {
+            (void)entity;
+
             for (const auto& slot : matComp.XJGetSlots())//要是没有材质酒放弃渲染
             {
-                XJBaseMaterial* kMaterial = slot.Material ? slot.Material.get() : nullptr;
-                if (!kMaterial)
+                if(drawIndex >= MAX_ENTITIES)
                 {
-                    spdlog::error("TODO: Default material of error material ?");
+                    spdlog::warn("XJBaseMaterialSystem reached the " "maximum draw count {}.",MAX_ENTITIES);
+                    return;
+                }
+
+                XJMesh* mesh = slot.Mesh ? slot.Mesh.get() : nullptr;
+
+                XJBaseMaterial* material = slot.Material ? slot.Material.get() : nullptr;
+                if (!mesh || !material)
+                    continue;
+
+                const XJSubmesh* submesh = mesh->GetSubmesh(slot.SubmeshIndex);
+                if (!submesh || !submesh->IsValid(mesh->GetIndexCount()))
+                {
+                    spdlog::warn(
+                        "Base material draw skipped: "
+                        "invalid submesh index {}.",
+                        slot.SubmeshIndex);
                     continue;
                 }
 
-                XJMesh* kMesh = slot.Mesh ? slot.Mesh.get() : nullptr;
-    
-                if (kMesh && kEntityIndex < MAX_ENTITIES)
-                {
-                    mInstanceUbo[frameSlot].modelMat = transComp.modelMatrix;//设置实例UBO的模型矩阵
-                    //计算动态UBO偏移
-                    uint32_t kOffset = kEntityIndex * mDynamicAlignment;
-                    // 当前帧槽位写入自己的实例缓冲，避免覆盖 GPU 正在读取的其他帧数据。
-                    mInstanceBuffers[frameSlot]->WriteDataOffset(&mInstanceUbo[frameSlot], kOffset, sizeof(InstanceUbo));//UBO写入数据偏移
-                    //使用动态偏移绑定描述符集并绘制网格
-                    uint32_t kDynamicOffset = kOffset; // 计算动态偏移
-                    VkDescriptorSet descriptorSet = mDescriptorSets[frameSlot];
-                    vkCmdBindDescriptorSets(cmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, mPipelineLayout->XJGetPipelineLayout(), 0, 1,  &descriptorSet, 1, &kDynamicOffset);
-                    kMesh->Draw(cmdBuffer);
-                    kEntityIndex++; // 增加实体索引
-                }
-              
+                mInstanceUbo[frameSlot].modelMat = transComp.GetModelMatrix();//设置实例UBO的模型矩阵
+                const uint32_t dynamicOffset = drawIndex * mDynamicAlignment;//计算动态偏移
+                mInstanceBuffers[frameSlot]->WriteDataOffset(&mInstanceUbo[frameSlot], dynamicOffset, sizeof(InstanceUbo));//UBO写入数据偏移
+                VkDescriptorSet descriptorSet = mDescriptorSets[frameSlot];
+                vkCmdBindDescriptorSets(cmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, mPipelineLayout->XJGetPipelineLayout(), 0, 1, &descriptorSet, 1, &dynamicOffset);
+                mesh->DrawSubmesh(cmdBuffer, slot.SubmeshIndex);
+
+                ++drawIndex;
             }
            
         });

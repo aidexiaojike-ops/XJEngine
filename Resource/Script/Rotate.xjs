@@ -1,0 +1,18 @@
+class Rotate : ScriptBehaviour
+{
+    public:
+        [[FieldId("1000000001")]]
+        float speed = 180.0f;
+    
+        [[FieldId("1000000002")]]
+        bool enabled = true;
+    
+        void OnUpdate(float dt)
+        {
+            if (enabled)
+            {
+                Transform.RotateY(
+                    speed * dt);
+            }
+        }
+};

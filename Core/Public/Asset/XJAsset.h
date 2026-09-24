@@ -14,11 +14,12 @@ namespace XJ
     {
         None = 0,//change to None to avoid confusion with 0-based index of asset array
         
-        Mesh,
-        Texture,
-        Material,
-        Scene,
-        Shader,
+        Mesh = 1,
+        Texture = 2,
+        Material = 3,
+        Scene = 4,
+        Shader = 5,
+        Script = 6
     };
 
 

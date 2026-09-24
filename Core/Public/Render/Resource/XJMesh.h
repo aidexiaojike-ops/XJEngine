@@ -20,6 +20,10 @@ namespace XJ
         uint32_t IndexCount = 0;
         uint32_t MaterialSlot = 0;
 
+        // glTF primitive 原始 material index。
+        // -1 表示 primitive 没有指定材质。
+        int32_t SourceMaterialIndex = -1;
+
         XJBoundingBox Bounds;
 
         bool IsValid(uint32_t totalIndexCount) const

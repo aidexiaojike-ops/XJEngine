@@ -4,10 +4,14 @@
 #include "UI/XJEditorUILayer.h"
 #include "Asset/XJAssetRegistry.h"
 #include "Asset/XJAsset.h"
+#include "Asset/Importer/XJScriptAssetCompiler.h"
 #include <imgui.h>
+#include <misc/cpp/imgui_stdlib.h>
 #include <algorithm>
 #include <cstdint>
 #include <cstring>
+#include <fstream>
+#include <iterator>
 #include <vector>
 #include <string>
 #include <spdlog/spdlog.h>
@@ -57,6 +61,21 @@ namespace XJ
 
     void XJContentBrowserPanel::DrawUI()
     {
+        if (mState.RequestOpenScriptEditor)
+        {
+            const XJAssetHandle handle = mState.RequestedScriptEditorAsset;
+            mState.RequestOpenScriptEditor = false;
+            mState.RequestedScriptEditorAsset = 0;
+            if (mState.AssetRegistry)
+            {
+                const auto meta = mState.AssetRegistry->GetMeta(handle);
+                if (meta && meta->Type == XJAssetType::Script)
+                    OpenScriptEditor(*meta);
+            }
+        }
+
+        DrawScriptEditor();
+
         if (!mState.ShowContentBrowser)
         {
             return;
@@ -246,8 +265,15 @@ namespace XJ
                         mState.SceneRequests.RequestedScenePath = meta.SourcePath;
                         mState.SceneRequests.RequestedSceneHandle = handle;
                     }
+                    else if (ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left) &&
+                             meta.Type == XJAssetType::Script)
+                    {
+                        OpenScriptEditor(meta);
+                    }
                 }
-                if(!isRenaming && meta.Type == XJAssetType::Mesh && ImGui::BeginDragDropSource())//判断是是否是模型 然后再拖动
+                if(!isRenaming &&
+                   (meta.Type == XJAssetType::Mesh || meta.Type == XJAssetType::Script) &&
+                   ImGui::BeginDragDropSource())
                 {
                     XJEditorAssetDragPayload payload{};
 
@@ -256,7 +282,9 @@ namespace XJ
 
                     ImGui::SetDragDropPayload(XJ_ASSET_PAYLOAD_NAME, &payload, sizeof(payload));
 
-                    ImGui::Text("Mesh %s", meta.Name.c_str());
+                    ImGui::Text("%s %s",
+                        meta.Type == XJAssetType::Script ? "Script" : "Mesh",
+                        meta.Name.c_str());
                     ImGui::EndDragDropSource();
                 }
                 
@@ -272,6 +300,9 @@ namespace XJ
                      
                         if (ImGui::MenuItem("Scene"))
                             RequestCreateAsset(XJEditorCreateAssetType::Scene, targetDirectory);
+
+                        if (ImGui::MenuItem("Script"))
+                            RequestCreateAsset(XJEditorCreateAssetType::Script, targetDirectory);
                     
                         ImGui::EndMenu();
                     }
@@ -331,6 +362,123 @@ namespace XJ
 
     }
 
+    void XJContentBrowserPanel::OpenScriptEditor(const XJAssetMeta& meta)
+    {
+        std::ifstream input(meta.SourcePath, std::ios::binary);
+        if (!input.is_open())
+        {
+            mScriptEditorDiagnostics = {"Failed to open script file."};
+            mScriptEditorOpen = true;
+            return;
+        }
+
+        mScriptEditorSource.assign(
+            std::istreambuf_iterator<char>(input),
+            std::istreambuf_iterator<char>());
+        if (mScriptEditorSource.size() >= 3 &&
+            static_cast<unsigned char>(mScriptEditorSource[0]) == 0xEF &&
+            static_cast<unsigned char>(mScriptEditorSource[1]) == 0xBB &&
+            static_cast<unsigned char>(mScriptEditorSource[2]) == 0xBF)
+        {
+            mScriptEditorSource.erase(0, 3);
+        }
+
+        mScriptEditorHandle = meta.Handle;
+        mScriptEditorPath = meta.SourcePath;
+        mScriptEditorName = meta.Name;
+        mScriptEditorDirty = false;
+        mScriptEditorOpen = true;
+        mScriptEditorDiagnostics.clear();
+
+        const auto compiled = XJScriptAssetCompiler::CompileSource(
+            mScriptEditorSource, mScriptEditorPath);
+        if (compiled)
+        {
+            for (const auto& diagnostic : compiled->Diagnostics)
+            {
+                mScriptEditorDiagnostics.push_back(
+                    std::to_string(diagnostic.Line) + ":" +
+                    std::to_string(diagnostic.Column) + " " + diagnostic.Message);
+            }
+        }
+    }
+
+    void XJContentBrowserPanel::DrawScriptEditor()
+    {
+        if (!mScriptEditorOpen)
+            return;
+
+        const std::string title = "Script Editor - " + mScriptEditorName + "###XJScriptEditor";
+        if (!ImGui::Begin(title.c_str(), &mScriptEditorOpen,
+                          ImGuiWindowFlags_MenuBar | ImGuiWindowFlags_NoCollapse))
+        {
+            ImGui::End();
+            return;
+        }
+
+        if (ImGui::BeginMenuBar())
+        {
+            if (ImGui::MenuItem("Save", "Ctrl+S", false, mScriptEditorHandle != 0))
+            {
+                mState.AssetRequests.RequestSaveScriptSource = true;
+                mState.AssetRequests.SaveScriptSource.Handle = mScriptEditorHandle;
+                mState.AssetRequests.SaveScriptSource.Source = mScriptEditorSource;
+                mScriptEditorDirty = false;
+
+                const auto compiled = XJScriptAssetCompiler::CompileSource(
+                    mScriptEditorSource, mScriptEditorPath);
+                mScriptEditorDiagnostics.clear();
+                if (compiled)
+                {
+                    for (const auto& diagnostic : compiled->Diagnostics)
+                    {
+                        mScriptEditorDiagnostics.push_back(
+                            std::to_string(diagnostic.Line) + ":" +
+                            std::to_string(diagnostic.Column) + " " + diagnostic.Message);
+                    }
+                }
+            }
+            if (ImGui::MenuItem("Reload", nullptr, false, mScriptEditorHandle != 0) &&
+                mState.AssetRegistry)
+            {
+                const auto meta = mState.AssetRegistry->GetMeta(mScriptEditorHandle);
+                if (meta)
+                    OpenScriptEditor(*meta);
+            }
+            ImGui::EndMenuBar();
+        }
+
+        ImGui::TextUnformatted(mScriptEditorPath.generic_string().c_str());
+        if (mScriptEditorDirty)
+        {
+            ImGui::SameLine();
+            ImGui::TextDisabled("(modified)");
+        }
+
+        const float diagnosticsHeight = mScriptEditorDiagnostics.empty() ? 0.0f : 110.0f;
+        ImVec2 editorSize = ImGui::GetContentRegionAvail();
+        editorSize.y = std::max(80.0f, editorSize.y - diagnosticsHeight);
+        if (ImGui::InputTextMultiline(
+                "##ScriptSource",
+                &mScriptEditorSource,
+                editorSize,
+                ImGuiInputTextFlags_AllowTabInput))
+        {
+            mScriptEditorDirty = true;
+        }
+
+        if (!mScriptEditorDiagnostics.empty())
+        {
+            ImGui::SeparatorText("Diagnostics");
+            for (const auto& message : mScriptEditorDiagnostics)
+                ImGui::TextWrapped("%s", message.c_str());
+        }
+        if (!mState.AssetRequests.ScriptOperationError.empty())
+            ImGui::TextWrapped("Save error: %s", mState.AssetRequests.ScriptOperationError.c_str());
+
+        ImGui::End();
+    }
+
     const char* XJContentBrowserPanel::AssetTypeToString(XJAssetType type)
     {
         switch (type)
@@ -341,6 +489,7 @@ namespace XJ
             case XJAssetType::Material: return "Material";
             case XJAssetType::Scene:    return "Scene";
             case XJAssetType::Shader: return "Shader";
+            case XJAssetType::Script: return "Script";
             default:                    return "Unknown";
         }
     }
@@ -459,6 +608,9 @@ namespace XJ
              
                 if (ImGui::MenuItem("Scene"))
                     RequestCreateAsset(XJEditorCreateAssetType::Scene, folderPath);
+
+                if (ImGui::MenuItem("Script"))
+                    RequestCreateAsset(XJEditorCreateAssetType::Script, folderPath);
             
                 ImGui::EndMenu();
             }
