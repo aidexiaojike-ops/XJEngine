@@ -2,7 +2,7 @@ class Rotate : ScriptBehaviour
 {
     public:
         [[FieldId("1000000001")]]
-        float speed = 180.0f;
+        float speed = 45.0f;
     
         [[FieldId("1000000002")]]
         bool enabled = true;

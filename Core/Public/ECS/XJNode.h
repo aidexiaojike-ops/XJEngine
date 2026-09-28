@@ -7,6 +7,7 @@ namespace XJ
 {
     class XJNode
     {
+        friend class XJScene;
         private:
             /* data */
             //哈希表要用到的
@@ -15,12 +16,12 @@ namespace XJ
 
             XJNode *mParent = nullptr;//父级
             std::vector<XJNode*> mChildren;//子集
+            void XJSetUUID(const XJUUID &nodeUUID)  { mUUID = nodeUUID;};
         public:
             XJNode(/* args */);
             virtual ~XJNode();
 
             XJUUID XJGetUUID() const {return mUUID;};
-            void XJSetUUID(const XJUUID &nodeUUID)  { mUUID = nodeUUID;};
             const std::string &XJGetName() const {return mName;};
             void XJSetName(const std::string &name)  { mName = name;};
 

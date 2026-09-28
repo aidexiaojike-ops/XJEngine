@@ -35,15 +35,14 @@ namespace XJ
         if(id.mUUID == 0)
             return nullptr; // 如果 UUID 无效，直接返回空指针
 
-        for (const auto& [enttEntity, entity] : mEntities)
-        {
-            if (!entity)
-                continue;
+        const auto it = mEntitiesByUUID.find(id);
 
-            if (entity->XJGetUUID() == id)
-                return entity.get();
+        if (it == mEntitiesByUUID.end())
+        {
+            return nullptr;
         }
-        return nullptr; // 如果没有找到对应的实体，返回空指针
+
+        return GetEntity(it->second);// 如果没有找到对应的实体，返回空指针
     }
 
     // CreateEntityWithUUID：根据指定的 UUID 和名称创建实体
@@ -51,7 +50,7 @@ namespace XJ
     XJEntity* XJScene::CreateEntityWithUUID(const XJUUID &id, const std::string &name) 
     {
         // UUID 是序列化、层级恢复、编辑器选择的稳定身份。重复 UUID 会让查找和父子关系恢复混乱。
-        if (id && FindEntityByUUID(id))
+        if (!id || mEntitiesByUUID.contains(id))
         {
             spdlog::error(
                 "CreateEntityWithUUID failed: duplicate uuid={}, name='{}'",
@@ -78,8 +77,15 @@ namespace XJ
 
             return nullptr;
         }
-
         XJEntity* xjEntity = it->second.get();
+
+        auto [uuidIt, uuidInserted] = mEntitiesByUUID.emplace(id, enttEntity);
+        if (!uuidInserted)
+        {
+            mEntities.erase(it);
+            mEcsRegistry.destroy(enttEntity);
+            return nullptr;
+        }
 
         if (mRootNode)
             mRootNode->XJAddChild(xjEntity); // 设置该实体的父节点为场景的根节点
@@ -171,6 +177,11 @@ namespace XJ
         XJNode* parent = entityToDestroy->XJGetParent();
         if (parent)
             parent->XJRemoveChild(entityToDestroy);
+
+        const XJUUID uuid = entityToDestroy->XJGetUUID();
+        const auto uuidIt = mEntitiesByUUID.find(uuid);
+        if (uuidIt != mEntitiesByUUID.end() && uuidIt->second == entityToDestroy->GetEcsEntity())
+            mEntitiesByUUID.erase(uuidIt);
     
         if (mEcsRegistry.valid(entityToDestroy->GetEcsEntity()))
             mEcsRegistry.destroy(entityToDestroy->GetEcsEntity());
@@ -185,6 +196,7 @@ namespace XJ
 
         mPendingDestroyEntities.clear();
         mPendingDestroySet.clear();
+        mEntitiesByUUID.clear();
 
         if(mRootNode)
             mRootNode->XJClearChildren();

@@ -30,6 +30,7 @@ namespace XJ
             entt::registry mEcsRegistry; ///< EnTT ECS 注册表，存储所有组件
 
             std::unordered_map<entt::entity, std::shared_ptr<XJEntity>> mEntities;
+            std::unordered_map<XJUUID, entt::entity> mEntitiesByUUID;
             std::shared_ptr<XJNode> mRootNode;  ///< 场景根节点，用于构建场景层级树
             std::shared_ptr<void> mLifetimeToken;
 

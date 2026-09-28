@@ -20,7 +20,9 @@ namespace XJ
             static XJAssetHandle CreateMaterialAsset(XJAssetRegistry& assetRegistry, const std::filesystem::path& directory, const std::filesystem::path& registryPath);// 创建材质资产并注册
             static XJAssetHandle CreateSceneAsset(XJAssetRegistry& assetRegistry, const std::filesystem::path& directory, const std::filesystem::path& registryPath);// 创建场景资产并注册
             static XJAssetHandle CreateScriptAsset(XJAssetRegistry& assetRegistry, const std::filesystem::path& directory, const std::filesystem::path& registryPath);
-            static bool SaveScriptSource(XJAssetRegistry& assetRegistry, XJAssetHandle handle, const std::string& source, std::string& outError);
+            static bool SaveScriptSource(XJAssetRegistry& assetRegistry, XJAssetHandle handle,
+                                         const std::string& source, std::string& outError,
+                                         std::vector<std::string>* outDiagnostics = nullptr);
             static bool DeleteAsset(XJAssetRegistry& assetRegistry, XJAssetHandle handle, const std::filesystem::path& registryPath);// 从注册表删除资产
             static bool DeleteEmptyFolder(
                 XJAssetRegistry& assetRegistry,

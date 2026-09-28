@@ -73,20 +73,13 @@ namespace XJ
                     return 0;
                 }
 
-                auto& materialList = it->second;
-
-                // 工厂只保存 weak_ptr；这里顺手清理已经被场景/组件释放的材质。
-                materialList.erase
-                (
-                    std::remove_if(materialList.begin(), materialList.end(),
-                        [](const std::weak_ptr<XJMaterial>& material)
-                        {
-                            return material.expired();
-                        }),
-                    materialList.end()
-                );
-                
-                return materialList.size();  // 原: return mMaterials;
+                return static_cast<size_t>(std::count_if(
+                    it->second.begin(),
+                    it->second.end(),
+                    [](const std::weak_ptr<XJMaterial>& material)
+                    {
+                        return !material.expired();
+                    }));
             }
 
             template<typename T>
@@ -98,21 +91,18 @@ namespace XJ
 
                 const std::type_index typeId = std::type_index(typeid(T));
                 auto& materials = mMaterials[typeId];
-                
-               // 清理已经释放的材质，避免材质列表只增不减。
-                materials.erase(
-                    std::remove_if(
-                        materials.begin(),
-                        materials.end(),
-                        [](const std::weak_ptr<XJMaterial>& material)
-                        {
-                            return material.expired();
-                        }),
-                    materials.end());
+                mat->mInstanceId = mNextMaterialInstanceId++;
 
-                const uint32_t index = static_cast<uint32_t>(materials.size());
-                mat->mIndex = index;
-
+                for (uint32_t index = 0; index < materials.size(); ++index)
+                {
+                    if (materials[index].expired())
+                    {
+                        mat->mIndex = index;
+                        materials[index] = mat;
+                        return mat;
+                    }
+                }
+                mat->mIndex = static_cast<uint32_t>(materials.size());
                 // 工厂不强持有材质，避免材质和 GPU 资源被单例拖到进程退出才析构。
                 materials.push_back(mat);
                 return mat;
@@ -139,6 +129,7 @@ namespace XJ
             std::unordered_map<uint64_t, std::weak_ptr<XJSurfaceMaterial>> mDefaultMaterialCache;
             // 纹理缓存本来就是 weak_ptr，保留弱引用，但访问必须加锁。
             std::unordered_map<XJAssetHandle, std::weak_ptr<XJTexture>> mTextureCache;
+            uint64_t mNextMaterialInstanceId = 1;
 
             void ApplyTextureBindings(XJSurfaceMaterial& material, const XJMaterialAsset& asset, const std::shared_ptr<XJTexture>& defaultTexture, const std::shared_ptr<XJSampler>& defaultSampler);
            

@@ -471,13 +471,8 @@ namespace XJ
 
         for (auto& [typeIndex, materialList] : mMaterials)
         {
-            materialList.erase(
-                std::remove_if(materialList.begin(), materialList.end(),
-                    [](const std::weak_ptr<XJMaterial>& material)
-                    {
-                        return material.expired();
-                    }),
-                materialList.end());
+            while (!materialList.empty() && materialList.back().expired())
+                materialList.pop_back();
         }
 
         for (auto it = mMaterialAssetCache.begin(); it != mMaterialAssetCache.end();)
@@ -503,15 +498,8 @@ namespace XJ
 
         for (auto& [type, materials] : mMaterials)
         {
-            materials.erase(
-                std::remove_if(
-                    materials.begin(),
-                    materials.end(),
-                    [](const std::weak_ptr<XJMaterial>& material)
-                    {
-                        return material.expired();
-                    }),
-                materials.end());
+            while (!materials.empty() && materials.back().expired())
+                materials.pop_back();
         }
 
         for (auto it = mTextureCache.begin(); it != mTextureCache.end();)

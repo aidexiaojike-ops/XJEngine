@@ -18,6 +18,8 @@ namespace XJ
 {
     void XJEditorSceneController::SetScene(XJScene* scene)
     {
+        if (mScene != scene)
+            ++mSceneRevision;
         mScene = scene;
     }
 
@@ -171,6 +173,7 @@ namespace XJ
             if (mAfterOpenSceneCallback && mScene)
                 mAfterOpenSceneCallback(*mScene);
 
+            ++mSceneRevision;
             RefreshViewModels(uiState);
             return false;
         }
@@ -187,6 +190,7 @@ namespace XJ
             mAfterOpenSceneCallback(*mScene);
 
         ClearHistory();
+        ++mSceneRevision;
         RefreshViewModels(uiState);
         return true;  
     }
@@ -221,16 +225,34 @@ namespace XJ
 
     void XJEditorSceneController::RefreshViewModels(XJEditorUIState& uiState)
     {
+
+        const bool sceneChanged = mPublishedRevision != mSceneRevision;
+        const bool assetDetailsChanged =
+            mPublishedAssetDetailEpoch != uiState.AssetDetailEpoch;
+
+        const bool selectionChanged = mPublishedSelectedEntity != uiState.Selection.SelectedEntity || mPublishedSelectedAsset != uiState.Selection.SelectedAsset;
+
+        if (!sceneChanged && !selectionChanged && !assetDetailsChanged)
+        {
+            return;
+        }
         if (!mScene)
         {
             uiState.SceneView = {};
             uiState.SelectedEntityDetails = {};
+            mPublishedRevision = mSceneRevision;
+            mPublishedAssetDetailEpoch = uiState.AssetDetailEpoch;
+            mPublishedSelectedEntity = uiState.Selection.SelectedEntity;
+            mPublishedSelectedAsset = uiState.Selection.SelectedAsset;
             return;
         }
     
-        uiState.SceneView = XJEditorSceneService::BuildSceneViewModel(
-            *mScene,
-            mShouldExposeEntityCallback);
+        if (sceneChanged)
+        {
+            uiState.SceneView = XJEditorSceneService::BuildSceneViewModel(
+                *mScene,
+                mShouldExposeEntityCallback);
+        }
         
         if (uiState.Selection.SelectedEntity != XJ_INVALID_EDITOR_ENTITY_ID)
         {
@@ -239,19 +261,25 @@ namespace XJ
             {
                 uiState.Selection.SelectedEntity = XJ_INVALID_EDITOR_ENTITY_ID;
                 uiState.SelectedEntityDetails = {};
-                return;
             }
-        
-            uiState.SelectedEntityDetails = XJEditorSceneService::BuildEntityDetailsView(
+            else
+            {
+                uiState.SelectedEntityDetails = XJEditorSceneService::BuildEntityDetailsView(
                 *mScene,
                 uiState.Selection.SelectedEntity,
                 mAssetRegistry,
                 mShouldExposeEntityCallback);
+            }
         }
         else
         {
             uiState.SelectedEntityDetails = {};
         }
+
+        mPublishedRevision = mSceneRevision;
+        mPublishedAssetDetailEpoch = uiState.AssetDetailEpoch;
+        mPublishedSelectedEntity = uiState.Selection.SelectedEntity;
+        mPublishedSelectedAsset = uiState.Selection.SelectedAsset;
     }
 
     XJEditorSceneController::SceneHistorySnapshot XJEditorSceneController::CaptureHistorySnapshot(
@@ -331,6 +359,7 @@ namespace XJ
             mAfterOpenSceneCallback(*mScene);
 
         MarkSceneDirty();
+        ++mSceneRevision;
         RefreshViewModels(uiState);
         return true;
     }
@@ -382,6 +411,7 @@ namespace XJ
         mRedoStack.push_back(std::move(current));
         while (mRedoStack.size() > kMaxHistoryEntries)
             mRedoStack.pop_front();
+
         return true;
     }
 
@@ -938,6 +968,7 @@ namespace XJ
 
         if (mAfterMutationCallback)
             mAfterMutationCallback();
+        ++mSceneRevision;
     }
 
     void XJEditorSceneController::ClearSceneReferences()

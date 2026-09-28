@@ -22,12 +22,6 @@
 #include "Runtime/XJEditorPlayState.h"
 #include "UI/XJEditorUIState.h"
 
-#include "Input/XJInput.h"
-#include "ECS/XJSystem.h"
-#include "ECS/XJEntity.h"
-#include "ECS/Component/XJCameraComponent.h"
-#include "ECS/Component/XJTransformComponent.h"
-#include "ECS/Component/Material/XJSurfaceMaterialComponent.h"
 
 #include <spdlog/spdlog.h>
 #include <utility>
@@ -169,49 +163,6 @@ namespace XJ
         }
 
 #endif
-    }
-
-    // ★★★ XJ_MARKER_PLAYMODE_SPIN_SYSTEM_20260903 ★★★
-    // Play Mode 演示系统：让运行时克隆中带 Mesh 的实体绕 Y 轴旋转，
-    // 并用通用输入轴（WASD/方向键）平移，直观验证调度与 Input 可用。
-    namespace
-    {
-        class SpinSystem final : public XJSystem
-        {
-            public:
-                explicit SpinSystem(XJScene* scene) : mScene(scene) {}
-
-                void OnUpdate(float deltaTime) override
-                {
-                    if (!mScene)
-                        return;
-
-                    const auto& input = XJInput::XJGetInstance().GetInputState();
-                    const float horizontal = input.GetAxis(XJInputAxis::Horizontal);
-                    const float vertical   = input.GetAxis(XJInputAxis::Vertical);
-
-                    for (const auto& [enttEntity, entity] : mScene->GetEntities())
-                    {
-                        if (!entity || entity->HasComponent<XJCameraComponent>())
-                            continue;
-
-                        if (!entity->HasComponent<XJTransformComponent>() ||
-                            !entity->HasComponent<XJSurfaceMaterialComponent>())
-                            continue;
-
-                        auto& transform = entity->GetComponent<XJTransformComponent>();
-
-                        transform.rotation.y += deltaTime * 45.0f;
-                        transform.position.x -= horizontal * deltaTime * 2.0f;
-                        transform.position.z += vertical   * deltaTime * 2.0f;
-
-                        transform.UpdateModelMatrix();
-                    }
-                }
-
-            private:
-                XJScene* mScene = nullptr;
-        };
     }
 
     class XJEditorRuntime::Impl
@@ -517,13 +468,6 @@ namespace XJ
         }
         
         mImpl->PlayController = std::make_unique<XJEditorPlayController>();
-
-        // 注册 Play Mode 演示系统：旋转 + WASD 平移。
-        mImpl->PlayController->RegisterSystemFactory(
-            [](XJScene& scene) -> std::shared_ptr<XJSystem>
-            {
-                return std::make_shared<SpinSystem>(&scene);
-            });
 
         // Game 窗口 Play/Pause/Stop 按钮回调：只记请求，Update 里统一处理。
         if (mImpl->Viewports && mImpl->Viewports->GetGamePreview())

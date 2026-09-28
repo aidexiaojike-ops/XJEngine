@@ -90,6 +90,24 @@ int main()
     Check(rebuilt && rebuilt->Entities[0].Script.Slots[0].FieldOverrides.size() == 4,
           "runtime scene rebuild preserves overrides");
 
+    XJ::XJScene indexedScene;
+    const XJ::XJUUID indexedId{9001};
+    XJ::XJEntity* indexedEntity = indexedScene.CreateEntityWithUUID(indexedId, "Indexed");
+    Check(indexedEntity && indexedScene.FindEntityByUUID(indexedId) == indexedEntity,
+          "UUID index resolves a created entity");
+    const size_t indexedEntityCount = indexedScene.GetEntities().size();
+    Check(indexedScene.CreateEntityWithUUID(XJ::XJUUID{0}, "Invalid") == nullptr &&
+              indexedScene.GetEntities().size() == indexedEntityCount,
+          "zero UUID creation does not leak an entity");
+    Check(indexedScene.CreateEntityWithUUID(indexedId, "Duplicate") == nullptr &&
+              indexedScene.GetEntities().size() == indexedEntityCount,
+          "duplicate UUID creation does not leak an entity");
+    indexedScene.DestroyEntity(indexedEntity);
+    Check(indexedScene.FindEntityByUUID(indexedId) == nullptr,
+          "destroyed entity is removed from UUID index");
+    Check(indexedScene.CreateEntityWithUUID(indexedId, "Recreated") != nullptr,
+          "destroyed UUID can be reused");
+
     const auto scriptPath = root / "Behaviour.xjs";
     WriteText(scriptPath,
         "class Behaviour : ScriptBehaviour { public: "

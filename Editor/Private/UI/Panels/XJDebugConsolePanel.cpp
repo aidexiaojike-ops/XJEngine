@@ -4,6 +4,7 @@
 #include "UI/XJEditorLog.h"
 
 #include <imgui.h>
+#include <algorithm>
 #include <cstring>
 #include <string>
 
@@ -28,7 +29,11 @@ namespace XJ
             return;
 
         const char* title = mConfig ? mConfig->title.c_str() : "Output Log";
-        ImGui::Begin(title);
+        if (!ImGui::Begin(title))
+        {
+            ImGui::End();
+            return;
+        }
 
         auto& log = XJEditorLog::XJGet();
 
@@ -73,9 +78,12 @@ namespace XJ
         ImGui::Separator();
         ImGui::BeginChild("LogArea", ImVec2(0, 0), false, ImGuiWindowFlags_HorizontalScrollbar);
 
-        auto entries = log.XJGetEntriesCopy();
-        for (const auto& entry : entries)
+        log.CopyEntriesIfChanged(mLogRevision, mEntries);
+        std::vector<size_t> visibleEntries;
+        visibleEntries.reserve(mEntries.size());
+        for (size_t index = 0; index < mEntries.size(); ++index)
         {
+            const auto& entry = mEntries[index];
              // level filter  根据日志级别过滤日志条目，如果用户取消了某个级别的显示选项，则跳过该级别的日志条目
             if (entry.Level == XJEditorLogLevel::Info    && !showInfo)    continue;
             if (entry.Level == XJEditorLogLevel::Warning && !showWarning) continue;
@@ -91,6 +99,12 @@ namespace XJ
             }
             
             //color by level 根据日志级别设置不同的文本颜色，增强日志的可读性和区分度
+            visibleEntries.push_back(index);
+        }
+
+        const auto drawEntry = [this](size_t entryIndex)
+        {
+            const auto& entry = mEntries[entryIndex];
             ImVec4 color = ImVec4(1.0f, 1.0f, 1.0f, 1.0f);
             switch(entry.Level)
             {
@@ -102,10 +116,31 @@ namespace XJ
                 default: break;
             }
 
-            ImGui::PushStyleColor(ImGuiCol_Text, color);//设置文本颜色
-            std::string line = "[" + entry.Timestamp + "] " + entry.Message;
-            ImGui::TextUnformatted(line.c_str());//显示日志条目，格式为 [时间戳] 消息内容，使用不同颜色区分日志级别
-            ImGui::PopStyleColor();//恢复默认文本颜色
+            ImGui::PushStyleColor(ImGuiCol_Text, color);
+            ImGui::Text("[%s] %s", entry.Timestamp.c_str(), entry.Message.c_str());
+            ImGui::PopStyleColor();
+        };
+
+        const bool hasMultilineEntry = std::any_of(
+            visibleEntries.begin(), visibleEntries.end(),
+            [this](size_t index)
+            {
+                return mEntries[index].Message.find('\n') != std::string::npos;
+            });
+        if (hasMultilineEntry)
+        {
+            for (size_t index : visibleEntries)
+                drawEntry(index);
+        }
+        else
+        {
+            ImGuiListClipper clipper;
+            clipper.Begin(static_cast<int>(visibleEntries.size()));
+            while (clipper.Step())
+            {
+                for (int visibleIndex = clipper.DisplayStart; visibleIndex < clipper.DisplayEnd; ++visibleIndex)
+                    drawEntry(visibleEntries[static_cast<size_t>(visibleIndex)]);
+            }
         }
 
         // auto scroll to bottom 如果启用了自动滚动，并且当前滚动位置已经接近底部，则在新日志条目添加时自动滚动到底部

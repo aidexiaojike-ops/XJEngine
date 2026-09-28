@@ -838,9 +838,12 @@ namespace XJ
         XJAssetRegistry& assetRegistry,
         XJAssetHandle handle,
         const std::string& source,
-        std::string& outError)
+        std::string& outError,
+        std::vector<std::string>* outDiagnostics)
     {
         outError.clear();
+        if (outDiagnostics)
+            outDiagnostics->clear();
         const auto meta = assetRegistry.GetMeta(handle);
         if (!meta || meta->Type != XJAssetType::Script)
         {
@@ -855,6 +858,16 @@ namespace XJ
 
         // 保存允许暂时存在语法错误；Play 的严格预检会阻止坏脚本运行。
         const auto compiled = XJScriptAssetCompiler::CompileSource(source, meta->SourcePath);
+        if (compiled && outDiagnostics)
+        {
+            outDiagnostics->reserve(compiled->Diagnostics.size());
+            for (const auto& diagnostic : compiled->Diagnostics)
+            {
+                outDiagnostics->push_back(
+                    std::to_string(diagnostic.Line) + ":" +
+                    std::to_string(diagnostic.Column) + " " + diagnostic.Message);
+            }
+        }
         if (compiled && !compiled->IsCompiled() && !compiled->Diagnostics.empty())
         {
             spdlog::warn("Saved script '{}' with {} compile diagnostics.",

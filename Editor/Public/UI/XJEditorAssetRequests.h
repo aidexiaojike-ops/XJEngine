@@ -75,6 +75,10 @@ namespace XJ
 
         std::string FolderOperationError;
         std::string ScriptOperationError;
+        uint64_t ScriptSaveRevision = 0;
+        XJAssetHandle LastSavedScriptHandle = 0;
+        bool LastScriptSaveSucceeded = false;
+        std::vector<std::string> ScriptSaveDiagnostics;
     };
 }
 

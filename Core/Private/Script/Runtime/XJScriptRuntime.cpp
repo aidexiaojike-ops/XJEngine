@@ -64,14 +64,6 @@ namespace XJ
             return true;
         }
 
-        struct Frame
-        {
-            uint32_t FunctionIndex = 0;
-            uint32_t Pc = 0;
-            std::vector<XJScriptValue> Arguments;
-            std::vector<std::optional<XJScriptValue>> Locals;
-            std::vector<XJScriptValue> Stack;
-        };
     }
 
     class XJScriptMachine
@@ -86,8 +78,10 @@ namespace XJ
                   mModule(*mModuleOwner),
                   mNativeInvoker(nativeInvoker),
                   mNativeContext(nativeContext),
-                  mLimits(limits)
+                  mLimits(limits),
+                  mScratch(instance.mScratch)
             {
+                mScratch.Begin();
             }
 
             XJScriptExecutionResult Run(uint32_t functionIndex,
@@ -98,7 +92,7 @@ namespace XJ
 
                 try
                 {
-                    while (!mFrames.empty() && !mResult.Error)
+                    while (mScratch.ActiveFrameCount != 0 && !mResult.Error)
                         ExecuteNext();
                 }
                 catch (const std::exception& exception)
@@ -122,6 +116,7 @@ namespace XJ
                     mInstance.mFaulted = true;
                     mInstance.mLastError = mResult.Error;
                 }
+                mScratch.End();
                 return std::move(mResult);
             }
 
@@ -132,7 +127,7 @@ namespace XJ
                 mCurrentInstruction = 0;
                 if (functionIndex >= mModule.Functions.size())
                     return Fail(XJScriptRuntimeErrorCode::InvalidFunction, "Function index is out of range");
-                if (mFrames.size() >= mLimits.MaxCallDepth)
+                if (mScratch.ActiveFrameCount >= mLimits.MaxCallDepth)
                     return Fail(XJScriptRuntimeErrorCode::CallDepthExceeded, "Script call depth exceeded");
 
                 const auto& function = mModule.Functions[functionIndex];
@@ -148,19 +143,26 @@ namespace XJ
                                     "Function argument contains a non-finite float");
                 }
 
-                Frame frame;
+                if (mScratch.ActiveFrameCount == mScratch.Frames.size())
+                    mScratch.Frames.emplace_back();
+                XJScriptFrameScratch& frame = mScratch.Frames[mScratch.ActiveFrameCount++];
+                frame.Reset();
                 frame.FunctionIndex = functionIndex;
                 frame.Arguments.assign(arguments.begin(), arguments.end());
                 frame.Locals.resize(function.LocalTypes.size());
                 const uint32_t capacity = mInstance.mFunctionMaxStackDepths[functionIndex];
                 frame.Stack.reserve(capacity);
-                mFrames.push_back(std::move(frame));
                 return true;
+            }
+
+            XJScriptFrameScratch& CurrentFrame()
+            {
+                return mScratch.Frames[mScratch.ActiveFrameCount - 1];
             }
 
             void ExecuteNext()
             {
-                Frame& frame = mFrames.back();
+                XJScriptFrameScratch& frame = CurrentFrame();
                 const auto& function = mModule.Functions[frame.FunctionIndex];
                 if (frame.Pc >= function.Code.size())
                 {
@@ -257,7 +259,7 @@ namespace XJ
 
             bool Push(XJScriptValue value)
             {
-                Frame& frame = mFrames.back();
+                XJScriptFrameScratch& frame = CurrentFrame();
                 const uint32_t capacity = mInstance.mFunctionMaxStackDepths[frame.FunctionIndex];
                 if (frame.Stack.size() >= capacity)
                     return Fail(XJScriptRuntimeErrorCode::StackOverflow, "Operand stack overflow");
@@ -267,7 +269,7 @@ namespace XJ
 
             std::optional<XJScriptValue> Pop()
             {
-                Frame& frame = mFrames.back();
+                XJScriptFrameScratch& frame = CurrentFrame();
                 if (frame.Stack.empty())
                 {
                     Fail(XJScriptRuntimeErrorCode::StackUnderflow, "Operand stack underflow");
@@ -395,34 +397,33 @@ namespace XJ
             {
                 auto condition = PopTyped<bool>();
                 if (condition && *condition == expected)
-                    mFrames.back().Pc = static_cast<uint32_t>(instruction.A);
+                    CurrentFrame().Pc = static_cast<uint32_t>(instruction.A);
             }
 
-            std::optional<std::vector<XJScriptValue>> PopArguments(uint32_t count)
+            bool PopArguments(uint32_t count)
             {
-                std::vector<XJScriptValue> arguments(count);
+                mScratch.CallArguments.clear();
+                mScratch.CallArguments.resize(count);
                 for (uint32_t index = count; index > 0; --index)
                 {
                     auto value = Pop();
-                    if (!value) return std::nullopt;
-                    arguments[index - 1] = std::move(*value);
+                    if (!value) return false;
+                    mScratch.CallArguments[index - 1] = std::move(*value);
                 }
-                return arguments;
+                return true;
             }
 
             void CallScript(const XJScriptInstruction& instruction)
             {
-                auto arguments = PopArguments(static_cast<uint32_t>(instruction.B));
-                if (arguments)
-                    PushFrame(static_cast<uint32_t>(instruction.A), *arguments);
+                if (PopArguments(static_cast<uint32_t>(instruction.B)))
+                    PushFrame(static_cast<uint32_t>(instruction.A), mScratch.CallArguments);
             }
 
             void CallNative(const XJScriptInstruction& instruction)
             {
-                auto arguments = PopArguments(static_cast<uint32_t>(instruction.B));
-                if (!arguments) return;
+                if (!PopArguments(static_cast<uint32_t>(instruction.B))) return;
                 const auto result = mNativeInvoker.Invoke(
-                    static_cast<XJScriptNativeFunctionId>(instruction.A), *arguments, mNativeContext);
+                    static_cast<XJScriptNativeFunctionId>(instruction.A), mScratch.CallArguments, mNativeContext);
                 if (!result.IsValid())
                 {
                     FailNative(result);
@@ -435,22 +436,22 @@ namespace XJ
 
             void ReturnVoid()
             {
-                if (!mFrames.back().Stack.empty())
+                if (!CurrentFrame().Stack.empty())
                 { Fail(XJScriptRuntimeErrorCode::InvalidBytecode, "ReturnVoid with non-empty stack"); return; }
-                mFrames.pop_back();
+                --mScratch.ActiveFrameCount;
             }
 
             void ReturnValue()
             {
                 auto value = Pop();
                 if (!value) return;
-                const auto& function = mModule.Functions[mFrames.back().FunctionIndex];
+                const auto& function = mModule.Functions[CurrentFrame().FunctionIndex];
                 if (ValueType(*value) != function.ReturnType)
                 { Fail(XJScriptRuntimeErrorCode::TypeMismatch, "Return value type mismatch"); return; }
-                if (!mFrames.back().Stack.empty())
+                if (!CurrentFrame().Stack.empty())
                 { Fail(XJScriptRuntimeErrorCode::InvalidBytecode, "ReturnValue with extra stack values"); return; }
-                mFrames.pop_back();
-                if (mFrames.empty()) mResult.ReturnValue = std::move(*value);
+                --mScratch.ActiveFrameCount;
+                if (mScratch.ActiveFrameCount == 0) mResult.ReturnValue = std::move(*value);
                 else Push(std::move(*value));
             }
 
@@ -471,8 +472,9 @@ namespace XJ
                         error.Column = function.Code[mCurrentInstruction].Column;
                     }
                 }
-                for (auto frame = mFrames.rbegin(); frame != mFrames.rend(); ++frame)
+                for (uint32_t frameIndex = mScratch.ActiveFrameCount; frameIndex > 0; --frameIndex)
                 {
+                    const auto* frame = &mScratch.Frames[frameIndex - 1];
                     const auto& function = mModule.Functions[frame->FunctionIndex];
                     const uint32_t instructionIndex = frame->Pc == 0 ? 0 : frame->Pc - 1;
                     uint32_t line = 1;
@@ -503,7 +505,7 @@ namespace XJ
             XJScriptNativeInvoker& mNativeInvoker;
             XJScriptNativeContext& mNativeContext;
             XJScriptExecutionLimits mLimits;
-            std::vector<Frame> mFrames;
+            XJScriptExecutionScratch& mScratch;
             XJScriptExecutionResult mResult;
             uint32_t mCurrentFunction = 0;
             uint32_t mCurrentInstruction = 0;

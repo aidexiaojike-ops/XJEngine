@@ -19,6 +19,7 @@
 
 namespace XJ
 {
+    class XJMaterialRuntimeUploader;
 
     struct TextureParam
     {
@@ -88,9 +89,16 @@ namespace XJ
             std::filesystem::path mShaderPath;
 
             std::unordered_map<std::string, TextureView> mSamplerTextures;
-
+            uint64_t mInstanceId = 0;
+            uint64_t mParameterRevision = 1;
+            uint64_t mResourceRevision = 1;
 
             friend class XJMaterialFactory;
+            friend class XJMaterialRuntimeUploader;
+
+            bool SetDerivedPrimaryUboMemberBytes(const std::string& memberName, const void* data, uint32_t size);
+            bool SetUboMemberBytesImpl(const std::string& uboName, const std::string& memberName,
+                                       const void* data, uint32_t size, bool incrementRevision);
         public:
             XJMaterial(const XJMaterial&) = delete;
             XJMaterial &operator = (const XJMaterial&) = delete;
@@ -113,6 +121,7 @@ namespace XJ
 
             int32_t XJGetIndex() const {return mIndex;}
             uint32_t GetIndex() const { return static_cast<uint32_t>(mIndex); }
+            uint64_t GetInstanceId() const { return mInstanceId; }
 
             const std::filesystem::path& GetShaderPath() const { return mShaderPath; }
             void SetShaderPath(const std::filesystem::path& path) { mShaderPath = path; }
@@ -124,14 +133,11 @@ namespace XJ
             // Runtime Parameter
             //--------------------------------
             const XJMaterialParameterLayout& GetParameterLayout() const { return mParameterLayout; }
-            XJMaterialParameterLayout& GetParameterLayout() { return mParameterLayout; }
             void SetParameterLayout(const XJMaterialParameterLayout& layout) { mParameterLayout = layout;  MarkParameterDirty();}
             
             const XJMaterialParameterBlock& GetParameterBlock() const { return mParameterBlock; }
-            XJMaterialParameterBlock& GetParameterBlock() { return mParameterBlock; }
             void SetParameterBlock(const XJMaterialParameterBlock& block) { mParameterBlock = block; MarkParameterDirty(); }
             const std::unordered_map<uint64_t, XJMaterialParameterBlock>& GetParameterBlocks() const { return mParameterBlocks; }
-            std::unordered_map<uint64_t, XJMaterialParameterBlock>& GetParameterBlocks() { return mParameterBlocks; }
             void SetParameterBlocks(const std::unordered_map<uint64_t, XJMaterialParameterBlock>& blocks);
 
             bool HasRuntimeParameterBlock() const { return mParameterLayout.IsValid() && (!mParameterBlock.Empty() || !mParameterBlocks.empty()); }
@@ -140,7 +146,6 @@ namespace XJ
             // Runtime Texture Binding
             //--------------------------------
             const std::vector<XJMaterialTextureBinding>& GetTextureBindings() const { return mTextureBindings; }
-            std::vector<XJMaterialTextureBinding>& GetTextureBindings() { return mTextureBindings; }
             void SetTextureBindings(const std::vector<XJMaterialTextureBinding>& bindings) { mTextureBindings = bindings; MarkTextureDirty(); }
 
             //--------------------------------
@@ -155,28 +160,8 @@ namespace XJ
             void UpdateTextureViewUVRotation(uint32_t id, float uvRotation);
             void UpdateTextureViewUVScale(uint32_t id, const glm::vec2 &uvScale);
 
-            //--------------------------------
-            // Dirty
-            //--------------------------------
-            bool IsParameterDirty() const { return bShouldFlushParams; }
-            bool IsTextureDirty() const { return bShouldFlushResoure; }
-
-            bool ShouldFlushParams() const { return IsParameterDirty(); }
-            bool ShouldFlushResoure() const { return IsTextureDirty(); }
-
-            void MarkParameterDirty() { bShouldFlushParams = true; }//标记材质参数需要刷新
-            void MarkTextureDirty() { bShouldFlushResoure = true; }//标记材质参数和纹理需要刷新
-
-            void ClearParameterDirty() { bShouldFlushParams = false; }
-            void ClearTextureDirty() { bShouldFlushResoure = false; }
-            void ClearDirty()
-            {
-                ClearParameterDirty();
-                ClearTextureDirty();
-            }
-
-            void FinishFlushParams() { ClearParameterDirty(); }
-            void FinishFlushResoure() { ClearTextureDirty(); }
+            void MarkParameterDirty() { ++mParameterRevision; }
+            void MarkTextureDirty() { ++mResourceRevision; }
             //UboUnlit 手动 setter 仍保留，但不再写死 UBO 名称，而是使用当前 runtime layout 的 UBO 名称。
             const std::string& GetPrimaryUboName() const;
             bool SetPrimaryUboMemberValue(const std::string& memberName, XJShaderParameterType type, const XJMaterialParameterValue& value);
@@ -192,14 +177,13 @@ namespace XJ
             
             void UpdateSamplerTextureViewEnable(const std::string& samplerName, bool enable);
 
+            uint64_t GetParameterRevision() const { return mParameterRevision; }
+            uint64_t GetResourceRevision() const {return mResourceRevision;}
+
+
         protected:
             XJMaterial() = default;
-            // Compatibility names for current material setters. 当前材质设置器的兼容名称
-            bool bShouldFlushParams = false;
-            bool bShouldFlushResoure = false;
-            
     };
-
     
 }
 #endif

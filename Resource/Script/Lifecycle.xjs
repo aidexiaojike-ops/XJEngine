@@ -2,7 +2,7 @@ class Lifecycle : ScriptBehaviour
 {
     public:
         [[FieldId("1001")]]
-        float speed = 10.0f;
+        float speed = 100.0f;
 
         void OnCreate()
         {

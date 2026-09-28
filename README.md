@@ -138,7 +138,7 @@ Swapchain
 - **Sampler Lifetime**: `XJSampler` delegates Vulkan sampler ownership to `XJVulkanTextureSampler` for RAII cleanup and validity checks
 
 #### **ECS Implementation**
-- **Entity Management**: Lightweight entity handles with automatic lifetime tracking and scene lifetime-token validation (`XJEntity::GetSceneChecked`) to guard against dangling scene access
+- **Entity Management**: Lightweight entity handles with automatic lifetime tracking and scene lifetime-token validation (`XJEntity::GetSceneChecked`) to guard against dangling scene access; scenes maintain a UUID-to-EnTT index for direct stable-ID lookup and duplicate rejection
 - **Reserved UUID Range**: Engine/editor-owned UUIDs live in a reserved range (`XJReservedUUID`), and user UUID generation skips it to avoid collisions
 - **Component Storage**: Dense array storage for optimal cache performance
 - **Light Component**: `XJLightComponent` supports Directional/Point/Spot lights with enable toggle, color, intensity, range, and validated spot inner/outer cone angles
@@ -150,7 +150,7 @@ Swapchain
 
 #### **Script System**
 - **Language Pipeline**: `XJScriptLexer` -> `XJScriptParser` -> `XJScriptSemanticAnalyzer` -> `XJScriptCompiler` produces immutable bytecode modules with structured diagnostics
-- **Verified Runtime**: `XJScriptBytecodeVerifier` validates modules before execution; `XJScriptRuntime` enforces instruction budgets, call-depth limits, type/overflow checks, fault isolation, stack traces, and re-entrancy protection
+- **Verified Runtime**: `XJScriptBytecodeVerifier` validates modules before execution; `XJScriptRuntime` enforces instruction budgets, call-depth limits, type/overflow checks, fault isolation, stack traces, and re-entrancy protection while reusing per-instance frame/argument scratch storage
 - **ECS Lifecycle**: `XJScriptSystem` creates per-entity script instances and dispatches `OnCreate`, `OnUpdate`, `OnFixedUpdate`, and `OnDestroy` through `XJSystemScheduler`
 - **Script Components**: `XJScriptComponent` supports multiple enabled/disabled script slots per entity, stable slot UUIDs, and per-field overrides keyed by `[[FieldId("...")]]`
 - **Native Bridge**: `XJEcsScriptNativeInvoker` exposes controlled ECS operations to scripts; the initial native API includes `Transform.RotateY`
@@ -162,7 +162,7 @@ Swapchain
 - **Material Parameter System**: `XJMaterialParameterBlock`/`Layout`/`Builder`/`Writer` — build from shader schema, write to GPU buffers
 - **Base Material System**: Dynamic uniform buffer instancing with global/per-instance UBOs
 - **Material Render System**: `XJMaterialRenderSystemBase` — base class for material-driven render systems, `XJMaterialRenderItem` — render item abstraction
-- **Surface Material System**: `XJSurfaceMaterialSystem` renders `XJSurfaceMaterialComponent` items through schema-driven pipeline runtimes, tracking parameter/resource uploads independently for each frame slot
+- **Surface Material System**: `XJSurfaceMaterialSystem` renders `XJSurfaceMaterialComponent` items through schema-driven pipeline runtimes, using material instance IDs plus parameter/resource revisions to synchronize each frame-slot descriptor safely
 - **Shared Frame/Light Data**: `XJFrameUbo` provides projection, view, resolution, frame/time, and camera position; `XJLightUbo` provides one directional light plus up to eight point and eight spot lights using std140-compatible layouts and per-frame descriptor sets
 - **Scene Light Collection**: `XJLightSceneUtils` gathers enabled `XJLightComponent` instances and transforms into the per-frame light UBO
 - **DescriptorSetWriter**: Utility class providing static helpers for descriptor buffer/image info creation and descriptor set writes
@@ -175,7 +175,7 @@ Swapchain
 - **Cross-Stage Reflection**: Shader stage flags are bitmasks, allowing descriptor bindings reflected from vertex and fragment stages to be merged into one Vulkan layout
 - **Shader Runtime Layout**: `XJMaterialShaderRuntimeLayout`/`Builder`, `XJMaterialPipelineRuntime`/`Builder`/`Cache`/`Descriptor`, `XJMaterialRuntimeUploader`, `XJSurfaceMaterialBindingUtils` — runtime shader-material binding, optional light descriptor set (`set=3`), pipeline caching, and GPU upload
 - **Material Serializers**: `XJMaterialAssetSerializer`, `XJShaderAssetSerializer`, `XJShaderSchemaSerializer`
-- **Material Factory Cache**: `XJMaterialFactory` caches materials by asset/default key (weak refs), reuses loaded textures, and provides `ClearExpiredMaterials`/`ClearCaches` for scene lifetime management
+- **Material Factory Cache**: `XJMaterialFactory` caches materials by asset/default key (weak refs), reuses loaded textures and expired material slots, assigns stable instance IDs, and provides `ClearExpiredMaterials`/`ClearCaches` for scene lifetime management
 - **Inspector Material Editing**: Parameter editing with `XJEditorMaterialParameterType` (Float, Color3, Texture2D, etc.)
 - **Inspector Light Editing**: Directional/Point/Spot type, enabled state, color, intensity, range, and spot inner/outer cone angles are editable through the scene request/ViewModel flow
 
@@ -215,10 +215,11 @@ Swapchain
 - **Lifecycle Hooks**: `OnUIBegin`/`OnUIEnd`/`OnUIRender`/`OnUIDestroy` virtual methods in XJApplication base class
 - **MVVM Architecture**: Controllers (camera, scene, drop, asset), Services, ViewModels decouple UI from ECS
 - **Asset ViewModel**: `XJEditorAssetViewModel` exposes asset details (handle, type, name, path), shader validation view (`XJEditorShaderValidationView`), and mesh bounds view (`XJEditorMeshBoundsView` with per-submesh AABB) for the Inspector panel
-- **XJEditorSceneController**: Scene load/save/open, dirty tracking, entity mutation requests, and snapshot-based Undo/Redo history (scene + material assets, up to 100 entries)
+- **XJEditorSceneController**: Scene load/save/open, dirty tracking, entity mutation requests, and snapshot-based Undo/Redo history (scene + material assets, up to 100 entries); revision tracking rebuilds Scene/selection ViewModels only when relevant state changes
 - **XJEditorAssetController**: Asset create/rename/delete/import lifecycle management
 - **XJEditorAssetRequests**: MVVM request structs (CreateAsset, RenameAsset, DeleteAsset, ImportExternalFiles)
-- **Console Logging**: `XJEditorLog` bridges spdlog into the editor Console panel via a custom spdlog sink (async-safe payload copying, level mapping, thread-safe queue)
+- **Console Logging**: `XJEditorLog` bridges spdlog into the editor Console panel via a custom sink; revision-based snapshots avoid unchanged copies and `ImGuiListClipper` limits rendering work for single-line logs while preserving multiline entries
+- **Script Save Diagnostics**: Script saves report success, revision, and compiler diagnostics back to the Content Browser editor before clearing its dirty state
 - **XJEditorSceneAssetDropController**: Content Browser asset drag to Scene Preview with ray-cast entity placement
 - **XJEditorExternalDropController**: OS file drag-drop into editor window (e.g., drag .glb from Explorer)
 - **XJEditorCameraManager**: Viewport camera binding and editor camera lifecycle (entity-ID based, resolving through the scene to avoid dangling pointers)

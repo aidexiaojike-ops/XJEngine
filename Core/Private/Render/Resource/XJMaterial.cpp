@@ -19,6 +19,44 @@ namespace XJ
         }
     }
 
+    bool XJMaterial::SetUboMemberBytesImpl(const std::string& uboName, const std::string& memberName, const void* data, uint32_t size, bool incrementRevision)
+    {
+
+        const XJMaterialUboMemberBinding* memberBinding  = mParameterLayout.FindUboMemberBinding(uboName, memberName);
+        if (!memberBinding)
+        {
+            spdlog::warn("SetUboMemberBytes failed: UBO member not found: {}.{}", uboName, memberName);
+            return false;
+        }
+
+
+        XJMaterialParameterBlock* block = FindBlockForBinding(
+            mParameterBlocks,
+            mParameterBlock,
+            memberBinding->Set,
+            memberBinding->Binding);
+
+        const uint32_t writeSize = (memberBinding->Size != 0 && memberBinding->Size < size) ? memberBinding->Size : size;
+        if (!block->SetBytes(memberBinding->Offset, data, writeSize))
+        {
+            spdlog::warn(
+                "SetUboMemberBytes failed: write block failed: {}.{}, offset={}, size={}, blockSize={}",
+                uboName,
+                memberName,
+                memberBinding->Offset,
+                writeSize,
+                block->GetSize());
+            return false;
+        }
+
+        if (memberBinding->Set == mParameterLayout.GetUboSet() && memberBinding->Binding == mParameterLayout.GetUboBinding())
+            mParameterBlock = *block;
+
+        if (incrementRevision)
+            MarkParameterDirty();
+
+        return true;
+    }
 
     bool XJMaterial::SetParameterValue(const std::string& parameterName, const XJMaterialParameterValue& value)
     {
@@ -120,43 +158,19 @@ namespace XJ
 
     bool XJMaterial::SetUboMemberBytes(const std::string& uboName, const std::string& memberName, const void* data, uint32_t size)
     {
-        const XJMaterialUboMemberBinding* memberBinding  = mParameterLayout.FindUboMemberBinding(uboName, memberName);
-        if (!memberBinding)
-        {
-            spdlog::warn("SetUboMemberBytes failed: UBO member not found: {}.{}", uboName, memberName);
-            return false;
-        }
+        return SetUboMemberBytesImpl(uboName, memberName, data, size, true);
+    }
 
-
-        XJMaterialParameterBlock* block = FindBlockForBinding(
-            mParameterBlocks,
-            mParameterBlock,
-            memberBinding->Set,
-            memberBinding->Binding);
-
-        const uint32_t writeSize = (memberBinding->Size != 0 && memberBinding->Size < size) ? memberBinding->Size : size;
-        if (!block->SetBytes(memberBinding->Offset, data, writeSize))
-        {
-            spdlog::warn(
-                "SetUboMemberBytes failed: write block failed: {}.{}, offset={}, size={}, blockSize={}",
-                uboName,
-                memberName,
-                memberBinding->Offset,
-                writeSize,
-                block->GetSize());
-            return false;
-        }
-
-        if (memberBinding->Set == mParameterLayout.GetUboSet() && memberBinding->Binding == mParameterLayout.GetUboBinding())
-            mParameterBlock = *block;
-        
-        MarkParameterDirty();
-        return true;
+    bool XJMaterial::
+    SetDerivedPrimaryUboMemberBytes(const std::string& memberName, const void* data, uint32_t size)
+    {
+        return SetUboMemberBytesImpl(GetPrimaryUboName(), memberName, data, size, false);
     }
 
     void XJMaterial::SetParameterBlocks(const std::unordered_map<uint64_t, XJMaterialParameterBlock>& blocks)
     {
         mParameterBlocks = blocks;
+        mParameterBlock = {};
 
         const uint64_t primaryKey = XJMakeMaterialUboKey(mParameterLayout.GetUboSet(), mParameterLayout.GetUboBinding());
         auto it = mParameterBlocks.find(primaryKey);
@@ -195,6 +209,7 @@ namespace XJ
         }
 
         MarkTextureDirty();//纹理变更 更新材质
+        MarkParameterDirty();// textureParam.enable 也依赖纹理和采样器是否有效
     }
     void XJMaterial::UpdateTextureViewEnable(uint32_t id, bool enable) 
     {
@@ -303,6 +318,7 @@ namespace XJ
         }
     
         MarkTextureDirty();
+        MarkParameterDirty();
     }
     
     void XJMaterial::UpdateSamplerTextureViewEnable(const std::string& samplerName, bool enable)

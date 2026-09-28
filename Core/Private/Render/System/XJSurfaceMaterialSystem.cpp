@@ -47,80 +47,6 @@ namespace XJ
         }
        
     }
-    void XJSurfaceMaterialSystem::MarkMaterialParamsDirtyForAllFrameSlots(XJMaterialPipelineRuntime& runtime, uint32_t materialIndex)
-    {
-        std::vector<bool>& flags = mParamUploadedByRuntime[&runtime];
-        const uint32_t flagCount = runtime.LastDescriptorSetCount*RENDERER_NUM_BUFFER;
-
-        if (flags.size() < flagCount)
-            flags.resize(flagCount, false);
-        
-        if(materialIndex >= runtime.LastDescriptorSetCount)
-        {
-            spdlog::error("MarkMaterialParamsDirtyForAllFrameSlots: materialIndex {} exceeds runtime.LastDescriptorSetCount {}",
-                materialIndex, runtime.LastDescriptorSetCount);
-            return;
-        }
-
-        for (uint32_t frameSlot = 0; frameSlot < RENDERER_NUM_BUFFER; ++frameSlot)
-            flags[frameSlot * runtime.LastDescriptorSetCount + materialIndex] = false;
-    }
-
-    void XJSurfaceMaterialSystem::MarkMaterialResourcesDirtyForAllFrameSlots(XJMaterialPipelineRuntime& runtime, uint32_t materialIndex)
-    {
-        std::vector<bool>& flags = mResourceUploadedByRuntime[&runtime];
-        const uint32_t flagCount = runtime.LastDescriptorSetCount * RENDERER_NUM_BUFFER;
-
-        if (flags.size() < flagCount)
-            flags.resize(flagCount, false);
-
-        if (materialIndex >= runtime.LastDescriptorSetCount)
-            return;
-
-        for (uint32_t frameSlot = 0; frameSlot < RENDERER_NUM_BUFFER; ++frameSlot)
-            flags[frameSlot * runtime.LastDescriptorSetCount + materialIndex] = false;
-    }
-
-    bool XJSurfaceMaterialSystem::HasPendingMaterialParamUpdates(XJMaterialPipelineRuntime& runtime, uint32_t materialIndex) const//
-    {
-        auto it = mParamUploadedByRuntime.find(&runtime);
-        if (it == mParamUploadedByRuntime.end())
-            return false;
-
-        if (materialIndex >= runtime.LastDescriptorSetCount)
-            return false;
-
-        const std::vector<bool>& flags = it->second;
-        for (uint32_t frameSlot = 0; frameSlot < RENDERER_NUM_BUFFER; ++frameSlot)
-        {
-            const uint32_t descriptorIndex = frameSlot * runtime.LastDescriptorSetCount + materialIndex;
-            if (descriptorIndex < flags.size() && !flags[descriptorIndex])
-                return true;
-        }
-
-        return false;
-    }
-
-    bool XJSurfaceMaterialSystem::HasPendingMaterialResourceUpdates(XJMaterialPipelineRuntime& runtime, uint32_t materialIndex) const
-    {
-        auto it = mResourceUploadedByRuntime.find(&runtime);
-        if (it == mResourceUploadedByRuntime.end())
-            return false;
-
-        if (materialIndex >= runtime.LastDescriptorSetCount)
-            return false;
-
-        const std::vector<bool>& flags = it->second;
-        for (uint32_t frameSlot = 0; frameSlot < RENDERER_NUM_BUFFER; ++frameSlot)
-        {
-            const uint32_t descriptorIndex = frameSlot * runtime.LastDescriptorSetCount + materialIndex;
-            if (descriptorIndex < flags.size() && !flags[descriptorIndex])
-                return true;
-        }
-
-        return false;
-    }
-
     void XJSurfaceMaterialSystem::OnRender(XJVulkanCommandBuffer cmdBuffer, XJRenderTarget* renderTarget) 
     {
         XJScene *scene = XJGetScene();
@@ -170,7 +96,6 @@ namespace XJ
         XJLightSceneUtils::BuildLightUboFromScene(*scene, lightUbo);
         uploadContext.LightData = &lightUbo;
 
-        mForceUpdateRuntimes.clear();
         mUpdatedFrameRuntimes.clear();
         mRequiredDescriptorCountByRuntime.clear();
 
@@ -218,15 +143,13 @@ namespace XJ
                 }
             
                 // descriptor pool 重建后所有 material/frame slot 都需要重新写 descriptor。
-                mForceUpdateRuntimes.insert(runtime);
-                mParamUploadedByRuntime[runtime].assign(requiredCount * RENDERER_NUM_BUFFER, false);
-                mResourceUploadedByRuntime[runtime].assign(requiredCount * RENDERER_NUM_BUFFER, false);
+                mUploadStates[runtime].Slots.assign(
+                    runtime->LastDescriptorSetCount * RENDERER_NUM_BUFFER, {});
             }
-             else
+            else
             {
-                const uint32_t flagCount = runtime->LastDescriptorSetCount * RENDERER_NUM_BUFFER;
-                mParamUploadedByRuntime[runtime].resize(flagCount, false);
-                mResourceUploadedByRuntime[runtime].resize(flagCount, false);
+                mUploadStates[runtime].Slots.resize(
+                    runtime->LastDescriptorSetCount * RENDERER_NUM_BUFFER);
             }
         }
 
@@ -263,23 +186,16 @@ namespace XJ
             if (!preparedMaterialIndices.insert(materialIndex).second)
                 continue;
 
-            const bool forceUpdateRuntime = mForceUpdateRuntimes.find(runtime) != mForceUpdateRuntimes.end();
-
-            if (material->ShouldFlushParams())
-                MarkMaterialParamsDirtyForAllFrameSlots(*runtime, materialIndex);
-
-            if (material->ShouldFlushResoure())
-                MarkMaterialResourcesDirtyForAllFrameSlots(*runtime, materialIndex);
-
-            std::vector<bool>& paramFlags = mParamUploadedByRuntime[runtime];
-            std::vector<bool>& resourceFlags = mResourceUploadedByRuntime[runtime];
+            XJMaterialUploadStamp& stamp = mUploadStates[runtime].Slots[descriptorIndex];
+            if (stamp.OwnerId != material->GetInstanceId())
+                stamp = { material->GetInstanceId(), 0, 0 };
 
             VkDescriptorSet paramsDescSet = runtime->MaterialParamDescSets[descriptorIndex];
             VkDescriptorSet resourceDescSet = runtime->MaterialResourceDescSets[descriptorIndex];
 
             // Descriptor sets must be updated before any draw in this command buffer
             // can bind them. Updating a set after it was bound invalidates recording.
-            if (forceUpdateRuntime || descriptorIndex >= paramFlags.size() || !paramFlags[descriptorIndex])
+            if (stamp.ParameterRevision != material->GetParameterRevision())
             {
                 if (XJMaterialRuntimeUploader::UpdateMaterialParamsDescSet(
                         uploadContext.Device,
@@ -288,15 +204,11 @@ namespace XJ
                         descriptorIndex,
                         material))
                 {
-                    if (descriptorIndex < paramFlags.size())
-                        paramFlags[descriptorIndex] = true;
+                    stamp.ParameterRevision = material->GetParameterRevision();
                 }
-
-                if (!HasPendingMaterialParamUpdates(*runtime, materialIndex))
-                    material->FinishFlushParams();
             }
 
-            if (forceUpdateRuntime || descriptorIndex >= resourceFlags.size() || !resourceFlags[descriptorIndex])
+            if (stamp.ResourceRevision != material->GetResourceRevision())
             {
                 if (XJMaterialRuntimeUploader::UpdateMaterialResourceDescSet(
                         uploadContext.Device,
@@ -304,12 +216,8 @@ namespace XJ
                         resourceDescSet,
                         material))
                 {
-                    if (descriptorIndex < resourceFlags.size())
-                        resourceFlags[descriptorIndex] = true;
+                    stamp.ResourceRevision = material->GetResourceRevision();
                 }
-
-                if (!HasPendingMaterialResourceUpdates(*runtime, materialIndex))
-                    material->FinishFlushResoure();
             }
         }
 
@@ -349,6 +257,15 @@ namespace XJ
                     material->GetIndex());
                 continue;
             }
+
+            const auto stateIt = mUploadStates.find(runtime);
+            if (stateIt == mUploadStates.end() || descriptorIndex >= stateIt->second.Slots.size())
+                continue;
+            const XJMaterialUploadStamp& stamp = stateIt->second.Slots[descriptorIndex];
+            if (stamp.OwnerId != material->GetInstanceId() ||
+                stamp.ParameterRevision != material->GetParameterRevision() ||
+                stamp.ResourceRevision != material->GetResourceRevision())
+                continue;
 
             
         
@@ -402,11 +319,9 @@ namespace XJ
     void XJSurfaceMaterialSystem::OnDestroy() 
     {
         mRenderItems.clear();
-        mForceUpdateRuntimes.clear();
         mUpdatedFrameRuntimes.clear();
         mRequiredDescriptorCountByRuntime.clear();
-        mParamUploadedByRuntime.clear();
-        mResourceUploadedByRuntime.clear();
+        mUploadStates.clear();
         
         ShutdownMaterialRuntime();
     }

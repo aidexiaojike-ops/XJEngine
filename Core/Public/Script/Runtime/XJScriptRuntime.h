@@ -80,41 +80,85 @@ namespace XJ
         std::vector<XJScriptStackTraceEntry> StackTrace;
     };
 
+    struct XJScriptFrameScratch
+    {
+        uint32_t FunctionIndex = 0;
+        uint32_t Pc = 0;
+
+        std::vector<XJScriptValue> Arguments;
+
+        std::vector<std::optional<XJScriptValue>> Locals;
+
+        std::vector<XJScriptValue> Stack;
+
+        void Reset()
+        {
+            FunctionIndex = 0;
+            Pc = 0;
+            Arguments.clear();
+            Locals.clear();
+            Stack.clear();
+        }
+    };
+
+    struct XJScriptExecutionScratch
+    {
+        std::vector<XJScriptFrameScratch> Frames;
+
+        std::vector<XJScriptValue> CallArguments;
+
+        uint32_t ActiveFrameCount = 0;
+
+        void Begin()
+        {
+            ActiveFrameCount = 0;
+            CallArguments.clear();
+        }
+
+        void End() noexcept
+        {
+            ActiveFrameCount = 0;
+            CallArguments.clear();
+        }
+    };
+
 
     class XJScriptInstance
     {
-    public:
-        const std::shared_ptr<const XJScriptBytecodeModule>& GetModule() const { return mModule; }
-        const std::vector<XJScriptValue>& GetFields() const { return mFields; }
-        const XJScriptValue* GetField(uint32_t index) const
-        {
-            return index < mFields.size() ? &mFields[index] : nullptr;
-        }
-        bool SetField(uint32_t index, XJScriptValue value);
-        bool IsFaulted() const { return mFaulted; }
-        bool IsExecuting() const { return mExecuting; }
-        const std::optional<XJScriptRuntimeError>& GetLastError() const { return mLastError; }
+        public:
+            const std::shared_ptr<const XJScriptBytecodeModule>& GetModule() const { return mModule; }
+            const std::vector<XJScriptValue>& GetFields() const { return mFields; }
+            const XJScriptValue* GetField(uint32_t index) const
+            {
+                return index < mFields.size() ? &mFields[index] : nullptr;
+            }
+            bool SetField(uint32_t index, XJScriptValue value);
+            bool IsFaulted() const { return mFaulted; }
+            bool IsExecuting() const { return mExecuting; }
+            const std::optional<XJScriptRuntimeError>& GetLastError() const { return mLastError; }
 
-    private:
-        friend class XJScriptRuntime;
-        friend class XJScriptMachine;
+        private:
+            friend class XJScriptRuntime;
+            friend class XJScriptMachine;
 
-        // Module 不可变，可以被多个实体实例共享。
-        std::shared_ptr<const XJScriptBytecodeModule> mModule;
+            // Module 不可变，可以被多个实体实例共享。
+            std::shared_ptr<const XJScriptBytecodeModule> mModule;
 
-        // 每个实例独立持有字段状态。
-        std::vector<XJScriptValue> mFields;
+            // 每个实例独立持有字段状态。
+            std::vector<XJScriptValue> mFields;
 
-        // InitializeInstance 重新验证模块后保存，运行时不依赖可伪造的缓存值。
-        std::vector<uint32_t> mFunctionMaxStackDepths;
+            // InitializeInstance 重新验证模块后保存，运行时不依赖可伪造的缓存值。
+            std::vector<uint32_t> mFunctionMaxStackDepths;
 
-        // 发生运行时错误后停止调度该实例。
-        bool mFaulted = false;
+            // 发生运行时错误后停止调度该实例。
+            bool mFaulted = false;
 
-        // 防止同一实例递归进入 Execute。
-        bool mExecuting = false;
+            // 防止同一实例递归进入 Execute。
+            bool mExecuting = false;
 
-        std::optional<XJScriptRuntimeError> mLastError;
+            std::optional<XJScriptRuntimeError> mLastError;
+
+            XJScriptExecutionScratch mScratch;
     };
 
     struct XJScriptExecutionResult

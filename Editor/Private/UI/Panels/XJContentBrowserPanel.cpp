@@ -408,6 +408,18 @@ namespace XJ
         if (!mScriptEditorOpen)
             return;
 
+        auto& requests = mState.AssetRequests;
+        if (mObservedScriptSaveRevision != requests.ScriptSaveRevision)
+        {
+            mObservedScriptSaveRevision = requests.ScriptSaveRevision;
+            if (requests.LastSavedScriptHandle == mScriptEditorHandle)
+            {
+                mScriptEditorDiagnostics = requests.ScriptSaveDiagnostics;
+                if (requests.LastScriptSaveSucceeded)
+                    mScriptEditorDirty = false;
+            }
+        }
+
         const std::string title = "Script Editor - " + mScriptEditorName + "###XJScriptEditor";
         if (!ImGui::Begin(title.c_str(), &mScriptEditorOpen,
                           ImGuiWindowFlags_MenuBar | ImGuiWindowFlags_NoCollapse))
@@ -423,20 +435,6 @@ namespace XJ
                 mState.AssetRequests.RequestSaveScriptSource = true;
                 mState.AssetRequests.SaveScriptSource.Handle = mScriptEditorHandle;
                 mState.AssetRequests.SaveScriptSource.Source = mScriptEditorSource;
-                mScriptEditorDirty = false;
-
-                const auto compiled = XJScriptAssetCompiler::CompileSource(
-                    mScriptEditorSource, mScriptEditorPath);
-                mScriptEditorDiagnostics.clear();
-                if (compiled)
-                {
-                    for (const auto& diagnostic : compiled->Diagnostics)
-                    {
-                        mScriptEditorDiagnostics.push_back(
-                            std::to_string(diagnostic.Line) + ":" +
-                            std::to_string(diagnostic.Column) + " " + diagnostic.Message);
-                    }
-                }
             }
             if (ImGui::MenuItem("Reload", nullptr, false, mScriptEditorHandle != 0) &&
                 mState.AssetRegistry)

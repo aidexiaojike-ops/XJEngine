@@ -101,7 +101,7 @@ File -> Importer -> Asset (CPU) -> Factory -> Resource (GPU) -> Renderer
 ### 脚本系统
 
 - **语言管线**：`XJScriptLexer` -> `XJScriptParser` -> `XJScriptSemanticAnalyzer` -> `XJScriptCompiler`，生成带结构化诊断的不可变字节码模块
-- **验证运行时**：`XJScriptBytecodeVerifier` 在执行前验证模块；`XJScriptRuntime` 限制指令预算和调用深度，并处理类型错误、溢出、故障隔离、堆栈跟踪及重入保护
+- **验证运行时**：`XJScriptBytecodeVerifier` 在执行前验证模块；`XJScriptRuntime` 限制指令预算和调用深度，并处理类型错误、溢出、故障隔离、堆栈跟踪及重入保护，同时复用每个实例的调用帧/参数 scratch 存储
 - **ECS 生命周期**：`XJScriptSystem` 创建实体脚本实例，通过 `XJSystemScheduler` 调度 `OnCreate`、`OnUpdate`、`OnFixedUpdate`、`OnDestroy`
 - **脚本组件**：`XJScriptComponent` 支持每个实体挂载多个可启停脚本槽、稳定槽 UUID，以及基于 `[[FieldId("...")]]` 的字段覆盖
 - **原生桥接**：`XJEcsScriptNativeInvoker` 向脚本暴露受控 ECS 操作，首批原生 API 包含 `Transform.RotateY`
@@ -111,12 +111,12 @@ File -> Importer -> Asset (CPU) -> Factory -> Resource (GPU) -> Renderer
 - **Shader Schema 系统**：JSON 定义的着色器参数，`XJShaderSchemaValidator` 验证 + `XJShaderSchemaBindingResolver` 绑定解析 + `XJShaderDescriptorLayoutBuilder` 描述符布局构建
 - **Lit 材质参数**：`Lit.schema` 提供基础颜色、Albedo 纹理、高光强度和光泽度，并复用通用 SurfaceMaterial 运行时
 - **跨阶段 Shader 反射**：Shader stage 使用位掩码，将 Vertex/Fragment 反射出的同一描述符绑定合并进统一 Vulkan 布局
-- **Surface 材质系统**：`XJSurfaceMaterialSystem` 渲染 `XJSurfaceMaterialComponent`，按 frame slot 分别跟踪材质参数和资源上传状态
+- **Surface 材质系统**：`XJSurfaceMaterialSystem` 渲染 `XJSurfaceMaterialComponent`，通过材质实例 ID 与参数/资源修订号安全同步每个 frame slot 的描述符
 - **共享 Frame/Light 数据**：`XJFrameUbo` 提供投影/视图矩阵、分辨率、帧号/时间与摄像机位置；`XJLightUbo` 使用 std140 布局和逐帧描述符集支持 1 个方向光、最多 8 个点光和 8 个聚光灯
 - **场景灯光收集**：`XJLightSceneUtils` 从场景中的 `XJLightComponent` 与 Transform 构建每帧灯光 UBO
 - **Shader 运行时布局**：`XJMaterialShaderRuntimeLayout`/`Builder`、`XJMaterialPipelineRuntime`/`Builder`/`Cache`/`Descriptor`、`XJMaterialRuntimeUploader`、`XJSurfaceMaterialBindingUtils` — 运行时 Shader-材质绑定、可选灯光描述符集（`set=3`）、管线缓存与 GPU 上传
 - **材质序列化**：`XJMaterialAssetSerializer`、`XJShaderAssetSerializer`、`XJShaderSchemaSerializer`
-- **材质工厂缓存**：`XJMaterialFactory` 按资产/默认材质键缓存材质（弱引用）、复用已加载纹理，并提供 `ClearExpiredMaterials`/`ClearCaches` 配合场景生命周期管理
+- **材质工厂缓存**：`XJMaterialFactory` 按资产/默认材质键缓存材质（弱引用），复用已加载纹理和过期材质槽，分配稳定实例 ID，并提供 `ClearExpiredMaterials`/`ClearCaches`
 - **Inspector 材质编辑**：通过 `XJEditorMaterialParameterType` 编辑 Float、Color3、Texture2D 等参数
 - **Inspector 灯光编辑**：通过场景请求/ViewModel 数据流编辑 Directional/Point/Spot 类型、开关、颜色、强度、范围和聚光灯内外锥角
 
@@ -132,8 +132,9 @@ File -> Importer -> Asset (CPU) -> Factory -> Resource (GPU) -> Renderer
 - **精确场景拾取**：`XJEditorSceneService::RaycastClosestSceneEntity` 先进行世界空间 AABB 粗筛，再使用 Mesh 的 CPU 顶点/索引副本执行射线-三角形检测
 - **选中点轨道旋转**：Scene Preview 可通过视口射线设置摄像机 orbit pivot，使轨道控制围绕命中的表面点旋转
 - **灯光 Gizmo**：`XJLightGizmoMaterialSystem` 在 Scene Preview 中以编辑器专用线框显示方向光、点光和聚光灯
-- **Controllers**：`XJEditorSceneController`（场景加载/保存/切换 + 基于快照的 Undo/Redo 历史，含场景与材质资产，最多 100 条）+ `XJEditorAssetController`（资产 CRUD）+ `XJEditorCameraManager`（基于实体 ID 的视口摄像机绑定与解析，避免悬垂指针）+ `XJEditorSceneAssetDropController`（资产拖放到场景）+ `XJEditorExternalDropController`（OS文件拖入）
-- **Console 日志**：`XJEditorLog` 通过自定义 spdlog sink 将引擎日志桥接到 Console 面板（异步安全复制、级别映射、线程安全队列）
+- **Controllers**：`XJEditorSceneController`（场景加载/保存/切换 + 基于快照的 Undo/Redo 历史，含场景与材质资产，最多 100 条；按修订号仅重建发生变化的 Scene/选择 ViewModel）+ `XJEditorAssetController`（资产 CRUD）+ `XJEditorCameraManager`（基于实体 ID 的视口摄像机绑定与解析）
+- **Console 日志**：`XJEditorLog` 通过自定义 spdlog sink 桥接日志；修订号快照避免重复复制，`ImGuiListClipper` 减少单行日志绘制工作并保留多行日志显示
+- **脚本保存诊断**：脚本保存完成后将成功状态、修订号和编译诊断反馈给 Content Browser，成功后才清除编辑器 dirty 状态
 - **Viewport 渲染表面**：`XJViewport` 接口（`GetViewportTextureID`/`IsViewportTextureReady`/`OnViewportResized`）由 `XJViewportRenderSurface` 实现，负责离屏 render pass、render target、调整大小时的延迟 descriptor 释放以及 ImGui 纹理显示
 - **Services**：`XJEditorSceneService` + `XJEditorAssetService`（Controller 与 ECS 之间的桥接层）
 - **ViewModels**：`XJEditorSceneViewModel`、`XJEditorSelection`、`XJEditorComponentTypes`、`XJEditorAssetRequests`（UI 面板读取快照，写入请求）、`XJEditorAssetViewModel`（资产详情视图：基本信息、着色器验证、网格包围盒展示）
@@ -145,7 +146,7 @@ File -> Importer -> Asset (CPU) -> Factory -> Resource (GPU) -> Renderer
 - **材质系统**：`XJBaseMaterialSystem`、`XJSurfaceMaterialSystem`、`XJMaterialRenderSystemBase`、`XJSurfaceMaterialComponent`、`XJMaterialParameterBlock`/`Builder`/`Writer`
 - **摄像机系统**：`XJCameraController`（Core/Camera）、`XJCameraMath`（数学工具）、`XJCameraSystem`（ECS 适配）
 - **资产系统**：`XJModelImporter`、`XJTextureImporter`、`XJAssetRegistry`、`XJAssetRegistryScanner`、`XJAssetBootstrap`、`XJSceneRuntimeUtil`、`XJMeshAssetLoader`、`XJJsonIO`
-- **ECS 基础**：`XJEntity` 通过场景生命周期 token 校验避免悬垂访问；`XJReservedUUID` 定义引擎/编辑器保留 UUID 区间，用户 UUID 生成自动避开；`XJSystemScheduler` 提供事务式 Start/Stop、固定步进上限和安全点回调；`XJInput` 输入单例每帧轮询 GLFW，提供键盘/鼠标边沿查询、鼠标增量/滚轮和 WASD 轴向；`XJLightComponent` 支持 Directional/Point/Spot 灯光
+- **ECS 基础**：`XJEntity` 通过场景生命周期 token 校验避免悬垂访问；Scene 维护 UUID -> EnTT 索引以直接查找并拒绝重复 UUID；`XJSystemScheduler` 提供事务式 Start/Stop、固定步进上限和安全点回调；`XJInput` 提供键盘/鼠标边沿查询；`XJLightComponent` 支持 Directional/Point/Spot 灯光
 - **编辑器系统**：`XJEditorSceneController`、`XJEditorCameraManager`、`XJEditorSceneService`、`XJUIContext`、`XJEditorRenderer`、`XJEditorUILayer`、编辑器面板
 - **Vulkan 平台层**：`XJSwapchainAcquireResult`/`XJSwapchainPresentResult` 区分成功、重建和设备丢失状态；`XJVulkanInstance` 自动选择最高支持到 Vulkan 1.3 的 API 版本；`XJVulkanSurface`、`XJGlfwWindow`、`XJVulkanTextureSampler` 增加句柄校验、生命周期顺序和 RAII 释放
 

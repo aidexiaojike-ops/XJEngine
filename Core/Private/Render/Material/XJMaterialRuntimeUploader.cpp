@@ -68,12 +68,24 @@ namespace XJ
             return false;
         }
 
-        const TextureView* texture = material->GetTextureView(SURFACE_MAT_BASE_COLOR);
-        if (texture)
+        if (descSet == VK_NULL_HANDLE)
+            return false;
+
+        const auto& parameterLayout = material->GetParameterLayout();
+        const auto* textureParamBinding = parameterLayout.FindUboMemberBinding(
+            material->GetPrimaryUboName(), "textureParam");
+        if (textureParamBinding)
         {
+            const TextureView* texture = nullptr;
+            if (!material->GetTextureBindings().empty())
+                texture = material->GetSamplerTextureView(material->GetTextureBindings().front().SamplerName);
+            if (!texture)
+                texture = material->GetTextureView(SURFACE_MAT_BASE_COLOR);
+
             TextureParam texParam{};
             XJMaterial::UpdateTextureParams(texture, &texParam);
-            material->SetPrimaryUboMemberBytes("textureParam", &texParam, sizeof(texParam));
+            if (!material->SetDerivedPrimaryUboMemberBytes("textureParam", &texParam, sizeof(texParam)))
+                return false;
         }
 
         if (!runtime.ShaderLayout.HasPrimaryMaterialUbo())
@@ -117,14 +129,14 @@ namespace XJ
                      uboLayout.Binding == runtime.ShaderLayout.PrimaryMaterialUboBinding)
                 block = &material->GetParameterBlock();
 
-            if (!block || block->Empty())
+            if (!block || block->Empty() || block->GetSize() != uboLayout.Size)
             {
                 spdlog::warn(
-                    "Skip material UBO write: material={}, ubo='{}', binding={} has empty block.",
+                    "Skip material UBO write: material={}, ubo='{}', binding={} has invalid block.",
                     material->GetIndex(),
                     uboLayout.UboName,
                     uboLayout.Binding);
-                continue;
+                return false;
             }
 
             const uint32_t bufferIndex = firstBufferIndex + uboIndex;
@@ -143,7 +155,7 @@ namespace XJ
 
             XJVulkanBuffer* materialBuffer = runtime.MaterialUboBuffers[bufferIndex].get();
             if (!materialBuffer)
-                continue;
+                return false;
 
             materialBuffer->WriteData(block->GetDataPtr());
 
@@ -185,7 +197,7 @@ namespace XJ
             return false;
         }
 
-        if (!material)
+        if (!material || descSet == VK_NULL_HANDLE)
         {
             spdlog::warn("Skip material resource update: material is null.");
             return false;
@@ -227,11 +239,12 @@ namespace XJ
                     material->GetIndex(),
                     textureBinding.SamplerName,
                     textureBinding.Binding);
+                return false;
             }
         }
 
         if (imageInfos.empty())
-            return false;
+            return material->GetTextureBindings().empty();
 
         std::vector<VkWriteDescriptorSet> writes;
         writes.reserve(imageInfos.size());

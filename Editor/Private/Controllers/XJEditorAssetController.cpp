@@ -35,13 +35,13 @@ namespace XJ
         // 没有注册表则无法进行任何操作
         if (!mAssetRegistry)
             return;
+        bool assetsChanged = false;
          // ---------- 刷新资产注册表 ----------
         if (uiState.AssetRequests.RequestRefreshRegistry)
         {
             uiState.AssetRequests.RequestRefreshRegistry = false;
-            XJEditorAssetService::RefreshRegistry(*mAssetRegistry, mRootPath, mRegistryPath);
-
-            ++uiState.AssetDetailEpoch;
+            assetsChanged = XJEditorAssetService::RefreshRegistry(
+                *mAssetRegistry, mRootPath, mRegistryPath);
         }
         // ---------- 创建资产 ----------
         if (uiState.AssetRequests.RequestCreateAsset)
@@ -64,7 +64,7 @@ namespace XJ
                 uiState.Selection.SelectedAsset = createdHandle;
                 uiState.Selection.SelectedEntity = XJ_INVALID_EDITOR_ENTITY_ID;
                 uiState.Selection.HighlightedEntities.clear();
-                ++uiState.AssetDetailEpoch; 
+                assetsChanged = true;
                 if (request.Type == XJEditorCreateAssetType::Script)
                 {
                     uiState.RequestOpenScriptEditor = true;
@@ -84,7 +84,7 @@ namespace XJ
                 uiState.Selection.SelectedAsset = request.Handle;
                 uiState.Selection.SelectedEntity = XJ_INVALID_EDITOR_ENTITY_ID;
                 uiState.Selection.HighlightedEntities.clear();
-                ++uiState.AssetDetailEpoch;
+                assetsChanged = true;
             }
         }
         // ---------- 删除资产 ----------
@@ -110,7 +110,7 @@ namespace XJ
             }
             else 
             {
-                ++uiState.AssetDetailEpoch; 
+                assetsChanged = true;
                 if (uiState.Selection.SelectedAsset != 0 &&
                      !mAssetRegistry->Contains(uiState.Selection.SelectedAsset))
                 {
@@ -153,7 +153,7 @@ namespace XJ
             if (canDelete &&
                 XJEditorAssetService::DeleteAsset(*mAssetRegistry, request.Handle, mRegistryPath))
             {
-                ++uiState.AssetDetailEpoch;                    
+                assetsChanged = true;
                 if (uiState.Selection.SelectedAsset == request.Handle)
                     uiState.Selection.SelectedAsset = 0;
             }
@@ -177,7 +177,7 @@ namespace XJ
 
             if (importedAny)
             {
-                ++uiState.AssetDetailEpoch;                    
+                assetsChanged = true;
             }
         }
 
@@ -187,17 +187,25 @@ namespace XJ
             uiState.AssetRequests.RequestSaveScriptSource = false;
             uiState.AssetRequests.SaveScriptSource = {};
             uiState.AssetRequests.ScriptOperationError.clear();
+            uiState.AssetRequests.ScriptSaveDiagnostics.clear();
+            uiState.AssetRequests.LastSavedScriptHandle = request.Handle;
 
             std::string error;
-            if (XJEditorAssetService::SaveScriptSource(
-                    *mAssetRegistry, request.Handle, request.Source, error))
-            {
-                ++uiState.AssetDetailEpoch;
-            }
-            else
+            const bool saved = XJEditorAssetService::SaveScriptSource(
+                *mAssetRegistry,
+                request.Handle,
+                request.Source,
+                error,
+                &uiState.AssetRequests.ScriptSaveDiagnostics);
+            uiState.AssetRequests.LastScriptSaveSucceeded = saved;
+            ++uiState.AssetRequests.ScriptSaveRevision;
+            if (!saved)
             {
                 uiState.AssetRequests.ScriptOperationError = std::move(error);
             }
         }
+
+        if (assetsChanged)
+            ++uiState.AssetDetailEpoch;
     }
 }

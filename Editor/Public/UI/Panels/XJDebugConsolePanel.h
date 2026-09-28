@@ -3,6 +3,10 @@
 #define XJ_DEBUG_CONSOLE_PANEL_H
 
 #include "UI/XJEditorUIConfig.h"
+#include "UI/XJEditorLog.h"
+
+#include <deque>
+#include <cstdint>
 
 namespace XJ
 {
@@ -22,6 +26,8 @@ namespace XJ
             bool mShowTrace = true;
             bool mShowCritical = true;
             char mSearchBuffer[256] = {};
+            uint64_t mLogRevision = 0;
+            std::deque<XJEditorLogEntry> mEntries;
     };
 }
 

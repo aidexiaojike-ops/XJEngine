@@ -158,6 +158,12 @@ namespace XJ
             std::deque<SceneHistorySnapshot> mRedoStack;
             bool mHistoryMutationOccurred = false;
 
+            uint64_t mSceneRevision = 1;
+            uint64_t mPublishedRevision = 0;
+            uint64_t mPublishedAssetDetailEpoch = 0;
+
+            XJEditorEntityId mPublishedSelectedEntity = XJ_INVALID_EDITOR_ENTITY_ID;
+            XJAssetHandle mPublishedSelectedAsset = 0;
     };
 }
 

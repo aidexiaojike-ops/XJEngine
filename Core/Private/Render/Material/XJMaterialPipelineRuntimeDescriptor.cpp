@@ -56,6 +56,10 @@ namespace XJ
                 newDescriptorSetCount);
             return false;
         }
+        // 其他 frame slot 可能仍在使用旧 pool/buffer。扩容很少发生，先确保 GPU 已完成访问。
+        if (runtime.MaterialDescriptorPool)
+            device->WaitIdle();
+
         //销毁老参数
         runtime.MaterialParamDescSets.clear();
         runtime.MaterialResourceDescSets.clear();

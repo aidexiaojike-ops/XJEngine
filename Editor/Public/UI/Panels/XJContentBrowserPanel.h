@@ -90,6 +90,7 @@ namespace XJ
             std::string mScriptEditorName;
             std::string mScriptEditorSource;
             std::vector<std::string> mScriptEditorDiagnostics;
+            uint64_t mObservedScriptSaveRevision = 0;
         
             
     };

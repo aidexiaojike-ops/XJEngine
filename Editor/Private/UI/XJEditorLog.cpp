@@ -97,6 +97,7 @@ namespace XJ
             mEntries.push_back(std::move(entry));
             while (static_cast<int>(mEntries.size()) > mMaxLines)
                 mEntries.pop_front();
+            ++mRevision;
         }
 
     }
@@ -105,6 +106,7 @@ namespace XJ
     {
         std::lock_guard<std::mutex> lock(mMutex);
         mEntries.clear();
+        ++mRevision;
     }
 
     void XJEditorLog::SetMaxLines(int maxLines)
@@ -116,12 +118,25 @@ namespace XJ
         mMaxLines = maxLines;//更新最大行数设置后，立即丢弃超过新限制的旧日志条目
         while (static_cast<int>(mEntries.size()) > mMaxLines)//如果当前日志条目数量超过新的最大行数限制，丢弃最旧的条目，直到满足限制
             mEntries.pop_front();//丢弃最旧的日志条目
+        ++mRevision;
     }
     
     std::deque<XJEditorLogEntry> XJEditorLog::XJGetEntriesCopy() const
     {
         std::lock_guard<std::mutex> lock(mMutex);
         return mEntries;
+    }
+
+    bool XJEditorLog::CopyEntriesIfChanged(
+        uint64_t& revision,
+        std::deque<XJEditorLogEntry>& entries) const
+    {
+        std::lock_guard<std::mutex> lock(mMutex);
+        if (revision == mRevision)
+            return false;
+        entries = mEntries;
+        revision = mRevision;
+        return true;
     }
 
     void XJEditorLog::AttachToSpdlog()
