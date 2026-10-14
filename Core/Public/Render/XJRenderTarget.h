@@ -4,8 +4,13 @@
 #include "XJRenderContext.h"
 #include "ECS/XJSystem.h"
 #include "ECS/XJUUID.h"
+#include "Diagnostics/XJPerformanceData.h"
 #include "Render/System/XJMaterialSystem.h"
+#include "Render/XJRenderViewOptions.h"
+
+
 #include "spdlog/spdlog.h"
+#include <cmath>
 
 namespace XJ
 {
@@ -47,6 +52,12 @@ namespace XJ
 
             // std::vector<std::shared_ptr<XJVulkanImage>> mColorImages;//颜色附件图像列表
             std::vector<std::shared_ptr<XJ::XJVulkanDepthImage>> mDepthImages;//深度附件图像列表
+
+                        //渲染视图
+            XJRenderStatistics mStatistics;
+            XJRenderViewOptions mViewOptions;
+            XJRenderViewCapabilities mViewCapabilities;
+
 
 
         public:
@@ -111,6 +122,76 @@ namespace XJ
             void XJClearCamera();
             XJEntity* XJGetCamera() const;
             XJUUID XJGetCameraId() const { return mCameraId; }
+
+
+            void BeginStatisticsFrame(uint64_t frameId)//开始统计帧
+            {
+                mStatistics = {};
+                mStatistics.FrameId = frameId;
+            }
+
+            XJRenderStatistics GetStatistics() const//获取统计数据
+            {
+                return mStatistics;
+            }
+
+            void RecordDrawCall()//记录绘制调用
+            {
+                if (mStatistics.FrameId != 0)
+                    ++mStatistics.DrawCalls;
+            }
+
+            void RecordMaterialParameterUpload()//记录材质参数上传
+            {
+                if (mStatistics.FrameId != 0)
+                    ++mStatistics.MaterialParameterUploads;
+            }
+
+            void RecordMaterialResourceUpload()//记录材质资源上传
+            {
+                if (mStatistics.FrameId != 0)
+                    ++mStatistics.MaterialResourceUploads;
+            }
+
+            const XJRenderViewOptions& GetViewOptions() const//获取视图选项
+            {
+                return mViewOptions;
+            }
+
+            XJRenderViewCapabilities GetViewCapabilities() const//获取视图能力
+            {
+                return mViewCapabilities;
+            }
+
+            bool TrySetViewOptions(const XJRenderViewOptions& options)//尝试设置视图选项
+            {
+                if (!mViewCapabilities.Supports(options.Mode) ||
+                    !std::isfinite(options.DepthRange) ||
+                    options.DepthRange <= 0.0f)
+                {
+                    return false;
+                }
+
+                mViewOptions = options;
+                return true;
+            }
+
+            // 仅由渲染器在实际支持模式后调用。
+            void SetViewCapabilities(
+                const std::array<bool, XJ_RENDER_VIEW_MODE_COUNT>& supported)
+            {
+                auto capabilities = supported;
+                // Final 是所有有效视口的基础模式，必须始终可用。
+                capabilities[static_cast<size_t>(XJRenderViewMode::Final)] = true;
+                if (mViewCapabilities.Supported == capabilities)
+                    return;
+
+                mViewCapabilities.Supported = capabilities;
+                ++mViewCapabilities.Revision;
+
+                if (!mViewCapabilities.Supports(mViewOptions.Mode))
+                    mViewOptions.Mode = XJRenderViewMode::Final;
+            }
 
     };
 }

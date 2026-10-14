@@ -1,6 +1,7 @@
 #include "Runtime/XJEditorRuntime.h"
 #include "Runtime/XJEditorPlayController.h"
 
+#include "Asset/XJAssetRegistry.h"
 #include "Asset/Metadata/XJAssetMetadataPath.h"
 #include "Asset/Metadata/XJAssetMetadataSerializer.h"
 #include "Asset/Metadata/XJPersistentAssetHandleGenerator.h"
@@ -12,6 +13,8 @@
 
 #include "Edit/XJGlfwWindow.h"
 #include "Render/XJRenderContext.h"
+#include "ECS/XJEntity.h"
+#include "ECS/Component/XJScriptComponent.h"
 #include "ECS/XJScene.h"
 #include "Graphic/VulkanCommon.h"
 #include "UI/XJEditorUIHost.h"
@@ -21,6 +24,8 @@
 
 #include "Runtime/XJEditorPlayState.h"
 #include "UI/XJEditorUIState.h"
+#include "Services/XJEditorViewportDisplayService.h"
+#include "Controllers/XJEditorViewportDisplayController.h"
 
 
 #include <spdlog/spdlog.h>
@@ -183,6 +188,18 @@ namespace XJ
             bool HasPendingPlayRequest = false;
             XJEditorPlayState PendingPlayState = XJEditorPlayState::Edit;
 
+            std::unique_ptr<XJEditorViewportDisplayService> DisplayService;
+            std::unique_ptr<XJEditorViewportDisplayController> DisplayController;
+
+            std::function<uint64_t()> ReadCurrentFrameId;
+
+            std::function<XJCompletedFrameStatistics()>
+                ReadCompletedFrameStatistics;
+
+            uint64_t StatisticsFrameId = 0;
+            XJEditorPerformanceSample PendingPerformance;
+            bool HasPendingPerformance = false;
+
             bool BeginPlay()
             {
                 if (!PlayController || !Scene || !Workspace || !Viewports || !Resources)
@@ -218,6 +235,7 @@ namespace XJ
                     PlayController->GetRuntimeScene(),
                     PlayController->GetRuntimeCamera());
                 Workspace->SetMode(XJEditorWorkspaceMode::PlayReadOnly);
+                Workspace->SetRuntimeScene(PlayController->GetRuntimeScene());
                 Viewports->SetPlayState(XJEditorPlayState::Playing);
                 spdlog::info("Play mode started.");
                 return true;
@@ -239,6 +257,9 @@ namespace XJ
                 if (!PlayController || PlayController->GetState() == XJEditorPlayState::Edit)
                     return;
 
+                if (Workspace)
+                    Workspace->SetRuntimeScene(nullptr);
+
                 // 必须先解除 Viewport 的 RuntimeScene/Camera 引用，再销毁克隆。
                 if (Viewports)
                 {
@@ -250,6 +271,94 @@ namespace XJ
                 if (Workspace)
                     Workspace->SetMode(XJEditorWorkspaceMode::Edit);
                 spdlog::info("Play mode stopped.");
+            }
+            void ApplyRuntimeScriptRequests()
+            {
+                if(!Workspace || !PlayController)
+                    return;
+
+                auto& state = Workspace->GetUIState();
+                auto commands = std::move(state.RuntimeScriptRequests);
+                state.RuntimeScriptRequests.clear();
+
+                XJScene* scene = PlayController->GetRuntimeScene();
+                if(!state.RuntimeInspection || !scene)
+                    return;
+
+                for(const auto& command : commands)
+                {
+                    XJEntity* entity = scene->FindEntityByUUID(XJUUID(command.EntityId));
+
+                    if(!entity)
+                        continue;
+
+                    bool changed = false;
+
+                    switch (command.Operation)
+                    {
+                        case XJRuntimeScriptOperation::AddComponent:
+                            if (!entity->HasComponent<XJScriptComponent>())
+                            {
+                                entity->AddComponent<XJScriptComponent>();
+                                changed = true;
+                            }
+                            break;
+
+                        case XJRuntimeScriptOperation::RemoveComponent:
+                            if (entity->HasComponent<XJScriptComponent>())
+                            {
+                                entity->RemoveComponent<XJScriptComponent>();
+                                changed = true;
+                            }
+                            break;
+                        case XJRuntimeScriptOperation::AddSlot:
+                        case XJRuntimeScriptOperation::ReplaceScript:
+                        {
+                            if (!entity->HasComponent<XJScriptComponent>() ||
+                                !state.AssetRegistry)
+                            {
+                                break;
+                            }
+
+                            const auto meta =
+                                state.AssetRegistry->GetMeta(command.ScriptAsset);
+
+                            if (!meta || meta->Type != XJAssetType::Script)
+                                break;
+
+                            auto& scripts = entity->GetComponent<XJScriptComponent>();
+                            const XJAssetRef reference{
+                                command.ScriptAsset, XJAssetType::Script};
+
+                            if (command.Operation == XJRuntimeScriptOperation::AddSlot)
+                                changed = scripts.AddSlot(reference) != nullptr;
+                            else
+                                changed = scripts.SetSlotScript(
+                                    XJUUID{command.SlotId}, reference);
+
+                            break;
+                        }
+                        case XJRuntimeScriptOperation::RemoveSlot:
+                            if (entity->HasComponent<XJScriptComponent>())
+                            {
+                                changed = entity->GetComponent<XJScriptComponent>()
+                                    .RemoveSlot(XJUUID{command.SlotId});
+                            }
+                            break;
+                        case XJRuntimeScriptOperation::SetEnabled:
+                            if (entity->HasComponent<XJScriptComponent>())
+                            {
+                                changed = entity->GetComponent<XJScriptComponent>()
+                                    .SetSlotEnabled(
+                                        XJUUID{command.SlotId}, command.Enabled);
+                            }
+                            break;
+                    }
+                     // 每条命令独立生效，禁用再启用不会被合并成无操作。
+                    if (changed)
+                        PlayController->SynchronizeScripts();
+
+                }
             }
 
             bool Initialized = false;
@@ -270,6 +379,12 @@ namespace XJ
     {
         Shutdown();
 
+        if (!info.ReadCurrentFrameId || !info.ReadCompletedFrameStatistics)
+        {
+            spdlog::error("Editor runtime requires frame statistics sources.");
+            return false;
+        }
+
         if (!info.Window || !info.RenderContext)
         {
             spdlog::error(
@@ -281,6 +396,8 @@ namespace XJ
         mImpl->Window = info.Window;
         mImpl->RenderContext = info.RenderContext;
         mImpl->Config = info.Config;
+        mImpl->ReadCurrentFrameId = info.ReadCurrentFrameId;
+        mImpl->ReadCompletedFrameStatistics = info.ReadCompletedFrameStatistics;
 
 #ifndef NDEBUG
         if (!RunAssetMetadataSelfTest(
@@ -405,7 +522,8 @@ namespace XJ
             .Window = mImpl->Window,
             .RenderContext = mImpl->RenderContext,
             .MainRenderTarget = mImpl->FrameRenderer->GetRenderTarget(),
-            .Resources = mImpl->Resources.get()
+            .Resources = mImpl->Resources.get(),
+            .UIState = &mImpl->Workspace->GetUIState()
         };
 
         if (!mImpl->Viewports->Init(viewportInfo))
@@ -417,6 +535,11 @@ namespace XJ
         }
 
         // Workspace 不直接依赖 ViewportSystem，通过 hooks 协调相机生命周期。
+        mImpl->DisplayService = std::make_unique<XJEditorViewportDisplayService>();
+        mImpl->DisplayService->Bind(*mImpl->Viewports);
+        mImpl->DisplayController = std::make_unique<XJEditorViewportDisplayController>(
+            mImpl->Workspace->GetUIState(), *mImpl->DisplayService);
+
         XJEditorViewportSystem* viewports = mImpl->Viewports.get();
         XJEditorWorkspaceSceneHooks hooks;
 
@@ -535,10 +658,38 @@ namespace XJ
 
     void XJEditorRuntime::BeginUI()
     {
-        if (mImpl->Initialized && mImpl->UIInitialized && mImpl->UI)
+        if (!mImpl->Initialized)
+            return;
+
+        if (mImpl->HasPendingPerformance &&
+            mImpl->DisplayController)
         {
-            mImpl->UI->BeginFrame();
+            const auto completed =
+                mImpl->ReadCompletedFrameStatistics();
+
+            if (completed.FrameId == mImpl->PendingPerformance.Frame.FrameId)
+            {
+                auto sample = mImpl->PendingPerformance;
+                sample.Frame = completed;
+
+                mImpl->DisplayController->PublishCompletedFrame(sample);
+            }
+
+            mImpl->HasPendingPerformance = false;
         }
+
+        mImpl->StatisticsFrameId = mImpl->ReadCurrentFrameId();
+
+        if (mImpl->DisplayService)
+            mImpl->DisplayService->BeginStatisticsFrame(
+                mImpl->StatisticsFrameId);
+
+        if (mImpl->PlayController)
+            mImpl->PlayController->BeginStatisticsFrame(
+                mImpl->StatisticsFrameId);
+
+        if (mImpl->UIInitialized && mImpl->UI)
+            mImpl->UI->BeginFrame();
     }
 
     void XJEditorRuntime::Update(float deltaTime)
@@ -554,6 +705,9 @@ namespace XJ
         // GamePreview 的 Play/Pause/Stop 按钮也在此阶段写入 pending 请求。
         if (mImpl->Viewports)
             mImpl->Viewports->DrawUI();
+
+        if (mImpl->DisplayController)
+            mImpl->DisplayController->ProcessRequests();
 
         // 处理 Play/Pause/Stop 请求（必须在 DrawUI 之后，此时请求才可用）。
         if (mImpl->HasPendingPlayRequest)
@@ -575,6 +729,8 @@ namespace XJ
                     break;
             }
         }
+
+        mImpl->ApplyRuntimeScriptRequests();
 
         if (mImpl->PlayController)
             mImpl->PlayController->Update(deltaTime);
@@ -632,6 +788,18 @@ namespace XJ
             spdlog::trace("Editor frame was not presented.");
         }
 
+        if (mImpl->DisplayService && mImpl->PlayController)
+        {
+            XJEditorPerformanceSample sample;
+            sample.Frame.FrameId = mImpl->StatisticsFrameId;
+            sample.Scripts = mImpl->PlayController->GetScriptStatistics();
+            for (size_t index = 0; index < sample.Views.size(); ++index)
+                sample.Views[index] = mImpl->DisplayService->ReadStatistics(
+                    static_cast<XJEditorViewportId>(index));
+            mImpl->PendingPerformance = sample;
+            mImpl->HasPendingPerformance = true;
+        }
+
     }
 
     void XJEditorRuntime::ShutdownUI()
@@ -648,6 +816,14 @@ namespace XJ
         // Hooks 捕获 ViewportSystem 裸指针，必须在 Viewports 销毁前解除。
         if (mImpl->Workspace)
             mImpl->Workspace->ClearSceneHooks();
+
+        mImpl->DisplayController.reset();
+
+        if (mImpl->DisplayService)
+        {
+            mImpl->DisplayService->Unbind();
+            mImpl->DisplayService.reset();
+        }
 
         // 不只修改标志。UIHost 保存了 RenderContext 非拥有指针，
         // 必须在 XJApplication 销毁 RenderContext 之前真正释放。
@@ -713,6 +889,11 @@ namespace XJ
         mImpl->Window = nullptr;
         mImpl->RenderContext = nullptr;
         mImpl->Initialized = false;
+
+        mImpl->ReadCurrentFrameId = {};
+        mImpl->ReadCompletedFrameStatistics = {};
+        mImpl->HasPendingPerformance = false;
+        mImpl->PendingPerformance = {};
     }
 
     

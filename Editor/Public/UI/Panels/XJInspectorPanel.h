@@ -61,6 +61,8 @@ namespace XJ
             void DrawAddComponentButton(const XJEditorEntityDetailsView& details);//添加组件按钮
             void RequestAddComponent(const XJEditorEntityDetailsView& details, XJEditorComponentType componentType);//准备添加组件
 
+            void DrawRuntimeScriptDetails(const XJEditorEntityDetailsView& details);//添加运行时脚本细节面板
+
             XJEditorUIState& mState;
             XJEditorPanelConfig_Inspector* mConfig = nullptr;
             char mMeshSearchBuffer[128] = {};

@@ -4,6 +4,7 @@
 #include "Asset/Loader/XJScriptAssetLoader.h"
 #include "ECS/XJSystem.h"
 #include "Script/Runtime/XJScriptRuntime.h"
+#include "Diagnostics/XJPerformanceData.h"
 
 #include <memory>
 #include <unordered_map>
@@ -25,15 +26,21 @@ namespace XJ
                     XJAssetHandle,
                     XJScriptAssetCacheEntry>
                     preparedCache = {},
-                XJScriptExecutionLimits limits = {});
+                XJScriptExecutionLimits limits = {},
+                XJScriptNativeInvoker* nativeInvoker = nullptr);
 
             ~XJScriptSystem() override;
+
+            void BeginStatisticsFrame(uint64_t frameId);
+            XJScriptStatistics GetStatistics() const;
 
             void OnCreate() override;
             void OnUpdate(float deltaTime) override;
             void OnFixedUpdate(
                 float fixedDeltaTime) override;
             void OnDestroy() override;
+            // 必须在主线程、VM 未执行时调用。暂停状态也可以调用。
+            void SynchronizeSlots();
 
         private:
             class Impl;

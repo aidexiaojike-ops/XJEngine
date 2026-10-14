@@ -156,20 +156,18 @@ namespace XJ
 
     XJMesh::~XJMesh() = default;
 
-    void XJMesh::Draw(VkCommandBuffer commandBuffer) const
+    bool XJMesh::Draw(VkCommandBuffer commandBuffer) const
     {
       
         if (!Bind(commandBuffer))
-            return;
+            return false;
     
         if (mIndexCount > 0)
-        {
             vkCmdDrawIndexed(commandBuffer, mIndexCount, 1, 0, 0, 0);
-            return;
-        }
+        else
+            vkCmdDraw(commandBuffer, mVertexCount, 1, 0, 0);
 
-
-        vkCmdDraw(commandBuffer, mVertexCount, 1, 0, 0);
+        return true;
     }
 
     bool XJMesh::Bind(VkCommandBuffer commandBuffer) const
@@ -206,35 +204,16 @@ namespace XJ
         return true;
     }
 
-    void XJMesh::DrawSubmesh(VkCommandBuffer commandBuffer, uint32_t submeshIndex) const
+    bool XJMesh::DrawSubmesh(VkCommandBuffer commandBuffer, uint32_t submeshIndex) const
     {
         const XJSubmesh* submesh = GetSubmesh(submeshIndex);
 
-        if(!submesh)
+        if (!submesh ||!submesh->IsValid(mIndexCount) ||!HasIndexedGeometry() ||!Bind(commandBuffer))
         {
-            spdlog::warn("XJMesh::DrawSubmesh skipped: " "submesh index {} is out of range {}.", submeshIndex, mSubmeshes.size());
-
-            return;
+            return false;
         }
-
-
-        if(!submesh->IsValid(mIndexCount))
-        {
-            spdlog::warn( "XJMesh::DrawSubmesh skipped: " "submesh range is invalid.");
-
-            return;
-        }
-
-        if (!HasIndexedGeometry())
-        {
-            spdlog::warn("XJMesh::DrawSubmesh skipped: ""indexed geometry is unavailable.");
-
-            return;
-        }
-
-        if (!Bind(commandBuffer))
-            return;
 
         vkCmdDrawIndexed(commandBuffer, submesh->IndexCount, 1, submesh->FirstIndex, 0, 0);
+        return true;
     }
 }

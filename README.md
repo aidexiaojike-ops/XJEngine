@@ -152,6 +152,7 @@ Swapchain
 - **Language Pipeline**: `XJScriptLexer` -> `XJScriptParser` -> `XJScriptSemanticAnalyzer` -> `XJScriptCompiler` produces immutable bytecode modules with structured diagnostics
 - **Verified Runtime**: `XJScriptBytecodeVerifier` validates modules before execution; `XJScriptRuntime` enforces instruction budgets, call-depth limits, type/overflow checks, fault isolation, stack traces, and re-entrancy protection while reusing per-instance frame/argument scratch storage
 - **ECS Lifecycle**: `XJScriptSystem` creates per-entity script instances and dispatches `OnCreate`, `OnUpdate`, `OnFixedUpdate`, and `OnDestroy` through `XJSystemScheduler`
+- **Live Script Slots**: `SynchronizeSlots()` reconciles component/slot lifecycle revisions at safe points, including while paused. Scene destruction notifications and execution scopes keep script owners valid until deferred deletion can run.
 - **Script Components**: `XJScriptComponent` supports multiple enabled/disabled script slots per entity, stable slot UUIDs, and per-field overrides keyed by `[[FieldId("...")]]`
 - **Native Bridge**: `XJEcsScriptNativeInvoker` exposes controlled ECS operations to scripts; the initial native API includes `Transform.RotateY`
 - **Assets and Persistence**: `.xjs` files are registered as `XJAssetType::Script`, compiled/cached by `XJScriptAssetCompiler`/`Loader`, and serialized in scenes with slot IDs, enabled state, references, and field overrides
@@ -163,6 +164,7 @@ Swapchain
 - **Base Material System**: Dynamic uniform buffer instancing with global/per-instance UBOs
 - **Material Render System**: `XJMaterialRenderSystemBase` — base class for material-driven render systems, `XJMaterialRenderItem` — render item abstraction
 - **Surface Material System**: `XJSurfaceMaterialSystem` renders `XJSurfaceMaterialComponent` items through schema-driven pipeline runtimes, using material instance IDs plus parameter/resource revisions to synchronize each frame-slot descriptor safely
+- **Upload State Tracking**: `XJMaterialUploadState` separates upload preparation from successful parameter/resource commits, validates slot ownership, and resets stamps when descriptor capacity changes.
 - **Shared Frame/Light Data**: `XJFrameUbo` provides projection, view, resolution, frame/time, and camera position; `XJLightUbo` provides one directional light plus up to eight point and eight spot lights using std140-compatible layouts and per-frame descriptor sets
 - **Scene Light Collection**: `XJLightSceneUtils` gathers enabled `XJLightComponent` instances and transforms into the per-frame light UBO
 - **DescriptorSetWriter**: Utility class providing static helpers for descriptor buffer/image info creation and descriptor set writes
@@ -206,6 +208,9 @@ Swapchain
 - **Editor Runtime**: `XJEditorRuntime` (pimpl) owns the full editor lifecycle — project config (`XJEditorProjectConfig`), workspace, viewport system, frame renderer, input bindings, and UI host — driven by `XJEditorApplication` in `Src/`
 - **Editor Play Mode**: `XJEditorPlayController` manages game simulation lifecycle (Start/Pause/Resume/Stop), clones the editor scene into a runtime scene, and wires `XJSystemScheduler` with registered system factories; `XJEditorPlayState` (`Edit`/`Playing`/`Paused`) tracks the current mode; `XJEditorWorkspaceMode` (`Edit`/`PlayReadOnly`/`PlayRuntime`) controls workspace editing permissions
 - **Editor Workspace**: `XJEditorWorkspace` manages the in-engine project workspace (resource root, asset registry, scene wiring)
+- **Runtime Inspection**: During Play/Pause, Hierarchy and Inspector read RuntimeScene snapshots and accept requests to add/remove script components or slots, toggle slots, and replace scripts. Stopping restores the editor selection.
+- **Viewport Display Controls**: `XJEditorViewportDisplayController`/`Service` apply display requests and publish ViewModels for Scene/Game previews. Render modes are capability-gated: currently only Final is implemented; BaseColor, LinearDepth, WorldNormal, and Lighting remain unavailable.
+- **Performance Snapshots**: Viewport overlays expose completed-frame time/FPS, script CPU time and active instances, draw calls, and material upload counts, with a 128-sample frame history. Collection uses snapshots rather than per-frame logging.
 - **Frame Renderer**: `XJEditorFrameRenderer` + `XJEditorRenderResources` own ImGui/Vulkan frame rendering and shared editor render resources; `XJEditorUIHost` hosts the UI layer
 - **Input Bindings**: `XJEditorInputBindings` centralizes editor input mapping (camera, viewport, actions)
 - **Viewport System**: `XJEditorViewportSystem` orchestrates Scene/Game preview viewports, camera resolution, protected editor entities, and scene attach/detach
@@ -313,6 +318,8 @@ make -j$(sysctl -n hw.ncpu)
 ### Tests
 
 The first-party CTest suite currently covers the complete scripting path: lexer, parser, semantic analysis, compiler, bytecode verifier, runtime, native ECS bridge, asset compiler/loader, component behavior, scene serialization, editor asset operations, and script system lifecycle.
+
+Render tests additionally cover material upload state and viewport display requests, capabilities, and statistics; script lifecycle tests include live slot synchronization and destruction handling.
 
 ```bash
 cmake -S . -B build -DXJ_BUILD_TESTS=ON

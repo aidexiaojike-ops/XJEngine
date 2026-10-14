@@ -4,6 +4,7 @@
 #include "Edit/SpdlogDebug.h"
 #include "Edit/XJGlfwWindow.h"
 #include "XJApplicationContext.h"
+#include "Diagnostics/XJPerformanceData.h"
 // XJApplication.h
 #include "Render/XJRenderContext.h" // 确保包含
 
@@ -48,6 +49,8 @@ namespace XJ
             // 命令行 --project <path> 指定的项目根目录；为空表示未指定。
             std::filesystem::path XJGetProjectPath() const { return mProjectPath; }
             const std::filesystem::path& XJGetLaunchWorkingDirectory() const { return mLaunchWorkingDirectory; }
+
+            XJCompletedFrameStatistics GetCompletedFrameStatistics() const { return mCompletedFrameStatistics; }
         protected:
             virtual void OnConfiguration(AppSettings *appSettings){}
             virtual void OnInit(){}
@@ -87,6 +90,7 @@ namespace XJ
             std::filesystem::path mLaunchWorkingDirectory;//解析相对 --project 时使用的原始启动目录
 
             static XJAppContext sAppContext;//全局应用程序上下文
+            XJCompletedFrameStatistics mCompletedFrameStatistics;//已完成帧统计数据
 
 
     };

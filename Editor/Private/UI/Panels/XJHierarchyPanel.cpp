@@ -20,11 +20,18 @@ namespace XJ
 
     void XJHierarchyPanel::DrawUI()
     {
+        if(mState.WorkspaceReadOnly)
+        {
+            mRenamingEntity = XJ_INVALID_EDITOR_ENTITY_ID;
+            mFocusRenameInput = false;
+        }
+
         if(!mState.ShowHierarchy)
             return;
 
         const char* title = mConfig ? mConfig->title.c_str() : "World Outliner";
         ImGui::Begin(title);
+
 
         if(mState.SceneView.RootEntities.empty())
         {
@@ -39,7 +46,7 @@ namespace XJ
 
         }
         //左键空白处UI
-        if (ImGui::BeginPopupContextWindow("HierarchyEmptyContext", ImGuiPopupFlags_MouseButtonRight | ImGuiPopupFlags_NoOpenOverItems))
+        if (!mState.WorkspaceReadOnly && ImGui::BeginPopupContextWindow("HierarchyEmptyContext", ImGuiPopupFlags_MouseButtonRight | ImGuiPopupFlags_NoOpenOverItems))
         {
            if (ImGui::MenuItem("Create Empty Entity"))
            {
@@ -143,7 +150,7 @@ namespace XJ
 
             ImGui::EndTooltip();
         }
-        if (!isRenaming && ImGui::BeginPopupContextItem())
+        if (!mState.WorkspaceReadOnly && !isRenaming && ImGui::BeginPopupContextItem())
         {
             if (ImGui::MenuItem("Select Mesh Asset", nullptr, false, entity.MeshAsset != 0))
             {

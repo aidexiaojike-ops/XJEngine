@@ -4,6 +4,10 @@
 #include "Graphic/VulkanCommon.h"
 #include "UI/XJEditorSelection.h"
 #include "Runtime/XJEditorPlayState.h"
+#include "Diagnostics/XJPerformanceData.h"
+#include "Render/XJRenderViewOptions.h"
+#include "Viewport/XJEditorViewportTypes.h"
+
 #include <vector>
 
 #include <memory>
@@ -20,6 +24,7 @@ namespace XJ
     class XJEditorCameraController;
     class XJEditorCameraManager;
     class XJEditorRenderResources;
+    struct XJEditorUIState;
 
     struct XJEditorViewportSystemInitInfo
     {
@@ -27,6 +32,7 @@ namespace XJ
         XJRenderContext* RenderContext = nullptr;
         XJRenderTarget* MainRenderTarget = nullptr;
         XJEditorRenderResources* Resources = nullptr;
+        XJEditorUIState* UIState = nullptr;
     };
 
     class XJEditorViewportSystem
@@ -68,9 +74,17 @@ namespace XJ
             void BeginPlay(XJScene* runtimeScene, XJEntity* runtimeCamera);// Play 时 GamePreview 切到运行时克隆
             void EndPlay();                                                  // Stop 时恢复编辑器场景与相机
 
+            std::weak_ptr<void> GetLifetimeToken() const;
+            void BeginStatisticsFrame(uint64_t frameId);//开始统计帧
+
+            XJRenderStatistics ReadStatistics(XJEditorViewportId viewport) const;//读取统计信息
+            XJRenderViewCapabilities ReadViewCapabilities(XJEditorViewportId viewport) const;//读取视图能力
+            bool IsRenderViewAvailable(XJEditorViewportId viewport) const;//检查渲染视图是否可用
+            bool ApplyViewOptions(XJEditorViewportId viewport, const XJRenderViewOptions& options);//应用视图选项
         private:
             class Impl;
             std::unique_ptr<Impl> mImpl;
+            XJRenderTarget* ResolveRenderTarget(XJEditorViewportId viewport) const;
     };
 }
 

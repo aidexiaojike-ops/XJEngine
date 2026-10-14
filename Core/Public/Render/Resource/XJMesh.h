@@ -76,10 +76,10 @@ namespace XJ
             bool Bind(VkCommandBuffer commandBuffer) const;           
 
             // 绘制整个 Mesh，保留给旧渲染路径。
-            void Draw(VkCommandBuffer commandBuffer) const;           
+            bool Draw(VkCommandBuffer commandBuffer) const;
 
             // 只绘制指定的 submesh。
-            void DrawSubmesh(VkCommandBuffer commandBuffer, uint32_t submeshIndex) const;
+            bool DrawSubmesh(VkCommandBuffer commandBuffer, uint32_t submeshIndex) const;
 
 
              uint32_t GetVertexCount() const

@@ -114,6 +114,17 @@ namespace XJ
         const char* title = mConfig ? mConfig->title.c_str() : "Details";
         ImGui::Begin(title);
 
+        if(mState.RuntimeInspection)
+        {
+            if(mState.SelectedEntityDetails.Valid)
+                DrawRuntimeScriptDetails(mState.SelectedEntityDetails);
+            else
+                ImGui::TextUnformatted("No runtime entity selected");
+
+            ImGui::End();
+            return;
+        }
+
         if (mState.SelectedEntityDetails.Valid)
         {
             DrawEntityDetails(mState.SelectedEntityDetails);
@@ -130,6 +141,130 @@ namespace XJ
 
         ImGui::Text("No entity selected"); 
         ImGui::End();
+    }
+
+    void XJInspectorPanel::DrawRuntimeScriptDetails(const XJEditorEntityDetailsView& details)
+    {
+        ImGui::TextUnformatted(details.Name.c_str());
+        ImGui::LabelText(
+            "UUID", "0x%016llX",
+            static_cast<unsigned long long>(details.Id));
+
+        if (details.Transform.Valid)
+        {
+            const auto& value = details.Transform;
+            ImGui::Text(
+                "Position: %.3f, %.3f, %.3f",
+                value.Position.x, value.Position.y, value.Position.z);
+            ImGui::Text(
+                "Rotation: %.3f, %.3f, %.3f",
+                value.Rotation.x, value.Rotation.y, value.Rotation.z);
+        }
+
+        const auto request = [&](XJRuntimeScriptOperation operation,
+                                 uint64_t slotId = 0,
+                                 XJAssetHandle asset = 0,
+                                 bool enabled = true)
+        {
+            mState.RuntimeScriptRequests.push_back({
+                operation, details.Id, slotId, asset, enabled
+            });
+        };
+
+        if (!details.Script.Valid)
+        {
+            if (ImGui::Button("Add Script Component"))
+                request(XJRuntimeScriptOperation::AddComponent);
+            return;
+        }
+
+        if (ImGui::Button("Remove Script Component"))
+            request(XJRuntimeScriptOperation::RemoveComponent);
+
+        const auto assetPicker = [&](const char* label,
+                                     XJRuntimeScriptOperation operation,
+                                     uint64_t slotId,
+                                     const char* preview)
+        {
+            if (!ImGui::BeginCombo(label, preview))
+                return;
+
+            std::vector<XJAssetMeta> assets;
+
+            if (mState.AssetRegistry)
+            {
+                for (const auto& [handle, meta] :
+                     mState.AssetRegistry->XJGetAllMetas())
+                {
+                    (void)handle;
+                    if (meta.Type == XJAssetType::Script)
+                        assets.push_back(meta);
+                }
+            }
+
+            std::sort(
+                assets.begin(), assets.end(),
+                [](const XJAssetMeta& left, const XJAssetMeta& right)
+                {
+                    if (left.Name == right.Name)
+                        return left.Handle < right.Handle;
+                    return left.Name < right.Name;
+                });
+
+            for (const auto& asset : assets)
+            {
+                const std::string id = std::to_string(asset.Handle);
+                ImGui::PushID(id.c_str());
+
+                if (ImGui::Selectable(asset.Name.c_str()))
+                {
+                    request(operation, slotId, asset.Handle);
+                    ImGui::CloseCurrentPopup();
+                }
+
+                ImGui::PopID();
+            }
+
+            ImGui::EndCombo();
+        };
+
+        for (const auto& slot : details.Script.Slots)
+        {
+            const std::string id = std::to_string(slot.SlotId);
+            ImGui::PushID(id.c_str());
+
+            ImGui::Separator();
+            assetPicker(
+                "Script",
+                XJRuntimeScriptOperation::ReplaceScript,
+                slot.SlotId,
+                slot.DisplayName.c_str());
+
+            bool enabled = slot.Enabled;
+            if (ImGui::Checkbox("Enabled", &enabled))
+            {
+                request(
+                    XJRuntimeScriptOperation::SetEnabled,
+                    slot.SlotId, 0, enabled);
+            }
+
+            ImGui::SameLine();
+            if (ImGui::SmallButton("Remove"))
+                request(XJRuntimeScriptOperation::RemoveSlot, slot.SlotId);
+
+            ImGui::LabelText(
+                "Slot UUID", "0x%016llX",
+                static_cast<unsigned long long>(slot.SlotId));
+
+            ImGui::PopID();
+        }
+
+        ImGui::Separator();
+        assetPicker(
+            "Add Script",
+            XJRuntimeScriptOperation::AddSlot,
+            0,
+            "Select Script");
     }
 
     void XJInspectorPanel::DrawEntityDetails(const XJEditorEntityDetailsView& details)

@@ -527,6 +527,7 @@ namespace XJ
             spdlog::error("渲染通道开始失败");
             bBeginRenderTarget = false;
         }
+        mStatistics.CommandsRecorded = true;
 
         return bBeginRenderTarget;
     }

@@ -76,6 +76,9 @@ namespace XJ
                 const glm::vec3& rayDirection,
                 float maxDistance);
 
+            void SetRuntimeScene(XJScene* scene);// 设置运行时场景指针
+            XJScene* GetRuntimeScene() const;// 获取运行时场景指针
+
         private:
             class Impl;
             std::unique_ptr<Impl> mImpl;

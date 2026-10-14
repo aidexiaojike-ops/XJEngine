@@ -269,7 +269,8 @@ namespace XJ
                 0,
                 sizeof(pushConstants),
                 &pushConstants);
-            mesh->Draw(cmdBuffer);
+            if (mesh->Draw(cmdBuffer))
+                renderTarget->RecordDrawCall();
         });
     }
 

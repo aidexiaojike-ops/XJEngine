@@ -72,6 +72,7 @@ namespace XJ
             }
 
         private:
+            friend class XJEditorViewportSystem;
             XJViewportRenderSurface mSurface;
             XJEntity* mPreviewCamera = nullptr;//用于预览的摄像机实体
             XJScene* mScene = nullptr;//当前预览的场景

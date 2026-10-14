@@ -142,15 +142,9 @@ namespace XJ
                     return;
                 }
             
-                // descriptor pool 重建后所有 material/frame slot 都需要重新写 descriptor。
-                mUploadStates[runtime].Slots.assign(
-                    runtime->LastDescriptorSetCount * RENDERER_NUM_BUFFER, {});
             }
-            else
-            {
-                mUploadStates[runtime].Slots.resize(
-                    runtime->LastDescriptorSetCount * RENDERER_NUM_BUFFER);
-            }
+            mUploadStates[runtime].Configure(
+                runtime->LastDescriptorSetCount, RENDERER_NUM_BUFFER);
         }
 
         std::unordered_map<XJMaterialPipelineRuntime*, std::unordered_set<uint32_t>> preparedMaterialIndicesByRuntime;
@@ -186,16 +180,21 @@ namespace XJ
             if (!preparedMaterialIndices.insert(materialIndex).second)
                 continue;
 
-            XJMaterialUploadStamp& stamp = mUploadStates[runtime].Slots[descriptorIndex];
-            if (stamp.OwnerId != material->GetInstanceId())
-                stamp = { material->GetInstanceId(), 0, 0 };
-
             VkDescriptorSet paramsDescSet = runtime->MaterialParamDescSets[descriptorIndex];
             VkDescriptorSet resourceDescSet = runtime->MaterialResourceDescSets[descriptorIndex];
 
-            // Descriptor sets must be updated before any draw in this command buffer
-            // can bind them. Updating a set after it was bound invalidates recording.
-            if (stamp.ParameterRevision != material->GetParameterRevision())
+            XJMaterialUploadState& uploadState = mUploadStates[runtime];
+            const uint64_t ownerId = material->GetInstanceId();
+            const uint64_t parameterRevision = material->GetParameterRevision();
+            const uint64_t resourceRevision = material->GetResourceRevision();
+
+            const auto requirements = uploadState.Prepare(
+                frameSlot, materialIndex, ownerId, parameterRevision, resourceRevision);
+            if (!requirements)
+                continue;
+
+            // Upload only before drawing; rewriting bound descriptors invalidates recording.
+            if (requirements->Parameters)
             {
                 if (XJMaterialRuntimeUploader::UpdateMaterialParamsDescSet(
                         uploadContext.Device,
@@ -204,11 +203,15 @@ namespace XJ
                         descriptorIndex,
                         material))
                 {
-                    stamp.ParameterRevision = material->GetParameterRevision();
+                    uploadState.CommitParameters(
+                        frameSlot,
+                        materialIndex,
+                        ownerId,
+                        parameterRevision);
+                    renderTarget->RecordMaterialParameterUpload();
                 }
             }
-
-            if (stamp.ResourceRevision != material->GetResourceRevision())
+            if (requirements->Resources)
             {
                 if (XJMaterialRuntimeUploader::UpdateMaterialResourceDescSet(
                         uploadContext.Device,
@@ -216,9 +219,16 @@ namespace XJ
                         resourceDescSet,
                         material))
                 {
-                    stamp.ResourceRevision = material->GetResourceRevision();
+                    uploadState.CommitResources(
+                        frameSlot,
+                        materialIndex,
+                        ownerId,
+                        resourceRevision);
+                    if (!material->GetTextureBindings().empty())
+                        renderTarget->RecordMaterialResourceUpload();
                 }
             }
+
         }
 
         XJMaterialPipelineRuntime* boundRuntime = nullptr;
@@ -229,7 +239,7 @@ namespace XJ
             XJMaterial* material = item.Material;
             if (!material || material->XJGetIndex() < 0 || !item.Mesh)
                 continue;
-            
+
             XJMaterialPipelineRuntime* runtime = ResolveMaterialRuntime(material);
             if (!runtime || !runtime->IsValid())
             {
@@ -259,16 +269,19 @@ namespace XJ
             }
 
             const auto stateIt = mUploadStates.find(runtime);
-            if (stateIt == mUploadStates.end() || descriptorIndex >= stateIt->second.Slots.size())
-                continue;
-            const XJMaterialUploadStamp& stamp = stateIt->second.Slots[descriptorIndex];
-            if (stamp.OwnerId != material->GetInstanceId() ||
-                stamp.ParameterRevision != material->GetParameterRevision() ||
-                stamp.ResourceRevision != material->GetResourceRevision())
+            if (stateIt == mUploadStates.end())
                 continue;
 
-            
-        
+            if (!stateIt->second.IsCurrent(
+                    frameSlot,
+                    materialIndex,
+                    material->GetInstanceId(),
+                    material->GetParameterRevision(),
+                    material->GetResourceRevision()))
+            {
+                continue;
+            }
+
             VkDescriptorSet paramsDescSet = runtime->MaterialParamDescSets[descriptorIndex];
             VkDescriptorSet resourceDescSet = runtime->MaterialResourceDescSets[descriptorIndex];
 
@@ -311,7 +324,9 @@ namespace XJ
                 sizeof(pc),
                 &pc);
 
-            item.Mesh->DrawSubmesh(cmdBuffer, item.SubmeshIndex);
+
+            if (item.Mesh->DrawSubmesh(cmdBuffer, item.SubmeshIndex))
+                renderTarget->RecordDrawCall();
         }
         
     }

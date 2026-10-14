@@ -186,17 +186,24 @@ namespace XJ
             }
         }
 
-        if (mState.WorkspaceReadOnly)
-            ImGui::BeginDisabled();
+        ImGui::BeginDisabled(mState.WorkspaceReadOnly);
+        if (mContentBrowser)
+            mContentBrowser->DrawUI();
+        ImGui::EndDisabled();
 
-        if (mContentBrowser) mContentBrowser->DrawUI();
-        if (mHierarchy)      mHierarchy->DrawUI();
-        if (mInspector)      mInspector->DrawUI();
+        // Hierarchy 允许运行态选择，但禁止创建/重命名/删除命令。
+        if (mHierarchy)
+            mHierarchy->DrawUI();
 
-        if (mState.WorkspaceReadOnly)
-            ImGui::EndDisabled();
+        // RuntimeInspection 分支只提供运行态 Script 操作。
+        ImGui::BeginDisabled(mState.WorkspaceReadOnly && !mState.RuntimeInspection);
+        if (mInspector)
+            mInspector->DrawUI();
+        ImGui::EndDisabled();
 
-        if (mDebugConsole)   mDebugConsole->DrawUI();
+        if (mDebugConsole)
+            mDebugConsole->DrawUI();
+
     }
 
     void XJEditorUILayer::SaveConfig()

@@ -273,7 +273,7 @@ namespace XJ
 
         uint32_t drawIndex = 0; // 实体索引，用于动态UBO偏移计算
         //setup custiom params
-        kView.each([this, &cmdBuffer, &drawIndex, frameSlot](const auto &entity, const XJTransformComponent& transComp, const XJBaseMaterialComponent& matComp)
+        kView.each([this, &cmdBuffer, &drawIndex, frameSlot,renderTarget](const auto &entity, const XJTransformComponent& transComp, const XJBaseMaterialComponent& matComp)
         {
             (void)entity;
 
@@ -306,7 +306,8 @@ namespace XJ
                 mInstanceBuffers[frameSlot]->WriteDataOffset(&mInstanceUbo[frameSlot], dynamicOffset, sizeof(InstanceUbo));//UBO写入数据偏移
                 VkDescriptorSet descriptorSet = mDescriptorSets[frameSlot];
                 vkCmdBindDescriptorSets(cmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, mPipelineLayout->XJGetPipelineLayout(), 0, 1, &descriptorSet, 1, &dynamicOffset);
-                mesh->DrawSubmesh(cmdBuffer, slot.SubmeshIndex);
+                if (mesh->DrawSubmesh(cmdBuffer, slot.SubmeshIndex))
+                    renderTarget->RecordDrawCall();
 
                 ++drawIndex;
             }

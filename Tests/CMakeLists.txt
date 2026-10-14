@@ -274,3 +274,17 @@ add_test(
     COMMAND
         $<TARGET_FILE:XJScriptSystemTests>
 )
+
+add_executable(XJMaterialStateTests
+    ${CMAKE_CURRENT_SOURCE_DIR}/Render/XJMaterialStateTests.cpp
+)
+target_link_libraries(XJMaterialStateTests PRIVATE Core)
+target_compile_features(XJMaterialStateTests PRIVATE cxx_std_20)
+add_test(NAME XJMaterialStateTests COMMAND $<TARGET_FILE:XJMaterialStateTests>)
+
+add_executable(XJViewportDisplayTests
+    ${CMAKE_CURRENT_SOURCE_DIR}/Render/XJViewportDisplayTests.cpp
+)
+target_link_libraries(XJViewportDisplayTests PRIVATE Editor Core)
+target_compile_features(XJViewportDisplayTests PRIVATE cxx_std_20)
+add_test(NAME XJViewportDisplayTests COMMAND $<TARGET_FILE:XJViewportDisplayTests>)

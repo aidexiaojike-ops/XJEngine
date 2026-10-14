@@ -1,6 +1,10 @@
 #include "UI/Viewports/XJGamePreview.h"
+#include "UI/XJEditorUIState.h"
+#include "UI/XJViewportDisplayWidgets.h"
 
 #include "ECS/XJEntity.h"
+
+#include <algorithm>
 
 namespace XJ
 {
@@ -11,6 +15,7 @@ namespace XJ
 
     void XJGamePreview::Shutdown()
     {
+        mUIState = nullptr;
         mSurface.Shutdown();
     }
 
@@ -113,36 +118,69 @@ namespace XJ
         mHovered = false;
         mFocused = false;
 
-        if(!mOpen)
+        if (!mOpen)
             return;
 
-        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
+        ImGui::PushStyleVar(
+            ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
 
         if (ImGui::Begin(mSettings.mViewportName, &mOpen))
         {
-            mFocused = ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows);
+            mFocused = ImGui::IsWindowFocused(
+                ImGuiFocusedFlags_RootAndChildWindows);
 
-            // 窗口顶部 Play/Pause/Stop 控制条
+            // 左侧播放控制。
             DrawPlayControls();
+
+            const float controlsRight =
+                ImGui::GetItemRectMax().x - ImGui::GetWindowPos().x;
+
+            if (mUIState)
+            {
+                const float menuX =
+                    ImGui::GetWindowContentRegionMax().x - 112.0f;
+
+                if (menuX > controlsRight + ImGui::GetStyle().ItemSpacing.x)
+                    ImGui::SameLine();
+
+                // 窄窗口换行后仍右对齐。
+                ImGui::SetCursorPosX(std::max(
+                    ImGui::GetWindowContentRegionMin().x, menuX));
+
+                XJViewportDisplayWidgets::DrawMenu(
+                    *mUIState, XJEditorViewportId::Game);
+            }
+
             ImGui::Separator();
 
-            ImVec2 avail = ImGui::GetContentRegionAvail();
-            if (avail.x > 1.0f && avail.y > 1.0f)
+            const ImVec2 available = ImGui::GetContentRegionAvail();
+
+            if (available.x > 1.0f && available.y > 1.0f)
             {
-                Resize(static_cast<uint32_t>(avail.x), static_cast<uint32_t>(avail.y));
+                Resize(
+                    static_cast<uint32_t>(available.x),
+                    static_cast<uint32_t>(available.y));
+
                 if (IsViewportTextureReady())
                 {
-                    ImGui::Image(GetViewportTextureID(), avail);
+                    const ImVec2 imagePosition = ImGui::GetCursorScreenPos();
+
+                    ImGui::Image(GetViewportTextureID(), available);
                     mHovered = ImGui::IsItemHovered();
+
+                    if (mUIState)
+                    {
+                        XJViewportDisplayWidgets::DrawPerformance(
+                            *mUIState,
+                            XJEditorViewportId::Game,
+                            imagePosition,
+                            available);
+                    }
                 }
                 else
                 {
                     ImGui::TextUnformatted("Preview Texture Invalid.");
                 }
-            }
-            else
-            {
-                ImGui::TextUnformatted("Preview window too small.");
             }
         }
 

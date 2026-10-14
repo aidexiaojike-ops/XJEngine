@@ -16,7 +16,7 @@
 
 namespace XJ
 {
-    class XJEditorViewportSystem::Impl
+    class XJEditorViewportSystem::Impl//
     {
         public:
             XJGlfwWindow* Window = nullptr;
@@ -33,6 +33,8 @@ namespace XJ
             XJEditorCameraManager CameraManager;
         
             bool Initialized = false;
+            std::shared_ptr<void> LifetimeToken;//生命周期令牌，用于确保在渲染线程中访问时，系统仍然有效。
+            uint64_t StatisticsFrameId = 0;//用于统计的帧ID
     };
 
     XJEditorViewportSystem::XJEditorViewportSystem()
@@ -53,6 +55,7 @@ namespace XJ
         if (!info.Window ||
             !info.RenderContext ||
             !info.MainRenderTarget ||
+            !info.UIState ||
             !info.Resources ||
             !info.Resources->IsInitialized())
         {
@@ -99,6 +102,7 @@ namespace XJ
 
         mImpl->GamePreview->AddMaterialSystem<XJBaseMaterialSystem>();
         mImpl->GamePreview->AddMaterialSystem<XJSurfaceMaterialSystem>();
+        mImpl->GamePreview->BindUIState(info.UIState);
 
         mImpl->CameraController =
             std::make_unique<XJEditorCameraController>(
@@ -116,6 +120,7 @@ namespace XJ
             mImpl->CameraController.get());
 
         mImpl->Initialized = true;
+        mImpl->LifetimeToken = std::make_shared<uint8_t>(0);
         return true;
     }
 
@@ -206,6 +211,8 @@ namespace XJ
     {
         if (!mImpl)
             return;
+
+        mImpl->LifetimeToken.reset();
 
         DetachScene(nullptr);
 
@@ -306,4 +313,78 @@ namespace XJ
 
         mImpl->CameraManager.SetGameCameraLock(false);
     }
+    std::weak_ptr<void> XJEditorViewportSystem::GetLifetimeToken() const
+    {
+        return mImpl->LifetimeToken;
+    }
+
+    XJRenderTarget* XJEditorViewportSystem::ResolveRenderTarget(XJEditorViewportId viewport) const//解释 渲染目标
+    {
+        switch (viewport)
+        {
+            case XJEditorViewportId::Scene:
+                return mImpl->ScenePreview
+                    ? mImpl->ScenePreview->mSurface.GetRenderTarget()
+                    : nullptr;
+
+            case XJEditorViewportId::Game:
+                return mImpl->GamePreview
+                    ? mImpl->GamePreview->mSurface.GetRenderTarget()
+                    : nullptr;
+
+            default:
+                return nullptr;
+        }
+    }
+
+    void XJEditorViewportSystem::BeginStatisticsFrame(uint64_t frameId)//开始统计帧
+    {
+        mImpl->StatisticsFrameId = frameId;
+
+        for (size_t index = 0; index < XJ_EDITOR_VIEWPORT_COUNT; ++index)
+        {
+            if (auto* target = ResolveRenderTarget(
+                    static_cast<XJEditorViewportId>(index)))
+            {
+                target->BeginStatisticsFrame(frameId);
+            }
+        }
+    }
+
+    XJRenderStatistics XJEditorViewportSystem::ReadStatistics(//读取统计信息
+        XJEditorViewportId viewport) const
+    {
+        if (auto* target = ResolveRenderTarget(viewport))
+            return target->GetStatistics();
+
+        XJRenderStatistics result;
+        result.FrameId = mImpl->StatisticsFrameId;
+        return result;
+    }
+
+    XJRenderViewCapabilities XJEditorViewportSystem::ReadViewCapabilities(//读取视图能力
+        XJEditorViewportId viewport) const
+    {
+        if (auto* target = ResolveRenderTarget(viewport))
+            return target->GetViewCapabilities();
+
+        return {};
+    }
+
+    bool XJEditorViewportSystem::IsRenderViewAvailable(
+        XJEditorViewportId viewport) const
+    {
+        auto* target = ResolveRenderTarget(viewport);
+        return target && target->IsValid();
+    }
+
+    bool XJEditorViewportSystem::ApplyViewOptions(
+        XJEditorViewportId viewport,
+        const XJRenderViewOptions& options)
+    {
+        auto* target = ResolveRenderTarget(viewport);
+        return target && target->IsValid() &&
+               target->TrySetViewOptions(options);
+    }
+
 }

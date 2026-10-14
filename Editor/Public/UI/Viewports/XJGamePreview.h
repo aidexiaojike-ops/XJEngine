@@ -10,6 +10,8 @@ namespace XJ
 {
     class XJEntity;
     class XJScene;
+    struct XJEditorUIState;
+
 
     class XJGamePreview : public XJViewport
     {
@@ -51,6 +53,11 @@ namespace XJ
             }
             void DrawUI() override;
 
+            void BindUIState(XJEditorUIState* state)
+            {
+                mUIState = state;
+            }
+
         private:
             void DrawPlayControls();
 
@@ -60,6 +67,8 @@ namespace XJ
             XJEditorPlayState mPlayState = XJEditorPlayState::Edit;
             PlayStateChangeCallback mPlayStateChangeCallback;
              
+            friend class XJEditorViewportSystem;
+            XJEditorUIState* mUIState = nullptr;
         protected:
             ImTextureID GetViewportTextureID() const override;
             bool IsViewportTextureReady() const override;

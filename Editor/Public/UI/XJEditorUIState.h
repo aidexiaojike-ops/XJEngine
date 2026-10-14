@@ -6,6 +6,8 @@
 #include "UI/XJEditorSceneViewModel.h"
 #include "UI/XJEditorSelection.h"
 #include "UI/XJEditorComponentTypes.h"
+#include "UI/XJEditorViewportDisplayViewModel.h"
+#include "UI/XJEditorViewportRequests.h"
 
 #include <filesystem>
 #include <vector>
@@ -37,6 +39,25 @@ namespace XJ
         float LightOuterAngleDegrees = 30.0f;
     };
 
+    enum class XJRuntimeScriptOperation
+    {
+        AddComponent,
+        RemoveComponent,
+        AddSlot,
+        RemoveSlot,
+        SetEnabled,
+        ReplaceScript
+    };
+
+    struct XJRuntimeScriptCommand//运行脚本命令
+    {
+        XJRuntimeScriptOperation Operation = XJRuntimeScriptOperation::AddComponent;
+        XJEditorEntityId EntityId = XJ_INVALID_EDITOR_ENTITY_ID;
+        uint64_t SlotId = 0;
+        XJAssetHandle ScriptAsset = 0;
+        bool Enabled = true;
+    };
+
     struct XJEditorUIState//编辑器 UI 全局状态
     {
         XJAssetRegistry* AssetRegistry = nullptr;// // 指向资产注册表的指针
@@ -65,6 +86,12 @@ namespace XJ
         bool HasPendingExternalDrop = false; // 是否存在待处理的外部拖放事件
 
         XJEditorComponentClipboard ComponentClipboard;
+
+        bool RuntimeInspection = false; // 是否处于运行时检查模式
+        std::vector<XJRuntimeScriptCommand> RuntimeScriptRequests; // 待处理的运行时脚本命令列表
+
+        std::array<XJEditorViewportDisplayViewModel, XJ_EDITOR_VIEWPORT_COUNT> ViewportDisplays;
+        std::vector<XJEditorViewportRequest> ViewportRequests; // 待处理的视口请求列表
     };
 
 

@@ -104,6 +104,8 @@ namespace XJ
         spdlog::info("进入主循环");
         while (!mWindow->ShouldClose()) 
         {
+            const auto statisticsFrameStart = std::chrono::steady_clock::now();
+
             mWindow->PollEvents();
 
             float deltaTime = std::chrono::duration<float>(std::chrono::steady_clock::now() - mLastTimePoint).count();
@@ -123,6 +125,8 @@ namespace XJ
             OnUIEnd();// UI 渲染结束
 
             OnRender();
+
+            mCompletedFrameStatistics = {mFrameIndex, std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - statisticsFrameStart).count()};
         }
         spdlog::info("退出主循环");
     } 

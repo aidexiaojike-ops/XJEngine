@@ -49,6 +49,12 @@ namespace XJ
     // 此方法会给实体添加一个默认的 Transform 组件，并返回该实体的指针
     XJEntity* XJScene::CreateEntityWithUUID(const XJUUID &id, const std::string &name) 
     {
+
+        if(mDestroyingAll)
+        {
+            spdlog::error("CreateEntityWithUUID failed: scene is destroying all entities, uuid={}, name='{}'", static_cast<uint64_t>(id), name);
+            return nullptr;
+        }
         // UUID 是序列化、层级恢复、编辑器选择的稳定身份。重复 UUID 会让查找和父子关系恢复混乱。
         if (!id || mEntitiesByUUID.contains(id))
         {
@@ -92,6 +98,7 @@ namespace XJ
         // 为实体设置唯一的 UUID（如果未提供名称则使用默认值）
         xjEntity->XJSetUUID(id);
         xjEntity->XJSetName(name.empty() ? "Entity" : name);
+        ++mStructureRevision;
 
         return xjEntity;
     }
@@ -117,6 +124,12 @@ namespace XJ
      // DestroyEntity：立即销毁指定实体。不要在 registry.view().each() 内调用。
     void XJScene::DestroyEntity(const XJEntity* entity)
     {
+        if (mScriptExecutionDepth != 0)
+        {
+            QueueDestroyEntity(entity);
+            return;
+        }
+
         DestroyEntityImmediate(entity);
     }
 
@@ -124,11 +137,11 @@ namespace XJ
     {
         if (!entity)
             return;
-
         const entt::entity ecsEntity = entity->GetEcsEntity();
         // 不接受其他 Scene 中数值相同的 EnTT ID。
         auto it = mEntities.find(ecsEntity);
-        if (it == mEntities.end() || it->second.get() != entity || !mEcsRegistry.valid(ecsEntity))
+        if (it == mEntities.end() || it->second.get() != entity ||
+            !mEcsRegistry.valid(ecsEntity) || mDestroyingEntities.contains(ecsEntity))
             return;
 
         if (mPendingDestroySet.insert(ecsEntity).second)
@@ -137,6 +150,12 @@ namespace XJ
 
     void XJScene::FlushDestroyQueue()
     {
+
+        if(mScriptExecutionDepth != 0)
+        {
+            return;
+        }
+
         std::vector<entt::entity> pending = std::move(mPendingDestroyEntities);
         mPendingDestroyEntities.clear();
         mPendingDestroySet.clear();
@@ -153,58 +172,115 @@ namespace XJ
     {
         if (!entity)
             return;
-    
-        auto it = mEntities.find(entity->GetEcsEntity());
-        if (it == mEntities.end())
-            return;
-    
-        // 防止传入旧 scene 或旧包装对象，但 entt id 碰巧相同，误删当前 scene 的实体。
-        if (it->second.get() != entity)
+
+        const entt::entity ecsEntity = entity->GetEcsEntity();
+        const auto entityIt =  mEntities.find(ecsEntity);
+        if (entityIt == mEntities.end() ||
+            entityIt->second.get() != entity ||
+            !mEcsRegistry.valid(ecsEntity))
         {
-            spdlog::warn("DestroyEntity skipped: entity wrapper does not belong to this scene.");
             return;
         }
     
-        XJEntity* entityToDestroy = it->second.get();
-    
-        std::vector<XJNode*> children = entityToDestroy->XJGetChildren();
-        for (XJNode* child : children)
+        if(!mDestroyingEntities.insert(ecsEntity).second)
+        {
+            spdlog::warn("DestroyEntityImmediate skipped: entity is already being destroyed, entt={}", static_cast<uint32_t>(ecsEntity));
+            return;
+        }
+         // 保持 wrapper 有效，回调中的场景创建也不会使它失效。
+        const std::shared_ptr<XJEntity> entityOwner = entityIt->second;
+        XJEntity* entityToDestroy = entityOwner.get();
+
+        struct DestroyGuard
+        {
+            std::unordered_set<entt::entity>& Entities;
+            entt::entity Entity;
+
+            ~DestroyGuard()
+            {
+                Entities.erase(Entity);
+            }
+        } guard{mDestroyingEntities, ecsEntity};
+
+        // 保存 ECS ID，而不是跨递归保留可能失效的 child 指针。
+        std::vector<entt::entity> childIds;
+        for (XJNode* child : entityToDestroy->XJGetChildren())
         {
             if (XJEntity* childEntity = dynamic_cast<XJEntity*>(child))
-                DestroyEntityImmediate(childEntity);
+                childIds.push_back(childEntity->GetEcsEntity());
         }
-    
-        XJNode* parent = entityToDestroy->XJGetParent();
-        if (parent)
+
+        for (const entt::entity childId : childIds)
+        {
+            if (XJEntity* child = GetEntity(childId))
+                DestroyEntityImmediate(child);
+        }
+        // 此时 UUID、registry、Transform 等组件仍然有效。
+        // 通知中的递归删除/清空必须排队，避免重入正在销毁的实体。
+        {
+            ScriptExecutionScope notificationScope(*this);
+            mBeforeEntityDestroy.publish(*entityToDestroy);
+        }
+        if (XJNode* parent = entityToDestroy->XJGetParent())
             parent->XJRemoveChild(entityToDestroy);
+
 
         const XJUUID uuid = entityToDestroy->XJGetUUID();
         const auto uuidIt = mEntitiesByUUID.find(uuid);
         if (uuidIt != mEntitiesByUUID.end() && uuidIt->second == entityToDestroy->GetEcsEntity())
             mEntitiesByUUID.erase(uuidIt);
     
-        if (mEcsRegistry.valid(entityToDestroy->GetEcsEntity()))
-            mEcsRegistry.destroy(entityToDestroy->GetEcsEntity());
+        if (mEcsRegistry.valid(ecsEntity))
+            mEcsRegistry.destroy(ecsEntity);
 
-        mPendingDestroySet.erase(entityToDestroy->GetEcsEntity());
-        mEntities.erase(it);
+        mPendingDestroySet.erase(ecsEntity);
+        // 回调可能创建实体导致 unordered_map rehash，不继续使用旧 iterator。
+        mEntities.erase(ecsEntity);
+        ++mStructureRevision;
     }
 
      
     void XJScene::DestroyAllEntity() // DestroyAllEntity：销毁场景中的所有实体
     {
 
+        if (mScriptExecutionDepth != 0)
+        {
+            for (const auto& [ecsEntity, entity] : mEntities)
+            {
+                (void)ecsEntity;
+                QueueDestroyEntity(entity.get());
+            }
+            return;
+        }
+
+        if (mDestroyingAll)
+            return;
+
+        mDestroyingAll = true;
+
+        struct ResetGuard
+        {
+            bool& Flag;
+
+            ~ResetGuard()
+            {
+                Flag = false;
+            }
+        } guard{mDestroyingAll};
+
+        while (!mEntities.empty())
+        {
+            // 每个实体必须经过通知路径，不能直接 registry.clear()。
+            const auto entity = mEntities.begin()->second;
+            DestroyEntityImmediate(entity.get());
+        }
+
         mPendingDestroyEntities.clear();
         mPendingDestroySet.clear();
         mEntitiesByUUID.clear();
 
-        if(mRootNode)
+        if (mRootNode)
             mRootNode->XJClearChildren();
-        // 清空 ECS 注册表中的所有实体
-        mEcsRegistry.clear();
-
-        // 清空实体列表
-        mEntities.clear();
     }
 
     // GetEntity：根据实体 ID 获取对应的实体对象

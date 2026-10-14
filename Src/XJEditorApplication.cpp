@@ -132,7 +132,15 @@ namespace XJ
         XJEditorRuntimeInitInfo info{
             .Window = XJGetWindow(),
             .RenderContext = renderContext,
-            .Config = std::move(config)
+            .Config = std::move(config),
+            .ReadCurrentFrameId = [this]()
+            {
+                return XJGetFrameIndex();
+            },
+            .ReadCompletedFrameStatistics = [this]()
+            {
+                return GetCompletedFrameStatistics();
+            }
         };
 
         if (!mEditor.Init(info))

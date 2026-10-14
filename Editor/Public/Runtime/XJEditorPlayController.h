@@ -2,6 +2,7 @@
 #define XJ_EDITOR_PLAY_CONTROLLER_H
 
 #include "Runtime/XJEditorPlayState.h"
+#include "Diagnostics/XJPerformanceData.h"
 
 #include <functional>
 #include <memory>
@@ -38,10 +39,14 @@ namespace XJ
 
             bool RegisterSystemFactory(SystemFactory factory);
             void ClearSystemFactories();
+            void SynchronizeScripts();//同步脚本
 
             XJEditorPlayState GetState() const;
             XJScene* GetRuntimeScene() const;
             XJEntity* GetRuntimeCamera() const;
+
+            void BeginStatisticsFrame(uint64_t frameId);
+            XJScriptStatistics GetScriptStatistics() const;
 
         private:
             class Impl;

@@ -2,11 +2,14 @@
 
 #include "Asset/XJAssetRegistry.h"
 #include "Asset/Importer/XJScriptAssetCompiler.h"
+#include "ECS/XJScene.h"
+#include "UI/XJEditorUIState.h"
+#include "Workspace/XJEditorWorkspace.h"
 
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
-#include <iostream>
+#include <spdlog/spdlog.h>
 #include <iterator>
 #include <string>
 #include <string_view>
@@ -17,7 +20,7 @@ namespace
     {
         if (!condition)
         {
-            std::cerr << "FAILED: " << message << '\n';
+            spdlog::error("FAILED: {}", message);
             std::exit(EXIT_FAILURE);
         }
     }
@@ -26,6 +29,41 @@ namespace
     {
         std::ifstream input(path, std::ios::binary);
         return {std::istreambuf_iterator<char>(input), std::istreambuf_iterator<char>()};
+    }
+
+    void TestRuntimeBinding()
+    {
+        XJ::XJEditorWorkspace workspace;
+        auto& state = workspace.GetUIState();
+        state.Selection.SelectedEntity = 123;
+        state.Selection.SelectedAsset = 456;
+        state.Selection.HighlightedEntities.insert(123);
+        auto runtime = std::make_unique<XJ::XJScene>();
+
+        workspace.SetMode(XJ::XJEditorWorkspaceMode::PlayReadOnly);
+        workspace.SetRuntimeScene(runtime.get());
+        Check(state.RuntimeInspection && workspace.GetRuntimeScene() == runtime.get(),
+              "runtime inspector binds the runtime scene");
+        state.Selection.SelectedEntity = 789;
+        state.Selection.SelectedAsset = 0;
+        state.Selection.HighlightedEntities.clear();
+        state.RuntimeScriptRequests.push_back({});
+
+        // Resume/Pause 不得覆盖进入 Play 前保存的编辑器选择。
+        workspace.SetRuntimeScene(runtime.get());
+        Check(state.RuntimeScriptRequests.size() == 1,
+              "rebinding the same scene preserves pending runtime commands");
+        runtime.reset();
+        Check(workspace.GetRuntimeScene() == nullptr,
+              "expired runtime scene is not exposed as a dangling pointer");
+        workspace.SetRuntimeScene(nullptr);
+        workspace.SetMode(XJ::XJEditorWorkspaceMode::Edit);
+        Check(!state.RuntimeInspection && state.RuntimeScriptRequests.empty(),
+              "stop clears runtime inspection and queued commands");
+        Check(state.Selection.SelectedEntity == 123 &&
+              state.Selection.SelectedAsset == 456 &&
+              state.Selection.HighlightedEntities.count(123) == 1,
+              "stop restores editor selection and highlights");
     }
 }
 
@@ -73,7 +111,8 @@ int main()
     Check(XJ::XJScriptAssetCompiler::CompileFile(firstMeta->SourcePath)->IsCompiled(),
           "saved source compiles");
 
+    TestRuntimeBinding();
     std::filesystem::remove_all(root, ec);
-    std::cout << "XJEditor script asset tests passed\n";
+    spdlog::info("XJEditor script asset tests passed.");
     return EXIT_SUCCESS;
 }

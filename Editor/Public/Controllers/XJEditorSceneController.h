@@ -100,6 +100,11 @@ namespace XJ
 
             void ClearSceneReferences();//仅清理当前 scene 相关状态，保留默认资源和长期 callbacks
             void ClearRuntimeReferences();
+
+            void InvalidateViewModels()// 使视图模型失效，触发 UI 刷新
+            {
+                mPublishedRevision = 0;
+            }
         
         private:
             struct MaterialHistorySnapshot
@@ -167,4 +172,4 @@ namespace XJ
     };
 }
 
-#endif
+#endif // XJ_EDITOR_SCENE_CONTROLLER_H

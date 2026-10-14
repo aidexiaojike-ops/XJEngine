@@ -2,6 +2,8 @@
 #define XJ_EDITOR_RUNTIME_H
 
 #include "Runtime/XJEditorProjectConfig.h"
+#include "Diagnostics/XJPerformanceData.h"
+#include <functional>
 #include <memory>
 
 namespace XJ
@@ -22,6 +24,9 @@ namespace XJ
         XJGlfwWindow* Window = nullptr;
         XJRenderContext* RenderContext = nullptr;
         XJEditorProjectConfig Config;
+        std::function<uint64_t()> ReadCurrentFrameId;
+
+        std::function<XJCompletedFrameStatistics()> ReadCompletedFrameStatistics;
     };
 
     class XJEditorRuntime

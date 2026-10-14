@@ -8,6 +8,9 @@
 #include "UI/XJEditorDragPayload.h"
 #include "UI/XJEditorUIState.h"
 #include "ECS/XJScene.h"
+#include "ECS/XJEntity.h"
+#include "ECS/Component/XJScriptComponent.h"
+#include "ECS/Component/XJTransformComponent.h"
 #include "Services/XJEditorAssetService.h"
 #include "Services/XJEditorSceneService.h"
 
@@ -20,6 +23,14 @@ namespace XJ
     {
         public:
             XJScene* Scene = nullptr;
+            XJScene* RuntimeScene = nullptr;
+            std::weak_ptr<void> RuntimeSceneLifetime;
+            XJEditorSelectionState EditorSelectionBeforePlay;
+
+            uint64_t PublishedRuntimeStructure = 0;
+            uint64_t PublishedRuntimeScriptRevision = 0;
+            uint64_t PublishedRuntimeAssetEpoch = 0;
+            XJEditorEntityId PublishedRuntimeSelection = XJ_INVALID_EDITOR_ENTITY_ID;
         
             // UIState 必须先于持有其引用的 UI Layer 创建，
             // 并晚于 UI Layer 销毁。
@@ -53,6 +64,42 @@ namespace XJ
     XJEditorWorkspace::~XJEditorWorkspace()
     {
         Shutdown();
+    }
+
+    void XJEditorWorkspace::SetRuntimeScene(XJScene* scene)
+    {
+        if(scene == mImpl->RuntimeScene)
+            return;
+
+        if (scene && !mImpl->RuntimeScene)
+            mImpl->EditorSelectionBeforePlay = mImpl->UIState.Selection;
+
+        const bool wasRuntime = mImpl->RuntimeScene != nullptr;
+        mImpl->RuntimeScene = scene;
+        mImpl->RuntimeSceneLifetime = scene ? scene->GetLifetimeToken() : std::weak_ptr<void>{};
+
+        mImpl->PublishedRuntimeStructure = 0;
+        mImpl->PublishedRuntimeScriptRevision = 0;
+        mImpl->PublishedRuntimeSelection = XJ_INVALID_EDITOR_ENTITY_ID;
+
+        auto& state = mImpl->UIState;
+        state.RuntimeInspection = scene != nullptr;
+        state.RuntimeScriptRequests.clear();
+        state.SceneRequests = {};
+        state.AssetRequests = {};
+        state.SceneView = {};
+        state.SelectedEntityDetails = {};
+
+        if (!scene && wasRuntime)
+        {
+            state.Selection = mImpl->EditorSelectionBeforePlay;
+            mImpl->SceneController.InvalidateViewModels();
+        }
+    }
+
+    XJScene* XJEditorWorkspace::GetRuntimeScene() const
+    {
+        return mImpl->RuntimeSceneLifetime.expired() ? nullptr : mImpl->RuntimeScene;
     }
 
     bool XJEditorWorkspace::Init( const XJEditorWorkspaceInitInfo& info)
@@ -153,11 +200,14 @@ namespace XJ
 
     void XJEditorWorkspace::DetachScene(XJScene* scene)
     {
+
         if (!mImpl->Scene)
             return;
 
         if (scene && scene != mImpl->Scene)
             return;
+
+        SetRuntimeScene(nullptr);
 
         mImpl->AssetController.SetScene(nullptr);
         mImpl->SceneController.SetScene(nullptr);
@@ -179,10 +229,69 @@ namespace XJ
 
         if (mImpl->Mode != XJEditorWorkspaceMode::Edit)
         {
+            auto& state = mImpl->UIState;
+            // EditorScene 请求在 Play 中不能执行。
             // 只读期间丢弃请求，防止 Stop 后一次性执行 Play 期间积压的编辑操作。
-            mImpl->UIState.SceneRequests = {};
-            mImpl->UIState.AssetRequests = {};
-            mImpl->SceneController.RefreshViewModels(mImpl->UIState);
+            state.SceneRequests = {};
+            state.AssetRequests = {};
+
+            if(!mImpl->RuntimeScene || mImpl->RuntimeSceneLifetime.expired())
+            {
+                state.SceneView = {};
+                state.SelectedEntityDetails = {};
+                return;
+            }
+
+            XJScene& scene = *mImpl->RuntimeScene;
+            const uint64_t structure = scene.GetStructureRevision();
+            const bool structureChanged = structure != mImpl->PublishedRuntimeStructure;
+
+            if (structureChanged)
+                state.SceneView = XJEditorSceneService::BuildSceneViewModel(scene);
+
+            XJEntity* selected = scene.FindEntityByUUID(XJUUID{state.Selection.SelectedEntity});
+
+            if (!selected)
+            {
+                state.Selection.SelectedEntity = XJ_INVALID_EDITOR_ENTITY_ID;
+                state.SelectedEntityDetails = {};
+            }
+
+            const uint64_t scriptRevision =
+                selected && selected->HasComponent<XJScriptComponent>()
+                ? selected->GetComponent<XJScriptComponent>().GetRuntimeRevision()
+                : 0;
+
+            if (structureChanged ||
+                state.Selection.SelectedEntity != mImpl->PublishedRuntimeSelection ||
+                scriptRevision != mImpl->PublishedRuntimeScriptRevision ||
+                state.AssetDetailEpoch != mImpl->PublishedRuntimeAssetEpoch)
+            {
+                state.SelectedEntityDetails = selected
+                    ? XJEditorSceneService::BuildEntityDetailsView(
+                        scene,
+                        state.Selection.SelectedEntity,
+                        state.AssetRegistry,
+                        {})
+                    : XJEditorEntityDetailsView{};
+            }
+             // Transform 是运行数据，每帧更新已有快照，不重建材质/资产详情。
+            if (selected && selected->HasComponent<XJTransformComponent>())
+            {
+                const auto& transform =
+                    selected->GetComponent<XJTransformComponent>();
+
+                state.SelectedEntityDetails.Transform.Valid = true;
+                state.SelectedEntityDetails.Transform.Position = transform.position;
+                state.SelectedEntityDetails.Transform.Rotation = transform.rotation;
+                state.SelectedEntityDetails.Transform.Scale = transform.scale;
+            }
+
+
+            mImpl->PublishedRuntimeStructure = structure;
+            mImpl->PublishedRuntimeSelection = state.Selection.SelectedEntity;
+            mImpl->PublishedRuntimeScriptRevision = scriptRevision;
+            mImpl->PublishedRuntimeAssetEpoch = state.AssetDetailEpoch;
             return;
         }
 
@@ -256,7 +365,7 @@ namespace XJ
     void XJEditorWorkspace::Shutdown()
     {
         
-        
+        SetRuntimeScene(nullptr);
         ClearSceneHooks();
         
         DetachScene(nullptr);

@@ -21,10 +21,36 @@ namespace XJ
         {
             XJUUID EntityId{0};
             XJUUID SlotId{0};
+            XJAssetHandle ScriptHandle = 0;
+            uint64_t LifecycleRevision = 0;
+
             std::shared_ptr<XJScriptAsset> Asset;
             XJScriptInstance Instance;
-            bool OnCreateCompleted = false;
-            bool Active = true;
+
+            bool Created = false;
+            bool Active = false;
+        };
+
+        struct BusyGuard
+        {
+            explicit BusyGuard(bool& busy)
+                : Busy(busy)
+            {
+                Busy = true;
+            }
+
+            ~BusyGuard()
+            {
+                Busy = false;
+            }
+
+            bool& Busy;
+        };
+
+        struct PendingScriptCreation
+        {
+            XJUUID EntityId{0};
+            XJScriptSlot Source;
         };
 
         bool ApplyFieldOverrides(
@@ -32,182 +58,507 @@ namespace XJ
             const XJScriptBytecodeModule& module,
             const XJScriptSlot& slot)
         {
-            std::unordered_map<uint64_t, uint32_t> fields;
-            for (uint32_t index = 0; index < module.Fields.size(); ++index)
-            {
-                const auto& field = module.Fields[index];
-                if (field.Access == XJScriptAccess::Public && field.StableId != 0)
-                    fields[field.StableId] = index;
-            }
-
             for (const auto& [fieldId, value] : slot.FieldOverrides)
             {
-                const auto field = fields.find(fieldId);
-                if (field == fields.end() || !instance.SetField(field->second, value))
+                const auto field = std::find_if(
+                    module.Fields.begin(),
+                    module.Fields.end(),
+                    [fieldId](const auto& item)
+                    {
+                        return item.Access == XJScriptAccess::Public &&
+                               item.StableId == fieldId &&
+                               fieldId != 0;
+                    });
+
+                if (field == module.Fields.end())
+                    return false;
+
+                const auto index = static_cast<uint32_t>(
+                    std::distance(module.Fields.begin(), field));
+
+                if (!instance.SetField(index, value))
                     return false;
             }
+
             return true;
         }
     }
 
     class XJScriptSystem::Impl
     {
-    public:
-        XJScene* Scene = nullptr;
-        XJAssetRegistry* Registry = nullptr;
-        std::unordered_map<XJAssetHandle, XJScriptAssetCacheEntry> ScriptCache;
-        XJScriptExecutionLimits Limits;
-        XJEcsScriptNativeInvoker NativeInvoker;
-        std::vector<RuntimeScriptSlot> RuntimeSlots;
+        public:
+
+            XJScriptStatisticsRecorder Statistics;
+
+            XJScene* Scene = nullptr;
+            XJAssetRegistry* Registry = nullptr;
+            std::weak_ptr<void> SceneLifetime;
+
+            std::unordered_map<XJAssetHandle, XJScriptAssetCacheEntry> ScriptCache;
+            XJScriptExecutionLimits Limits;
+
+            XJEcsScriptNativeInvoker DefaultInvoker;
+            XJScriptNativeInvoker* Invoker = &DefaultInvoker;
+
+            std::vector<RuntimeScriptSlot> RuntimeSlots;
+            std::vector<XJEntity*> EntityScratch;
+            std::vector<PendingScriptCreation> PendingCreations;
+
+            // connection 本身不自动 disconnect。
+            // Scene 已销毁时，不能对其 signal 执行 release。
+            entt::connection DestroyConnection;
+
+            bool Started = false;
+            bool Busy = false;
+
+            bool HasScene() const
+            {
+                return Scene && !SceneLifetime.expired();
+            }
+
+            const XJScriptSlot* FindSource(const RuntimeScriptSlot& runtime) const
+            {
+                if (!HasScene())
+                    return nullptr;
+
+                XJEntity* entity = Scene->FindEntityByUUID(runtime.EntityId);
+                if (!entity || !entity->HasComponent<XJScriptComponent>())
+                    return nullptr;
+
+                return entity->GetComponent<XJScriptComponent>()
+                    .FindSlot(runtime.SlotId);
+            }
+
+            bool MatchesSource(const RuntimeScriptSlot& runtime) const
+            {
+                const XJScriptSlot* source = FindSource(runtime);
+                return source &&
+                       source->Enabled &&
+                       source->Script.Type == XJAssetType::Script &&
+                       source->Script.Handle == runtime.ScriptHandle &&
+                       source->LifecycleRevision == runtime.LifecycleRevision;
+            }
+
+            uint32_t CountActiveInstances() const
+            {
+                uint32_t count = 0;
+                for (const auto& runtime : RuntimeSlots)
+                {
+                    if(runtime.Created && runtime.Active && MatchesSource(runtime))
+                        ++count;
+                }
+
+                return count;
+            }
+
+            void DestroySlot(RuntimeScriptSlot& runtime) noexcept
+            {
+                runtime.Active = false;
+
+                if (!runtime.Created)
+                    return;
+
+                // 先标记，再执行用户回调，确保清理最多执行一次。
+                runtime.Created = false;
+
+                if (!HasScene() || !runtime.Asset || !runtime.Asset->Module ||
+                    !runtime.Asset->Module->OnDestroy)
+                {
+                    return;
+                }
+
+                XJEntity* owner = Scene->FindEntityByUUID(runtime.EntityId);
+                if (!owner)
+                    return;
+
+                try
+                {
+                    // 终止实例不再恢复 Update，只允许最后一次清理。
+                    XJScriptRuntime::ClearFault(runtime.Instance);
+
+                    XJScene::ScriptExecutionScope executionScope(*Scene);
+                    XJScriptNativeContext context{owner};
+
+                    const auto result = XJScriptRuntime::Execute(
+                        runtime.Instance,
+                        *runtime.Asset->Module->OnDestroy,
+                        {},
+                        *Invoker,
+                        context,
+                        Limits);
+
+                    if (!result.IsValid())
+                    {
+                        spdlog::error(
+                            "Script OnDestroy failed: entity={}, slot={}, {}",
+                            static_cast<uint64_t>(runtime.EntityId),
+                            static_cast<uint64_t>(runtime.SlotId),
+                            result.Error->Message);
+                    }
+                }
+                catch (const std::exception& exception)
+                {
+                    spdlog::error("Script cleanup failed: {}", exception.what());
+                }
+                catch (...)
+                {
+                    spdlog::error("Script cleanup failed with unknown exception.");
+                }
+            }
+
+            void BeforeEntityDestroy(XJEntity& entity) noexcept
+            {
+                XJScriptStatisticsRecorder::Scope statisticsScope(Statistics);
+                BusyGuard busyGuard(Busy);
+                const XJUUID entityId = entity.XJGetUUID();
+
+                for (size_t index = RuntimeSlots.size(); index > 0; --index)
+                {
+                    auto& runtime = RuntimeSlots[index - 1];
+                    if (runtime.EntityId != entityId)
+                        continue;
+
+                    DestroySlot(runtime);
+                    RuntimeSlots.erase(RuntimeSlots.begin() + (index - 1));
+                }
+            }
+
+            void CreateSlot(
+                XJEntity& entity,
+                const XJScriptSlot& source,
+                bool strict)
+            {
+                // 失败记录也保留，避免相同配置每帧重试/编译。
+                RuntimeSlots.emplace_back();
+                auto& runtime = RuntimeSlots.back();
+
+                runtime.EntityId = entity.XJGetUUID();
+                runtime.SlotId = source.SlotId;
+                runtime.ScriptHandle = source.Script.Handle;
+                runtime.LifecycleRevision = source.LifecycleRevision;
+
+                try
+                {
+                    if (!source.Script.IsValid() ||
+                        source.Script.Type != XJAssetType::Script)
+                    {
+                        throw std::runtime_error("Invalid Script asset reference");
+                    }
+
+                    XJScriptAssetLoadContext context{Registry, &ScriptCache};
+                    runtime.Asset = XJScriptAssetLoader::LoadScript(
+                        source.Script.Handle, context);
+
+                    if (runtime.Asset && !runtime.Asset->IsCompiled() &&
+                        !runtime.Asset->Diagnostics.empty())
+                        throw std::runtime_error(runtime.Asset->Diagnostics.front().Message);
+                    if (!runtime.Asset || !runtime.Asset->IsCompiled())
+                        throw std::runtime_error("Script asset failed to compile");
+
+                    const auto error = XJScriptRuntime::InitializeInstance(
+                        runtime.Instance, runtime.Asset->Module);
+
+                    if (error)
+                        throw std::runtime_error(error->Message);
+
+                    if (!ApplyFieldOverrides(
+                            runtime.Instance, *runtime.Asset->Module, source))
+                    {
+                        throw std::runtime_error("Script field overrides are invalid");
+                    }
+
+                    // OnCreate 部分执行后失败，也需要尝试清理。
+                    runtime.Created = true;
+
+                    if (runtime.Asset->Module->OnCreate)
+                    {
+                        XJScene::ScriptExecutionScope executionScope(*Scene);
+                        XJScriptNativeContext nativeContext{&entity};
+
+                        const auto result = XJScriptRuntime::Execute(
+                            runtime.Instance,
+                            *runtime.Asset->Module->OnCreate,
+                            {},
+                            *Invoker,
+                            nativeContext,
+                            Limits);
+
+                        if (!result.IsValid())
+                            throw std::runtime_error(result.Error->Message);
+                    }
+
+                    runtime.Active = true;
+                }
+                catch (const std::exception& exception)
+                {
+                    DestroySlot(runtime);
+
+                    spdlog::error(
+                        "Runtime Script creation failed: entity={}, slot={}, {}",
+                        static_cast<uint64_t>(runtime.EntityId),
+                        static_cast<uint64_t>(runtime.SlotId),
+                        exception.what());
+                    if (strict)
+                        throw;
+                }
+            }
+
+            void Synchronize(bool strict)
+            {
+                XJScriptStatisticsRecorder::Scope statisticsScope(Statistics);
+                if (!Started || !HasScene())
+                    return;
+
+                if (Busy)
+                {
+                    spdlog::error("Script synchronization is reentrant.");
+                    throw std::logic_error("Script synchronization is reentrant");
+                }
+
+                BusyGuard busyGuard(Busy);
+
+                // 移除、禁用、替换先清理旧实例。
+                for (size_t index = RuntimeSlots.size(); index > 0; --index)
+                {
+                    if (MatchesSource(RuntimeSlots[index - 1]))
+                        continue;
+
+                    DestroySlot(RuntimeSlots[index - 1]);
+                    RuntimeSlots.erase(RuntimeSlots.begin() + (index - 1));
+                }
+
+                EntityScratch.clear();
+                PendingCreations.clear();
+
+                for (const auto& [ecsEntity, entity] : Scene->GetEntities())
+                {
+                    (void)ecsEntity;
+                    if (entity && entity->HasComponent<XJScriptComponent>())
+                        EntityScratch.push_back(entity.get());
+                }
+
+                std::sort(
+                    EntityScratch.begin(),
+                    EntityScratch.end(),
+                    [](const XJEntity* left, const XJEntity* right)
+                    {
+                        return static_cast<uint64_t>(left->XJGetUUID()) <
+                               static_cast<uint64_t>(right->XJGetUUID());
+                    });
+
+                for (XJEntity* entity : EntityScratch)
+                {
+                    const auto& component =
+                        entity->GetComponent<XJScriptComponent>();
+
+                    for (const auto& source : component.GetSlots())
+                    {
+                        if (!source.Enabled)
+                            continue;
+
+                        const auto existing = std::find_if(
+                            RuntimeSlots.begin(),
+                            RuntimeSlots.end(),
+                            [&](const RuntimeScriptSlot& runtime)
+                            {
+                                return runtime.EntityId == entity->XJGetUUID() &&
+                                       runtime.SlotId == source.SlotId;
+                            });
+
+                        if (existing == RuntimeSlots.end())
+                            PendingCreations.push_back({entity->XJGetUUID(), source});
+                    }
+                }
+
+                // 用户 Native 回调可能修改 ScriptComponent，不能跨回调持有 slot iterator。
+                for (const auto& pending : PendingCreations)
+                {
+                    XJEntity* entity = Scene->FindEntityByUUID(pending.EntityId);
+                    if (!entity || !entity->HasComponent<XJScriptComponent>())
+                        continue;
+                    const auto* current = entity->GetComponent<XJScriptComponent>()
+                        .FindSlot(pending.Source.SlotId);
+                    if (!current || !current->Enabled ||
+                        current->LifecycleRevision != pending.Source.LifecycleRevision ||
+                        current->Script.Handle != pending.Source.Script.Handle ||
+                        current->Script.Type != pending.Source.Script.Type)
+                        continue;
+                    CreateSlot(*entity, pending.Source, strict);
+                }
+                PendingCreations.clear();
+            }
+
+            void Tick(float deltaTime, bool fixed)
+            {
+                XJScriptStatisticsRecorder::Scope statisticsScope(Statistics);
+                Synchronize(false);
+
+                if (!Started || !HasScene())
+                    return;
+
+                BusyGuard busyGuard(Busy);
+                const XJScriptValue argument = static_cast<double>(deltaTime);
+
+                for (auto& runtime : RuntimeSlots)
+                {
+                    if (!runtime.Created || !runtime.Active || !MatchesSource(runtime))
+                        continue;
+
+                    const auto& module = *runtime.Asset->Module;
+                    const auto function = fixed
+                        ? module.OnFixedUpdate
+                        : module.OnUpdate;
+
+                    if (!function)
+                        continue;
+
+                    XJEntity* owner = Scene->FindEntityByUUID(runtime.EntityId);
+                    if (!owner)
+                        continue;
+
+                    XJScene::ScriptExecutionScope executionScope(*Scene);
+                    XJScriptNativeContext context{owner};
+
+                    const auto result = XJScriptRuntime::Execute(
+                        runtime.Instance,
+                        *function,
+                        std::span<const XJScriptValue>(&argument, 1),
+                        *Invoker,
+                        context,
+                        Limits);
+
+                    if (!result.IsValid())
+                    {
+                        runtime.Active = false;
+                        spdlog::error(
+                            "Script {} failed: entity={}, slot={}, {}",
+                            fixed ? "OnFixedUpdate" : "OnUpdate",
+                            static_cast<uint64_t>(runtime.EntityId),
+                            static_cast<uint64_t>(runtime.SlotId),
+                            result.Error->Message);
+                    }
+                }
+            }
     };
 
     XJScriptSystem::XJScriptSystem(
         XJScene& scene,
         XJAssetRegistry& registry,
         std::unordered_map<XJAssetHandle, XJScriptAssetCacheEntry> preparedCache,
-        XJScriptExecutionLimits limits)
+        XJScriptExecutionLimits limits,
+        XJScriptNativeInvoker* nativeInvoker)
         : mImpl(std::make_unique<Impl>())
     {
         mImpl->Scene = &scene;
+        mImpl->SceneLifetime = scene.GetLifetimeToken();
         mImpl->Registry = &registry;
         mImpl->ScriptCache = std::move(preparedCache);
         mImpl->Limits = limits;
+
+        if (nativeInvoker)
+            mImpl->Invoker = nativeInvoker;
     }
 
-    XJScriptSystem::~XJScriptSystem() = default;
+    XJScriptSystem::~XJScriptSystem()
+    {
+        OnDestroy();
+    }
 
     void XJScriptSystem::OnCreate()
     {
-        std::vector<XJEntity*> entities;
-        for (const auto& [enttEntity, entity] : mImpl->Scene->GetEntities())
+        XJScriptStatisticsRecorder::Scope statisticsScope(mImpl->Statistics);
+
+        if (mImpl->Busy)
         {
-            (void)enttEntity;
-            if (entity && entity->HasComponent<XJScriptComponent>())
-                entities.push_back(entity.get());
+            spdlog::error("ScriptSystem lifecycle is reentrant.");
+            throw std::logic_error("ScriptSystem lifecycle is reentrant");
         }
-        std::sort(entities.begin(), entities.end(),
-            [](const XJEntity* left, const XJEntity* right)
-            {
-                return static_cast<uint64_t>(left->XJGetUUID()) <
-                       static_cast<uint64_t>(right->XJGetUUID());
-            });
-
-        XJScriptAssetLoadContext loadContext{mImpl->Registry, &mImpl->ScriptCache};
-        for (XJEntity* entity : entities)
+        if (mImpl->Started)
         {
-            const auto& component = entity->GetComponent<XJScriptComponent>();
-            for (const auto& slot : component.GetSlots())
-            {
-                if (!slot.Enabled)
-                    continue;
-                auto asset = XJScriptAssetLoader::LoadScript(slot.Script.Handle, loadContext);
-                if (!asset || !asset->IsCompiled())
-                    throw std::runtime_error("Script asset failed to compile");
-
-                RuntimeScriptSlot runtime;
-                runtime.EntityId = entity->XJGetUUID();
-                runtime.SlotId = slot.SlotId;
-                runtime.Asset = std::move(asset);
-                const auto error = XJScriptRuntime::InitializeInstance(
-                    runtime.Instance, runtime.Asset->Module);
-                if (error)
-                    throw std::runtime_error(error->Message);
-                if (!ApplyFieldOverrides(runtime.Instance, *runtime.Asset->Module, slot))
-                    throw std::runtime_error("Script field overrides are invalid");
-                mImpl->RuntimeSlots.push_back(std::move(runtime));
-            }
+            spdlog::error("ScriptSystem is already started.");
+            throw std::logic_error("ScriptSystem is already started");
         }
 
-        for (auto& runtime : mImpl->RuntimeSlots)
+        if (!mImpl->HasScene())
         {
-            runtime.OnCreateCompleted = true;
-            if (!runtime.Asset->Module->OnCreate)
-                continue;
-            XJScriptNativeContext context{
-                mImpl->Scene->FindEntityByUUID(runtime.EntityId)
-            };
-            const auto result = XJScriptRuntime::Execute(
-                runtime.Instance, *runtime.Asset->Module->OnCreate, {},
-                mImpl->NativeInvoker, context, mImpl->Limits);
-            if (!result.IsValid())
-            {
-                runtime.OnCreateCompleted = false;
-                throw std::runtime_error(result.Error->Message);
-            }
+            spdlog::error("ScriptSystem Scene is unavailable.");
+            throw std::runtime_error("ScriptSystem Scene is unavailable");
         }
+
+        mImpl->Started = true;
+        mImpl->DestroyConnection =
+            mImpl->Scene->BeforeEntityDestroy()
+                .connect<&Impl::BeforeEntityDestroy>(*mImpl);
+
+        try
+        {
+            mImpl->Synchronize(true);
+        }
+        catch (...)
+        {
+            OnDestroy();
+            throw;
+        }
+    }
+
+    void XJScriptSystem::SynchronizeSlots()
+    {
+        mImpl->Synchronize(false);
     }
 
     void XJScriptSystem::OnUpdate(float deltaTime)
     {
-        const XJScriptValue argument = static_cast<double>(deltaTime);
-        for (auto& runtime : mImpl->RuntimeSlots)
-        {
-            if (!runtime.Active || !runtime.OnCreateCompleted ||
-                !runtime.Asset->Module->OnUpdate)
-                continue;
-            XJEntity* owner = mImpl->Scene->FindEntityByUUID(runtime.EntityId);
-            if (!owner)
-            {
-                runtime.Active = false;
-                continue;
-            }
-            XJScriptNativeContext context{owner};
-            const auto result = XJScriptRuntime::Execute(
-                runtime.Instance, *runtime.Asset->Module->OnUpdate,
-                std::span<const XJScriptValue>(&argument, 1),
-                mImpl->NativeInvoker, context, mImpl->Limits);
-            if (!result.IsValid())
-            {
-                runtime.Active = false;
-                spdlog::error("Script OnUpdate failed: {}", result.Error->Message);
-            }
-        }
+        mImpl->Tick(deltaTime, false);
     }
 
     void XJScriptSystem::OnFixedUpdate(float fixedDeltaTime)
     {
-        const XJScriptValue argument = static_cast<double>(fixedDeltaTime);
-        for (auto& runtime : mImpl->RuntimeSlots)
-        {
-            if (!runtime.Active || !runtime.OnCreateCompleted ||
-                !runtime.Asset->Module->OnFixedUpdate)
-                continue;
-            XJEntity* owner = mImpl->Scene->FindEntityByUUID(runtime.EntityId);
-            if (!owner)
-            {
-                runtime.Active = false;
-                continue;
-            }
-            XJScriptNativeContext context{owner};
-            const auto result = XJScriptRuntime::Execute(
-                runtime.Instance, *runtime.Asset->Module->OnFixedUpdate,
-                std::span<const XJScriptValue>(&argument, 1),
-                mImpl->NativeInvoker, context, mImpl->Limits);
-            if (!result.IsValid())
-            {
-                runtime.Active = false;
-                spdlog::error("Script OnFixedUpdate failed: {}", result.Error->Message);
-            }
-        }
+        mImpl->Tick(fixedDeltaTime, true);
     }
 
     void XJScriptSystem::OnDestroy()
     {
-        for (auto it = mImpl->RuntimeSlots.rbegin(); it != mImpl->RuntimeSlots.rend(); ++it)
+        XJScriptStatisticsRecorder::Scope statisticsScope(mImpl->Statistics);
+
+        if (mImpl->Busy)
         {
-            auto& runtime = *it;
-            if (!runtime.OnCreateCompleted || !runtime.Active ||
-                runtime.Instance.IsFaulted() || !runtime.Asset->Module->OnDestroy)
-                continue;
-            XJScriptNativeContext context{
-                mImpl->Scene->FindEntityByUUID(runtime.EntityId)
-            };
-            const auto result = XJScriptRuntime::Execute(
-                runtime.Instance, *runtime.Asset->Module->OnDestroy, {},
-                mImpl->NativeInvoker, context, mImpl->Limits);
-            if (!result.IsValid())
-                spdlog::error("Script OnDestroy failed: {}", result.Error->Message);
+            spdlog::error("ScriptSystem destruction is reentrant.");
+            throw std::logic_error("ScriptSystem destruction is reentrant");
         }
+        if (!mImpl->Started)
+            return;
+
+        BusyGuard busyGuard(mImpl->Busy);
+        mImpl->Started = false;
+
+        if (mImpl->HasScene())
+            mImpl->DestroyConnection.release();
+
+        for (auto it = mImpl->RuntimeSlots.rbegin();
+             it != mImpl->RuntimeSlots.rend(); ++it)
+        {
+            mImpl->DestroySlot(*it);
+        }
+
         mImpl->RuntimeSlots.clear();
+        mImpl->EntityScratch.clear();
+        mImpl->PendingCreations.clear();
+    }
+
+    void XJScriptSystem::BeginStatisticsFrame(uint64_t frameId)
+    {
+        if (mImpl->Busy)
+        {
+            spdlog::error("Cannot reset ScriptSystem statistics during execution.");
+            throw std::logic_error("ScriptSystem statistics frame is reentrant");
+        }
+
+        mImpl->Statistics.BeginFrame(frameId);
+    }
+
+    XJScriptStatistics XJScriptSystem::GetStatistics() const
+    {
+        return mImpl->Statistics.GetSnapshot(
+            mImpl->CountActiveInstances());
     }
 }

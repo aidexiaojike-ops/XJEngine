@@ -30,11 +30,15 @@ namespace XJ
             {
             }
 
+            uint64_t StatisticsFrameId = 0;
+            XJScriptStatistics CachedScriptStatistics;
+
             std::unique_ptr<XJScene> RuntimeScene;
             XJSystemScheduler Scheduler;
             std::vector<SystemFactory> SystemFactories;
             XJUUID RuntimeCameraId{0};
             XJEditorPlayState State = XJEditorPlayState::Edit;
+            std::shared_ptr<XJScriptSystem> Scripts;
     };
 
     XJEditorPlayController::XJEditorPlayController()
@@ -96,12 +100,14 @@ namespace XJ
             camera.XJSetFar(100.0f);
         }
 
-        std::vector<std::shared_ptr<XJSystem>> systems;
-        systems.reserve(mImpl->SystemFactories.size() + 1);
-        systems.push_back(std::make_shared<XJScriptSystem>(
+        auto scriptSystem = std::make_shared<XJScriptSystem>(
             *candidateScene,
             registry,
-            std::move(context.ScriptCache)));
+            std::move(context.ScriptCache));
+        scriptSystem->BeginStatisticsFrame(mImpl->StatisticsFrameId);
+        std::vector<std::shared_ptr<XJSystem>> systems;
+        systems.reserve(mImpl->SystemFactories.size() + 1);
+        systems.push_back(scriptSystem);
         for (const SystemFactory& factory : mImpl->SystemFactories)
         {
             if (!factory)
@@ -135,16 +141,18 @@ namespace XJ
             }
         }
         XJScene* runtimeScene = mImpl->RuntimeScene.get();
+        std::weak_ptr<XJScriptSystem> weakScripts = scriptSystem;
 
         if (!mImpl->Scheduler.SetSafePointCallback(
-            [runtimeScene]()
-            {
-                if (runtimeScene)
+                [runtimeScene, weakScripts]()
+                {
                     runtimeScene->FlushDestroyQueue();
-            }))
-        {
-            spdlog::error("Play failed: scheduler safe point " "could not be configured.");
 
+                    if (auto scripts = weakScripts.lock())
+                        scripts->SynchronizeSlots();
+                }))
+        {
+            spdlog::error("Play failed: scheduler safe point could not be configured.");
             mImpl->Scheduler.Clear();
             mImpl->RuntimeScene.reset();
             mImpl->RuntimeCameraId = XJUUID{0};
@@ -156,10 +164,12 @@ namespace XJ
             spdlog::error("Play failed: scheduler could not start.");
 
             mImpl->Scheduler.Clear();
+            mImpl->CachedScriptStatistics = scriptSystem->GetStatistics();
             mImpl->RuntimeScene.reset();
             mImpl->RuntimeCameraId = XJUUID{0};
             return false;
         }
+        mImpl->Scripts = std::move(scriptSystem);
         mImpl->State = XJEditorPlayState::Playing;
         return true;
     }
@@ -180,15 +190,35 @@ namespace XJ
         return true;
     }
 
+    void XJEditorPlayController::SynchronizeScripts()
+    {
+        if (mImpl->Scripts)
+            mImpl->Scripts->SynchronizeSlots();
+    }
+
+
     void XJEditorPlayController::Update(float deltaTime)
     {
         if (mImpl->State == XJEditorPlayState::Playing)
+        {
             mImpl->Scheduler.Update(deltaTime);
+        }
+        else if (mImpl->State == XJEditorPlayState::Paused)
+        {
+            SynchronizeScripts();
+            if (mImpl->RuntimeScene)
+                mImpl->RuntimeScene->FlushDestroyQueue();
+        }
     }
 
     void XJEditorPlayController::Stop()
     {
         mImpl->Scheduler.Clear();
+
+        if (mImpl->Scripts)
+            mImpl->CachedScriptStatistics = mImpl->Scripts->GetStatistics();
+
+        mImpl->Scripts.reset();
         mImpl->RuntimeScene.reset();
         mImpl->RuntimeCameraId = XJUUID{0};
         mImpl->State = XJEditorPlayState::Edit;
@@ -213,5 +243,22 @@ namespace XJ
     XJEntity* XJEditorPlayController::GetRuntimeCamera() const
     {
         return mImpl->RuntimeScene ? mImpl->RuntimeScene->FindEntityByUUID(mImpl->RuntimeCameraId) : nullptr;
+    }
+
+    void XJEditorPlayController::BeginStatisticsFrame(uint64_t frameId)
+    {
+        mImpl->StatisticsFrameId = frameId;
+        mImpl->CachedScriptStatistics = {};
+        mImpl->CachedScriptStatistics.FrameId = frameId;
+
+        if (mImpl->Scripts)
+            mImpl->Scripts->BeginStatisticsFrame(frameId);
+    }
+
+    XJScriptStatistics XJEditorPlayController::GetScriptStatistics() const
+    {
+        return mImpl->Scripts
+            ? mImpl->Scripts->GetStatistics()
+            : mImpl->CachedScriptStatistics;
     }
 }

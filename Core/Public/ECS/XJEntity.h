@@ -76,6 +76,7 @@ namespace XJ
 
                 T &component = scene->mEcsRegistry.emplace_or_replace<T>(mEcsEntity, std::forward<Args>(args)...);
                 component.SetOwner(this);//设置组件的所有者为当前实体
+                ++scene->mStructureRevision;
                 return component;
             }
 
@@ -138,6 +139,7 @@ namespace XJ
                     return;
 
                 scene->mEcsRegistry.remove<T>(mEcsEntity);
+                ++scene->mStructureRevision;
             }
 
           
