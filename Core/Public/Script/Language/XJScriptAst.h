@@ -2,6 +2,7 @@
 #define XJ_SCRIPT_AST_H
 
 #include "Script/Language/XJScriptLexer.h"
+#include "Script/Value/XJScriptValue.h"
 
 #include <cstdint>
 #include <memory>
@@ -13,18 +14,13 @@
 namespace XJ
 {
     // 首版脚本的值类型集合。对象类型暂不允许用户声明，只通过内建绑定访问。
-    enum class XJScriptValueType
-    {
-        Void, Bool, Int, Float, String
-    };
-
     enum class XJScriptAccess
     {
         Public, Private, Protected
     };
 
     // int 固定为 int64_t，float 在编译前端使用 double 保存，避免解析阶段精度损失。
-    using XJScriptLiteralValue = std::variant<bool, int64_t, double, std::string>;
+    using XJScriptLiteralValue = XJScriptValue;
 
     enum class XJScriptUnaryOp
     {

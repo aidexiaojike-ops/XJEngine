@@ -175,7 +175,7 @@ namespace XJ
             if (std::holds_alternative<bool>(value)) return XJScriptValueType::Bool;
             if (std::holds_alternative<int64_t>(value)) return XJScriptValueType::Int;
             if (std::holds_alternative<double>(value)) return XJScriptValueType::Float;
-            return XJScriptValueType::String;
+            return XJGetScriptValueType(value);
         }
     }
 

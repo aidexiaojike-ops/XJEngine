@@ -16,8 +16,8 @@
   "1526164114675906749": {
     "handle": 1526164114675906749,
     "imported": "",
-    "name": "Transform",
-    "source": "Script/Transform.xjs",
+    "name": "Position",
+    "source": "Script/Position.xjs",
     "type": 6
   },
   "2208031170186802523": {
@@ -110,5 +110,12 @@
     "name": "Plane",
     "source": "Material/Plane.xjmat",
     "type": 3
+  },
+  "8907151027684800149": {
+    "handle": 8907151027684800149,
+    "imported": "",
+    "name": "Scale",
+    "source": "Script/Scale.xjs",
+    "type": 6
   }
 }

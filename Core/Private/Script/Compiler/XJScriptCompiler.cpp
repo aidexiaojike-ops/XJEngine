@@ -16,6 +16,7 @@ namespace XJ
                          const XJScriptSemanticResult& semantic)
                     : mDeclaration(declaration), mSemantic(semantic)
                 {
+                    mModule.NativeCatalogue = semantic.NativeCatalogue;
                     mModule.ClassName = declaration.Name;
                 }
 
@@ -57,6 +58,7 @@ namespace XJ
                     }
                     return std::move(mResult);
                 }
+
 
             private:
                 void Error(size_t line, size_t column, std::string message)
@@ -262,6 +264,8 @@ namespace XJ
                         compiled = CompileAssignment(*assignment);
                     else if (const auto* call = dynamic_cast<const XJScriptCallExpr*>(&expression))
                         compiled = CompileCall(*call);
+                    else if (const auto* member = dynamic_cast<const XJScriptMemberExpr*>(&expression))
+                        compiled = CompileMember(*member);
                     else
                         Error(expression.Line, expression.Column, "Unsupported expression in compiler");
 
@@ -270,10 +274,11 @@ namespace XJ
                     return compiled;
                 }
 
-                bool CompileUnary(const XJScriptUnaryExpr& expression)
+                bool CompileUnary(const XJScriptUnaryExpr& expression)//编译单目运算符
                 {
                     if (!expression.Operand)
                         return false;
+
                     const bool update = expression.Op == XJScriptUnaryOp::PreIncrement ||
                                         expression.Op == XJScriptUnaryOp::PreDecrement ||
                                         expression.Op == XJScriptUnaryOp::PostIncrement ||
@@ -286,6 +291,16 @@ namespace XJ
                     const auto type = TypeOf(*expression.Operand);
                     if (!type)
                         return false;
+
+                    if (*type == XJScriptValueType::Vec3)
+                    {
+                        if (expression.Op == XJScriptUnaryOp::Negate)
+                            Emit(XJScriptOpCode::Vec3Negate, 0, 0,
+                                 expression.Line, expression.Column);
+                            
+                        return true;
+                    }
+                    
                     if (expression.Op == XJScriptUnaryOp::Not)
                         Emit(XJScriptOpCode::LogicalNot, 0, 0, expression.Line, expression.Column);
                     else if (expression.Op == XJScriptUnaryOp::Negate)
@@ -293,40 +308,60 @@ namespace XJ
                                                                : XJScriptOpCode::INegate,
                              0, 0, expression.Line, expression.Column);
                     return true;
+                    
                 }
 
-                bool CompileUpdate(const XJScriptUnaryExpr& expression)
+                bool CompileUpdate(const XJScriptUnaryExpr& expression)//编译更新
                 {
-                    const auto* identifier = dynamic_cast<const XJScriptIdentifierExpr*>(expression.Operand.get());
-                    if (!identifier)
+                    if (!expression.Operand)
+                        return false;
+                
+                    const auto target = ResolveLValue(*expression.Operand);
+                
+                    if (!target)
                     {
-                        Error(expression.Line, expression.Column, "Unsupported increment target");
+                        Error(expression.Line, expression.Column,
+                              "Unsupported increment target");
                         return false;
                     }
-                    const auto binding = mSemantic.Bindings.find(identifier);
-                    if (binding == mSemantic.Bindings.end())
-                        return false;
-
-                    const bool prefix = expression.Op == XJScriptUnaryOp::PreIncrement ||
-                                        expression.Op == XJScriptUnaryOp::PreDecrement;
-                    const bool increment = expression.Op == XJScriptUnaryOp::PreIncrement ||
-                                           expression.Op == XJScriptUnaryOp::PostIncrement;
-                    EmitLoad(binding->second, expression.Line, expression.Column);
+                
+                    const bool prefix =
+                        expression.Op == XJScriptUnaryOp::PreIncrement ||
+                        expression.Op == XJScriptUnaryOp::PreDecrement;
+                
+                    const bool increment =
+                        expression.Op == XJScriptUnaryOp::PreIncrement ||
+                        expression.Op == XJScriptUnaryOp::PostIncrement;
+                
+                    const bool floating =
+                        target->GetType() == XJScriptValueType::Float;
+                
+                    EmitLoadLValue(*target, expression.Line, expression.Column);
+                
                     if (!prefix)
-                        Emit(XJScriptOpCode::Dup, 0, 0, expression.Line, expression.Column);
-
-                    const bool floating = binding->second.Type == XJScriptValueType::Float;
-                    Emit(XJScriptOpCode::PushConstant,
-                         AddConstant(floating ? XJScriptConstant{1.0} : XJScriptConstant{int64_t{1}}),
-                         0, expression.Line, expression.Column);
-                    Emit(floating
-                             ? (increment ? XJScriptOpCode::FAdd : XJScriptOpCode::FSubtract)
-                             : (increment ? XJScriptOpCode::IAdd : XJScriptOpCode::ISubtract),
-                         0, 0, expression.Line, expression.Column);
-
+                        Emit(XJScriptOpCode::Dup, 0, 0,
+                             expression.Line, expression.Column);
+                        
+                    Emit(
+                        XJScriptOpCode::PushConstant,
+                        AddConstant(floating
+                            ? XJScriptConstant{1.0}
+                            : XJScriptConstant{int64_t{1}}),
+                        0, expression.Line, expression.Column);
+                        
+                    Emit(
+                        floating
+                            ? (increment ? XJScriptOpCode::FAdd
+                                         : XJScriptOpCode::FSubtract)
+                            : (increment ? XJScriptOpCode::IAdd
+                                         : XJScriptOpCode::ISubtract),
+                        0, 0, expression.Line, expression.Column);
+                            
                     if (prefix)
-                        Emit(XJScriptOpCode::Dup, 0, 0, expression.Line, expression.Column);
-                    EmitStore(binding->second, expression.Line, expression.Column);
+                        Emit(XJScriptOpCode::Dup, 0, 0,
+                             expression.Line, expression.Column);
+                        
+                    EmitStoreLValue(*target, expression.Line, expression.Column);
                     return true;
                 }
 
@@ -349,6 +384,31 @@ namespace XJ
                     const bool floating = *leftType == XJScriptValueType::Float ||
                                           *rightType == XJScriptValueType::Float;
                     XJScriptOpCode op = XJScriptOpCode::IAdd;
+                    
+                    if (*leftType == XJScriptValueType::Vec3 ||
+                        *rightType == XJScriptValueType::Vec3)
+                    {
+                        if (expression.Op == XJScriptBinaryOp::Equal ||
+                            expression.Op == XJScriptBinaryOp::NotEqual)
+                        {
+                            Emit(
+                                EqualityOp(
+                                    XJScriptValueType::Vec3,
+                                    expression.Op == XJScriptBinaryOp::NotEqual),
+                                0, 0, expression.Line, expression.Column);
+                            return true;
+                        }
+                    
+                        const auto op = ArithmeticOp(
+                            expression.Op, *leftType, *rightType);
+                        
+                        if (!op)
+                            return false;
+                        
+                        Emit(*op, 0, 0, expression.Line, expression.Column);
+                        return true;
+                    }
+
                     switch (expression.Op)
                     {
                         case XJScriptBinaryOp::Add:
@@ -399,18 +459,20 @@ namespace XJ
                     return true;
                 }
 
-                bool CompileAssignment(const XJScriptAssignmentExpr& expression)
+                bool CompileAssignment(const XJScriptAssignmentExpr& expression)//编译作业
                 {
-                    const auto* identifier = dynamic_cast<const XJScriptIdentifierExpr*>(expression.Target.get());
-                    if (!identifier || !expression.Value)
+                    if (!expression.Target || !expression.Value)
+                        return false;
+                
+                    const auto target = ResolveLValue(*expression.Target);
+                
+                    if (!target)
                     {
-                        Error(expression.Line, expression.Column, "Unsupported assignment target");
+                        Error(expression.Line, expression.Column,
+                              "Unsupported assignment target");
                         return false;
                     }
-                    const auto binding = mSemantic.Bindings.find(identifier);
-                    if (binding == mSemantic.Bindings.end())
-                        return false;
-
+                
                     if (expression.Op == XJScriptAssignmentOp::Assign)
                     {
                         if (!CompileExpression(*expression.Value))
@@ -418,27 +480,44 @@ namespace XJ
                     }
                     else
                     {
-                        EmitLoad(binding->second, expression.Line, expression.Column);
+                        EmitLoadLValue(*target, expression.Line, expression.Column);
+                    
                         if (!CompileExpression(*expression.Value))
                             return false;
-                        const bool floating = binding->second.Type == XJScriptValueType::Float;
-                        XJScriptOpCode op = XJScriptOpCode::IAdd;
-                        if (expression.Op == XJScriptAssignmentOp::AddAssign)
-                            op = binding->second.Type == XJScriptValueType::String
-                                ? XJScriptOpCode::StringConcat
-                                : (floating ? XJScriptOpCode::FAdd : XJScriptOpCode::IAdd);
-                        else if (expression.Op == XJScriptAssignmentOp::SubtractAssign)
-                            op = floating ? XJScriptOpCode::FSubtract : XJScriptOpCode::ISubtract;
-                        else if (expression.Op == XJScriptAssignmentOp::MultiplyAssign)
-                            op = floating ? XJScriptOpCode::FMultiply : XJScriptOpCode::IMultiply;
-                        else if (expression.Op == XJScriptAssignmentOp::DivideAssign)
-                            op = floating ? XJScriptOpCode::FDivide : XJScriptOpCode::IDivide;
-                        Emit(op, 0, 0, expression.Line, expression.Column);
+                    
+                        const auto right = EffectiveType(*expression.Value);
+                        if (!right)
+                            return false;
+                    
+                        XJScriptBinaryOp operation = XJScriptBinaryOp::Add;
+                    
+                        switch (expression.Op)
+                        {
+                            case XJScriptAssignmentOp::AddAssign:
+                                operation = XJScriptBinaryOp::Add; break;
+                            case XJScriptAssignmentOp::SubtractAssign:
+                                operation = XJScriptBinaryOp::Subtract; break;
+                            case XJScriptAssignmentOp::MultiplyAssign:
+                                operation = XJScriptBinaryOp::Multiply; break;
+                            case XJScriptAssignmentOp::DivideAssign:
+                                operation = XJScriptBinaryOp::Divide; break;
+                            default:
+                                return false;
+                        }
+                    
+                        const auto op = ArithmeticOp(
+                            operation, target->GetType(), *right);
+                        
+                        if (!op)
+                            return false;
+                        
+                        Emit(*op, 0, 0, expression.Line, expression.Column);
                     }
-
-                    // 赋值本身也是表达式；复制一份给 Store 消费，原值留在栈顶。
-                    Emit(XJScriptOpCode::Dup, 0, 0, expression.Line, expression.Column);
-                    EmitStore(binding->second, expression.Line, expression.Column);
+                
+                    Emit(XJScriptOpCode::Dup, 0, 0,
+                         expression.Line, expression.Column);
+                    
+                    EmitStoreLValue(*target, expression.Line, expression.Column);
                     return true;
                 }
 
@@ -458,10 +537,12 @@ namespace XJ
                     if (call->second.Kind == XJScriptCallKind::ScriptMethod)
                         Emit(XJScriptOpCode::CallScript, ToOperand(call->second.MethodIndex),
                              ToOperand(expression.Arguments.size()), expression.Line, expression.Column);
-                else
-                    Emit(XJScriptOpCode::CallNative,
-                         static_cast<int32_t>(XJScriptNativeFunctionId::TransformRotateY),
-                         ToOperand(expression.Arguments.size()), expression.Line, expression.Column);
+                    else
+                        Emit(XJScriptOpCode::CallNative,
+                            static_cast<int32_t>(call->second.NativeId),
+                            ToOperand(expression.Arguments.size()),
+                            expression.Line,
+                            expression.Column);
                     return true;
                 }
 
@@ -483,6 +564,17 @@ namespace XJ
 
                 XJScriptOpCode EqualityOp(XJScriptValueType type, bool notEqual) const
                 {
+
+                    if (type == XJScriptValueType::Vec3)
+                        return notEqual
+                            ? XJScriptOpCode::Vec3NotEqual
+                            : XJScriptOpCode::Vec3Equal;
+
+                    if (type == XJScriptValueType::EntityRef)
+                        return notEqual
+                            ? XJScriptOpCode::EntityRefNotEqual
+                            : XJScriptOpCode::EntityRefEqual;
+
                     if (type == XJScriptValueType::Float)
                         return notEqual ? XJScriptOpCode::FNotEqual : XJScriptOpCode::FEqual;
                     if (type == XJScriptValueType::Bool)
@@ -517,7 +609,7 @@ namespace XJ
                     return ToOperand(mModule.Constants.size() - 1);
                 }
 
-                size_t Emit(XJScriptOpCode op, int32_t a, int32_t b, size_t line, size_t column)
+                size_t Emit(XJScriptOpCode op, int32_t a, int32_t b, size_t line, size_t column)//发射
                 {
                     mCurrentFunction->Code.push_back({
                         op, a, b, static_cast<uint32_t>(line), static_cast<uint32_t>(column)
@@ -555,6 +647,158 @@ namespace XJ
                         : static_cast<int32_t>(value);
                 }
 
+                struct LValue//左值
+                {
+                    XJScriptResolvedSymbol Symbol;
+                    std::optional<uint32_t> Component;
+
+                    XJScriptValueType GetType() const
+                    {
+                        return Component ? XJScriptValueType::Float:Symbol.Type;
+                    }
+                };
+
+                std::optional<LValue> ResolveLValue(const XJScriptExpr& expression)//解析左值
+                {
+                    const XJScriptIdentifierExpr* identifier = dynamic_cast<const XJScriptIdentifierExpr*>(&expression);
+
+                    std::optional<uint32_t> component;
+
+                    if(const auto* member = dynamic_cast<const XJScriptMemberExpr*>(&expression))
+                    {
+                        component = XJGetVec3ComponentIndex(member->Member);
+                        identifier = dynamic_cast<const XJScriptIdentifierExpr*>(member->Object.get());
+
+                        if(!component)
+                            return std::nullopt;
+                    }
+
+                    if(!identifier)
+                        return std::nullopt;
+
+                    const auto found = mSemantic.Bindings.find(identifier);
+
+                    if(found == mSemantic.Bindings.end() ||
+                        !found->second.Writable||
+                        found->second.Kind == XJScriptSymbolKind::BuiltinObject)
+                    {
+                        return std::nullopt;
+                    }
+
+                    if(component && found->second.Type != XJScriptValueType::Vec3)
+                        return std::nullopt;
+
+                    return LValue(found->second, component);
+                }
+
+                void EmitLoadLValue(const LValue& value, size_t line, size_t colum)//加载存储左值
+                {
+                    EmitLoad(value.Symbol, line, colum);
+
+                    if(value.Component)
+                    {
+                        Emit(XJScriptOpCode::Vec3GetComponent,
+                             static_cast<int32_t>(*value.Component), 0, line, colum);
+                    }
+                }
+
+                void EmitStoreLValue(const LValue& value, size_t line, size_t column)//发射存储左值
+                {
+                    if (!value.Component)
+                    {
+                        EmitStore(value.Symbol, line, column);
+                        return;
+                    }
+                
+                    XJScriptOpCode op = XJScriptOpCode::StoreLocalVec3Component;
+                
+                    if (value.Symbol.Kind == XJScriptSymbolKind::Field)
+                        op = XJScriptOpCode::StoreFieldVec3Component;
+                    else if (value.Symbol.Kind == XJScriptSymbolKind::Parameter)
+                        op = XJScriptOpCode::StoreArgumentVec3Component;
+                
+                    Emit(
+                        op,
+                        ToOperand(value.Symbol.Index),
+                        static_cast<int32_t>(*value.Component),
+                        line, column);
+                }
+
+                bool CompileMember(const XJScriptMemberExpr& EXPRESSION)//分量读取
+                {
+                    const auto component = XJGetVec3ComponentIndex(EXPRESSION.Member);
+
+                    if(!component || !EXPRESSION.Object || !CompileExpression(*EXPRESSION.Object))
+                    {
+                        Error(EXPRESSION.Line, EXPRESSION.Column,
+                              "Invalid Vec3 member access");
+                        return false;
+                    }
+
+                    Emit(
+                        XJScriptOpCode::Vec3GetComponent,
+                        static_cast<int32_t>(*component),
+                        0,
+                        EXPRESSION.Line,
+                        EXPRESSION.Column);
+
+                    return true;
+                }
+                std::optional<XJScriptOpCode> ArithmeticOp(XJScriptBinaryOp operation, XJScriptValueType left, XJScriptValueType right) const//通用算术指令选择
+                {
+                    using Op = XJScriptOpCode;
+                    using Type = XJScriptValueType;
+
+                    if (left == Type::Vec3 || right == Type::Vec3)
+                    {
+                        if (left == Type::Vec3 && right == Type::Vec3)
+                        {
+                            if (operation == XJScriptBinaryOp::Add)
+                                return Op::Vec3Add;
+                            if (operation == XJScriptBinaryOp::Subtract)
+                                return Op::Vec3Subtract;
+                        }
+                    
+                        if (operation == XJScriptBinaryOp::Multiply)
+                        {
+                            if (left == Type::Vec3 && right == Type::Float)
+                                return Op::Vec3MultiplyFloat;
+                            if (left == Type::Float && right == Type::Vec3)
+                                return Op::FloatMultiplyVec3;
+                        }
+                    
+                        if (operation == XJScriptBinaryOp::Divide &&
+                            left == Type::Vec3 && right == Type::Float)
+                        {
+                            return Op::Vec3DivideFloat;
+                        }
+                    
+                        return std::nullopt;
+                    }
+                
+                    if (operation == XJScriptBinaryOp::Add &&
+                        left == Type::String && right == Type::String)
+                    {
+                        return Op::StringConcat;
+                    }
+                
+                    const bool floating = left == Type::Float || right == Type::Float;
+                
+                    switch (operation)
+                    {
+                        case XJScriptBinaryOp::Add:
+                            return floating ? Op::FAdd : Op::IAdd;
+                        case XJScriptBinaryOp::Subtract:
+                            return floating ? Op::FSubtract : Op::ISubtract;
+                        case XJScriptBinaryOp::Multiply:
+                            return floating ? Op::FMultiply : Op::IMultiply;
+                        case XJScriptBinaryOp::Divide:
+                            return floating ? Op::FDivide : Op::IDivide;
+                        default:
+                            return std::nullopt;
+                    }
+                }
+
                 const XJScriptClassDecl& mDeclaration;
                 const XJScriptSemanticResult& mSemantic;
                 XJScriptCompileResult mResult;
@@ -567,6 +811,7 @@ namespace XJ
         const XJScriptClassDecl& declaration,
         const XJScriptSemanticResult& semantic)
     {
+        
         Compiler compiler(declaration, semantic);
         return compiler.Run();
     }

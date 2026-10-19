@@ -2,6 +2,7 @@
 #define XJ_SCRIPT_NATIVE_INVOKER_H
 
 #include "Script/Bytecode/XJScriptBytecode.h"
+#include "Script/Native/XJScriptNativeCatalogue.h"
 
 #include <optional>
 #include <span>
@@ -87,6 +88,12 @@ namespace XJ
                 std::span<
                     const XJScriptValue> arguments,
                 XJScriptNativeContext& context) = 0;
+
+            virtual std::shared_ptr<const XJScriptNativeCatalogue>
+            GetNativeCatalogue() const
+            {
+                return XJGetInitialNativeCatalogue();
+            }
 
         protected:
             XJScriptNativeInvoker() = default;

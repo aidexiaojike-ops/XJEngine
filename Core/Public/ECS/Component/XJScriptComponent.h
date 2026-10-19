@@ -134,7 +134,7 @@ namespace XJ
                 XJScriptSlot* slot = FindSlot(slotId);
                 if (!slot || fieldId == 0)
                     return false;
-                if (const auto* real = std::get_if<double>(&value); real && !std::isfinite(*real))
+                if (!XJIsSerializableScriptValue(value))
                     return false;
                 slot->FieldOverrides[fieldId] = std::move(value);
                 mRuntimeRevision = NextRuntimeRevision();

@@ -28,7 +28,7 @@ namespace XJ
                 case XJScriptValueType::Float: return 'f';
                 case XJScriptValueType::String: return 's';
             }
-            return '?';
+            return XJGetScriptTypeCode(type);
         }
 
         std::string MethodSignature(const XJScriptMethodDecl& method)
@@ -45,7 +45,7 @@ namespace XJ
             if (std::holds_alternative<bool>(value)) return XJScriptValueType::Bool;
             if (std::holds_alternative<int64_t>(value)) return XJScriptValueType::Int;
             if (std::holds_alternative<double>(value)) return XJScriptValueType::Float;
-            return XJScriptValueType::String;
+            return XJGetScriptValueType(value);
         }
 
         bool IsNumeric(XJScriptValueType type)
@@ -56,13 +56,24 @@ namespace XJ
         class Analyzer
         {
             public:
-                explicit Analyzer(const XJScriptClassDecl& declaration)
-                    : mDeclaration(declaration)
+                Analyzer(const XJScriptClassDecl& declaration,
+                   std::shared_ptr<const XJScriptNativeCatalogue> catalogue)
+                   : mDeclaration(declaration)
                 {
+                   mResult.NativeCatalogue = catalogue
+                       ? std::move(catalogue)
+                       : XJGetInitialNativeCatalogue();
                 }
-
+                
                 XJScriptSemanticResult Run()
                 {
+                    if (!mResult.NativeCatalogue)
+                    {
+                        Error(mDeclaration.Line, mDeclaration.Column,
+                              "Native catalogue is unavailable");
+                        return std::move(mResult);
+                    }
+
                     // 先收集类级符号，使方法可以调用后声明方法并参与重载解析。
                     CollectFields();
                     CollectMethods();
@@ -72,6 +83,7 @@ namespace XJ
 
                     return std::move(mResult);
                 }
+
 
             private:
                 using Scope = std::unordered_map<std::string, XJScriptResolvedSymbol>;
@@ -83,29 +95,96 @@ namespace XJ
             
             void CollectFields()
             {
+                
                 // 字段先全部进入类作用域，使方法声明顺序不影响字段可见性。
                 for (size_t index = 0; index < mDeclaration.Fields.size(); ++index)
+                {
+                    const auto& field = mDeclaration.Fields[index];
+                    XJScriptResolvedSymbol symbol{
+                        .Kind = XJScriptSymbolKind::Field,
+                        .Type = field.Type,
+                        .Index = index,
+                        .Writable = true
+                    };
+                    if (!mFields.emplace(field.Name, symbol).second)
+                        Error(field.Line, field.Column, "Duplicate field declaration");
+                
+                    if (!field.DefaultValue)
                     {
-                        const auto& field = mDeclaration.Fields[index];
-                        XJScriptResolvedSymbol symbol{
-                            .Kind = XJScriptSymbolKind::Field,
-                            .Type = field.Type,
-                            .Index = index,
-                            .Writable = true
-                        };
-                        if (!mFields.emplace(field.Name, symbol).second)
-                            Error(field.Line, field.Column, "Duplicate field declaration");
+                        Error(field.Line, field.Column, "Field requires an initializer");
+                        continue;
+                    }
+                
+                    if (LiteralType(*field.DefaultValue) != field.Type)
+                        Error(field.Line, field.Column, "Field initializer type does not match field type");
                     
-                        if (!field.DefaultValue)
-                        {
-                            Error(field.Line, field.Column, "Field requires an initializer");
-                            continue;
-                        }
-                    
-                        if (LiteralType(*field.DefaultValue) != field.Type)
-                            Error(field.Line, field.Column, "Field initializer type does not match field type");
+                    if (field.Type == XJScriptValueType::EntityRef &&
+                        field.Access == XJScriptAccess::Public)
+                    {
+                        Error(field.Line, field.Column,
+                              "EntityRef cannot be a public serialized field");
+                    }
+                    if (field.DefaultValue &&
+                        !XJIsScriptConstantValue(*field.DefaultValue))
+                    {
+                        Error(field.Line, field.Column,
+                              "Field default is not a valid constant");
                     }
                 }
+            }
+
+            ExpressionInfo ResolveNativeCall(
+                const XJScriptCallExpr& expression,
+                std::string_view objectName,
+                std::string_view memberName,
+                const std::vector<XJScriptValueType>& arguments)
+            {
+                const auto* descriptor = mResult.NativeCatalogue->Resolve(
+                    objectName, memberName, arguments);
+                
+                if (!descriptor)
+                {
+                    Error(expression.Line, expression.Column,
+                          "No exact native overload matches the call");
+                    return {};
+                }
+            
+                XJScriptResolvedCall call;
+                call.Kind = XJScriptCallKind::NativeFunction;
+                call.ReturnType = descriptor->ReturnType;
+                call.NativeId = descriptor->Id;
+            
+                mResult.Calls[&expression] = call;
+                return Record(expression, descriptor->ReturnType, false);
+            }
+
+            ExpressionInfo AnalyzeMember(const XJScriptMemberExpr& expression)
+            {
+                if (!expression.Object)
+                    return {};
+            
+                const ExpressionInfo object = AnalyzeExpression(*expression.Object);
+                const auto component = XJGetVec3ComponentIndex(expression.Member);
+            
+                if (!object.Valid)
+                    return {};
+            
+                if (object.Type != XJScriptValueType::Vec3 || !component)
+                {
+                    Error(expression.Line, expression.Column,
+                          "Only Vec3.x/y/z member access is supported");
+                    return {};
+                }
+            
+                const bool directVariable =
+                    dynamic_cast<const XJScriptIdentifierExpr*>(
+                        expression.Object.get()) != nullptr;
+                    
+                return Record(
+                    expression,
+                    XJScriptValueType::Float,
+                    object.Writable && directVariable);
+            }
             
             void CollectMethods()
             {
@@ -310,11 +389,9 @@ namespace XJ
                         return AnalyzeAssignment(*assignment);
                     if (const auto* call = dynamic_cast<const XJScriptCallExpr*>(&expression))
                         return AnalyzeCall(*call);
-                
-                    if (dynamic_cast<const XJScriptMemberExpr*>(&expression))
+                    if (const auto* member = dynamic_cast<const XJScriptMemberExpr*>(&expression))
                     {
-                        Error(expression.Line, expression.Column, "Member access must be part of a supported call");
-                        return {};
+                        return AnalyzeMember(*member);
                     }
                 
                     Error(expression.Line, expression.Column, "Unsupported expression");
@@ -328,6 +405,10 @@ namespace XJ
                     const ExpressionInfo operand = AnalyzeExpression(*expression.Operand);
                     if (!operand.Valid)
                         return {};
+                    if (operand.Type == XJScriptValueType::Vec3 &&
+                        (expression.Op == XJScriptUnaryOp::Positive ||
+                         expression.Op == XJScriptUnaryOp::Negate))
+                        return Record(expression, XJScriptValueType::Vec3, false);
                 
                     if (expression.Op == XJScriptUnaryOp::Not)
                     {
@@ -344,67 +425,127 @@ namespace XJ
                         Error(expression.Line, expression.Column, "Unary numeric operator requires int or float");
                     if (update && !operand.Writable)
                         Error(expression.Line, expression.Column, "Increment target is not writable");
+
                     return Record(expression, operand.Type, false);
                 }
             
-            ExpressionInfo AnalyzeBinary(const XJScriptBinaryExpr& expression)
-            {
-                // 两侧先独立推导类型，再根据运算符决定结果类型和需要的数值提升。
-                if (!expression.Left || !expression.Right)
-                        return {};
-                    const ExpressionInfo left = AnalyzeExpression(*expression.Left);
-                    const ExpressionInfo right = AnalyzeExpression(*expression.Right);
-                    if (!left.Valid || !right.Valid)
-                        return {};
-                
-                    if (expression.Op == XJScriptBinaryOp::LogicalAnd ||
-                        expression.Op == XJScriptBinaryOp::LogicalOr)
-                    {
-                        RequireExact(*expression.Left, left, XJScriptValueType::Bool,
-                                     "Logical operator requires bool operands");
-                        RequireExact(*expression.Right, right, XJScriptValueType::Bool,
-                                     "Logical operator requires bool operands");
-                        return Record(expression, XJScriptValueType::Bool, false);
-                    }
-                
-                    if (expression.Op == XJScriptBinaryOp::Equal || expression.Op == XJScriptBinaryOp::NotEqual)
-                    {
-                        if (left.Type == XJScriptValueType::Void || right.Type == XJScriptValueType::Void)
+                ExpressionInfo AnalyzeBinary(const XJScriptBinaryExpr& expression)
+                {
+                    // 两侧先独立推导类型，再根据运算符决定结果类型和需要的数值提升。
+                    if (!expression.Left || !expression.Right)
+                            return {};
+                        const ExpressionInfo left = AnalyzeExpression(*expression.Left);
+                        const ExpressionInfo right = AnalyzeExpression(*expression.Right);
+                        if (!left.Valid || !right.Valid)
+                            return {};
+
+                        if (left.Type == XJScriptValueType::Vec3 ||
+                            right.Type == XJScriptValueType::Vec3)
+                            return AnalyzeVectorBinary(expression, left, right);
+
+                        if (expression.Op == XJScriptBinaryOp::LogicalAnd ||
+                            expression.Op == XJScriptBinaryOp::LogicalOr)
                         {
-                            Error(expression.Line, expression.Column, "Void expressions cannot be compared");
+                            RequireExact(*expression.Left, left, XJScriptValueType::Bool,
+                                         "Logical operator requires bool operands");
+                            RequireExact(*expression.Right, right, XJScriptValueType::Bool,
+                                         "Logical operator requires bool operands");
+                            return Record(expression, XJScriptValueType::Bool, false);
+                        }
+                                                if (expression.Op == XJScriptBinaryOp::Equal || expression.Op == XJScriptBinaryOp::NotEqual)
+                        {
+                            if (left.Type == XJScriptValueType::Void || right.Type == XJScriptValueType::Void)
+                            {
+                                Error(expression.Line, expression.Column, "Void expressions cannot be compared");
+                                return {};
+                            }
+                            if (left.Type != right.Type)
+                            {
+                                if (left.Type == XJScriptValueType::Int && right.Type == XJScriptValueType::Float)
+                                    MarkConversion(*expression.Left);
+                                else if (left.Type == XJScriptValueType::Float && right.Type == XJScriptValueType::Int)
+                                    MarkConversion(*expression.Right);
+                                else
+                                    Error(expression.Line, expression.Column, "Equality operands have incompatible types");
+                            }
+                            return Record(expression, XJScriptValueType::Bool, false);
+                        }
+                                                const bool comparison = expression.Op == XJScriptBinaryOp::Less ||
+                                                expression.Op == XJScriptBinaryOp::LessEqual ||
+                                                expression.Op == XJScriptBinaryOp::Greater ||
+                                                expression.Op == XJScriptBinaryOp::GreaterEqual;
+                        const auto numericType = ResolveNumericOperands(*expression.Left, left,
+                                                                        *expression.Right, right);
+                        if (!numericType)
+                        {
+                            if (expression.Op == XJScriptBinaryOp::Add &&
+                                left.Type == XJScriptValueType::String && right.Type == XJScriptValueType::String)
+                                return Record(expression, XJScriptValueType::String, false);
+                            Error(expression.Line, expression.Column, "Operator requires compatible numeric operands");
                             return {};
                         }
-                        if (left.Type != right.Type)
+                        return Record(expression, comparison ? XJScriptValueType::Bool : *numericType, false);
+                }
+
+                ExpressionInfo AnalyzeVectorBinary(
+                    const XJScriptBinaryExpr& expression,
+                    const ExpressionInfo& left,
+                    const ExpressionInfo& right)
+                {
+                    const bool leftVector = left.Type == XJScriptValueType::Vec3;
+                    const bool rightVector = right.Type == XJScriptValueType::Vec3;
+                
+                    const auto promoteScalar = [&](const XJScriptExpr& source,
+                                                   XJScriptValueType type)
+                    {
+                        if (type == XJScriptValueType::Int)
+                            MarkConversion(source);
+                    };
+                
+                    if (leftVector && rightVector)
+                    {
+                        if (expression.Op == XJScriptBinaryOp::Add ||
+                            expression.Op == XJScriptBinaryOp::Subtract)
                         {
-                            if (left.Type == XJScriptValueType::Int && right.Type == XJScriptValueType::Float)
-                                MarkConversion(*expression.Left);
-                            else if (left.Type == XJScriptValueType::Float && right.Type == XJScriptValueType::Int)
-                                MarkConversion(*expression.Right);
-                            else
-                                Error(expression.Line, expression.Column, "Equality operands have incompatible types");
+                            return Record(expression, XJScriptValueType::Vec3, false);
                         }
-                        return Record(expression, XJScriptValueType::Bool, false);
+                    
+                        if (expression.Op == XJScriptBinaryOp::Equal ||
+                            expression.Op == XJScriptBinaryOp::NotEqual)
+                        {
+                            return Record(expression, XJScriptValueType::Bool, false);
+                        }
                     }
                 
-                    const bool comparison = expression.Op == XJScriptBinaryOp::Less ||
-                                            expression.Op == XJScriptBinaryOp::LessEqual ||
-                                            expression.Op == XJScriptBinaryOp::Greater ||
-                                            expression.Op == XJScriptBinaryOp::GreaterEqual;
-                    const auto numericType = ResolveNumericOperands(*expression.Left, left,
-                                                                    *expression.Right, right);
-                    if (!numericType)
+                    if (expression.Op == XJScriptBinaryOp::Multiply)
                     {
-                        if (expression.Op == XJScriptBinaryOp::Add &&
-                            left.Type == XJScriptValueType::String && right.Type == XJScriptValueType::String)
-                            return Record(expression, XJScriptValueType::String, false);
-                        Error(expression.Line, expression.Column, "Operator requires compatible numeric operands");
-                        return {};
+                        if (leftVector && IsNumeric(right.Type))
+                        {
+                            promoteScalar(*expression.Right, right.Type);
+                            return Record(expression, XJScriptValueType::Vec3, false);
+                        }
+                    
+                        if (rightVector && IsNumeric(left.Type))
+                        {
+                            promoteScalar(*expression.Left, left.Type);
+                            return Record(expression, XJScriptValueType::Vec3, false);
+                        }
                     }
-                    return Record(expression, comparison ? XJScriptValueType::Bool : *numericType, false);
+                
+                    if (expression.Op == XJScriptBinaryOp::Divide &&
+                        leftVector && IsNumeric(right.Type))
+                    {
+                        promoteScalar(*expression.Right, right.Type);
+                        return Record(expression, XJScriptValueType::Vec3, false);
+                    }
+                
+                    Error(expression.Line, expression.Column,
+                          "Unsupported Vec3 operator or operand types");
+                    return {};
                 }
             
-            ExpressionInfo AnalyzeAssignment(const XJScriptAssignmentExpr& expression)
-            {
+                ExpressionInfo AnalyzeAssignment(const XJScriptAssignmentExpr& expression)
+                {
                 // 普通赋值允许 int -> float；复合赋值还必须保证运算结果可写回目标。
                 if (!expression.Target || !expression.Value)
                         return {};
@@ -420,13 +561,36 @@ namespace XJ
                         RequireConversion(*expression.Value, value, target.Type,
                                           "Assigned value type does not match target type");
                     }
+                    else if (target.Type == XJScriptValueType::Vec3)
+                    {
+                        const bool vectorOperation =
+                            expression.Op == XJScriptAssignmentOp::AddAssign ||
+                            expression.Op == XJScriptAssignmentOp::SubtractAssign;
+                    
+                        if (vectorOperation)
+                        {
+                            RequireExact(
+                                *expression.Value, value,
+                                XJScriptValueType::Vec3,
+                                "Vec3 +=/-= requires Vec3");
+                        }
+                        else if (!IsNumeric(value.Type))
+                        {
+                            Error(expression.Line, expression.Column,
+                                  "Vec3 *= or /= requires a scalar");
+                        }
+                        else if (value.Type == XJScriptValueType::Int)
+                        {
+                            MarkConversion(*expression.Value);
+                        }
+                    }
                     else if (target.Type == XJScriptValueType::String &&
                              expression.Op == XJScriptAssignmentOp::AddAssign)
                     {
                         RequireExact(*expression.Value, value, XJScriptValueType::String,
                                      "String += requires string value");
                     }
-                    else
+                    else 
                     {
                         if (!IsNumeric(target.Type) || !IsNumeric(value.Type))
                         {
@@ -445,90 +609,94 @@ namespace XJ
                             MarkConversion(*expression.Value);
                         }
                     }
+                    
                     return Record(expression, target.Type, false);
                 }
             
-            ExpressionInfo AnalyzeCall(const XJScriptCallExpr& expression)
-            {
-                // 调用先确定全部实参类型，再执行脚本重载或内建函数的精确匹配。
-                std::vector<XJScriptValueType> argumentTypes;
+                ExpressionInfo AnalyzeCall(const XJScriptCallExpr& expression)
+                {
+                    std::vector<XJScriptValueType> argumentTypes;           
+
                     for (const auto& argument : expression.Arguments)
                     {
-                        const ExpressionInfo info = argument ? AnalyzeExpression(*argument) : ExpressionInfo{};
+                        const ExpressionInfo info =
+                            argument ? AnalyzeExpression(*argument) : ExpressionInfo{};         
+
                         if (!info.Valid)
-                            return {};
+                            return {};          
+
                         argumentTypes.push_back(info.Type);
-                    }
-                
-                    if (const auto* identifier = dynamic_cast<const XJScriptIdentifierExpr*>(expression.Callee.get()))
-                        return ResolveScriptCall(expression, *identifier, argumentTypes);
-                
-                    if (const auto* member = dynamic_cast<const XJScriptMemberExpr*>(expression.Callee.get()))
+                    }           
+
+                    if (const auto* identifier =
+                            dynamic_cast<const XJScriptIdentifierExpr*>(
+                                expression.Callee.get()))
                     {
-                        const auto* object = dynamic_cast<const XJScriptIdentifierExpr*>(member->Object.get());
-                        if (object && object->Name == "Transform" && member->Member == "RotateY")
+                        if (identifier->Name == "Vec3")
+                            return ResolveNativeCall(
+                                expression, "", "Vec3", argumentTypes);         
+
+                        return ResolveScriptCall(
+                            expression, *identifier, argumentTypes);
+                    }           
+
+                    if (const auto* member =
+                            dynamic_cast<const XJScriptMemberExpr*>(
+                                expression.Callee.get()))
+                    {
+                        const auto* object =
+                            dynamic_cast<const XJScriptIdentifierExpr*>(
+                                member->Object.get());          
+
+                        if (!object)
                         {
-                            if (ResolveSymbol(object->Name))
-                            {
-                                Error(object->Line, object->Column,
-                                      "Transform builtin is shadowed by a script variable");
-                                return {};
-                            }
-                            if (argumentTypes.size() != 1 || argumentTypes[0] != XJScriptValueType::Float)
-                            {
-                                Error(expression.Line, expression.Column,
-                                      "Transform.RotateY requires exactly one float argument");
-                                return {};
-                            }
-                            mResult.Bindings[object] = {
-                                .Kind = XJScriptSymbolKind::BuiltinObject,
-                                .Type = XJScriptValueType::Void,
-                                .Index = 0,
-                                .Writable = false
-                            };
-                            mResult.Calls[&expression] = {
-                                .Kind = XJScriptCallKind::TransformRotateY,
-                                .ReturnType = XJScriptValueType::Void,
-                                .MethodIndex = 0
-                            };
-                            return Record(expression, XJScriptValueType::Void, false);
-                        }
-                        Error(expression.Line, expression.Column, "Unknown builtin member call");
-                        return {};
-                    }
-                
-                    Error(expression.Line, expression.Column, "Expression is not callable");
+                            Error(expression.Line, expression.Column,
+                                  "Native call requires a builtin namespace");
+                            return {};
+                        }           
+
+                        if (ResolveSymbol(object->Name))
+                        {
+                            Error(object->Line, object->Column,
+                                  "Builtin namespace is shadowed by a variable");
+                            return {};
+                        }           
+
+                        mResult.Bindings[object] = {
+                            .Kind = XJScriptSymbolKind::BuiltinObject,
+                            .Type = XJScriptValueType::Void,
+                            .Index = 0,
+                            .Writable = false
+                        };          
+
+                        return ResolveNativeCall(
+                            expression, object->Name, member->Member, argumentTypes);
+                    }           
+
+                    Error(expression.Line, expression.Column,
+                          "Expression is not callable");
                     return {};
                 }
-            
-                ExpressionInfo ResolveScriptCall(const XJScriptCallExpr& expression,
-                                                 const XJScriptIdentifierExpr& identifier,
-                                                 const std::vector<XJScriptValueType>& arguments)
+                ExpressionInfo ResolveScriptCall(
+                    const XJScriptCallExpr& expression,
+                    const XJScriptIdentifierExpr& identifier,
+                    const std::vector<XJScriptValueType>& arguments)
                 {
-                    // 重载只允许参数类型完全匹配；这里刻意不应用 int -> float 提升。
                     const auto overloads = mMethodOverloads.find(identifier.Name);
                     if (overloads == mMethodOverloads.end())
                     {
                         Error(identifier.Line, identifier.Column, "Unknown method: " + identifier.Name);
                         return {};
                     }
-                
                     std::optional<size_t> match;
                     for (size_t methodIndex : overloads->second)
                     {
                         const auto& method = mDeclaration.Methods[methodIndex];
                         if (method.Parameters.size() != arguments.size())
                             continue;
-                    
                         bool exact = true;
                         for (size_t index = 0; index < arguments.size(); ++index)
-                        {
-                            if (method.Parameters[index].Type != arguments[index])
-                            {
-                                exact = false;
-                                break;
-                            }
-                        }
+                            exact = exact && method.Parameters[index].Type == arguments[index];
                         if (!exact)
                             continue;
                         if (match)
@@ -538,14 +706,12 @@ namespace XJ
                         }
                         match = methodIndex;
                     }
-                
                     if (!match)
                     {
                         Error(expression.Line, expression.Column,
                               "No exact overload matches method call: " + identifier.Name);
                         return {};
                     }
-                
                     const auto& method = mDeclaration.Methods[*match];
                     mResult.Calls[&expression] = {
                         .Kind = XJScriptCallKind::ScriptMethod,
@@ -554,92 +720,90 @@ namespace XJ
                     };
                     return Record(expression, method.ReturnType, false);
                 }
-            
-            std::optional<XJScriptResolvedSymbol> ResolveSymbol(const std::string& name) const
-            {
-                // 词法作用域从内向外查找；局部/参数可以遮蔽类字段。
-                for (auto scope = mScopes.rbegin(); scope != mScopes.rend(); ++scope)
-                    {
-                        const auto found = scope->find(name);
-                        if (found != scope->end())
-                            return found->second;
+
+                std::optional<XJScriptResolvedSymbol> ResolveSymbol(const std::string& name) const
+                {
+                    // 词法作用域从内向外查找；局部/参数可以遮蔽类字段。
+                    for (auto scope = mScopes.rbegin(); scope != mScopes.rend(); ++scope)
+                        {
+                            const auto found = scope->find(name);
+                            if (found != scope->end())
+                                return found->second;
+                        }
+                        const auto field = mFields.find(name);
+                        return field != mFields.end() ? std::optional<XJScriptResolvedSymbol>{field->second}
+                                                      : std::nullopt;
                     }
-                    const auto field = mFields.find(name);
-                    return field != mFields.end() ? std::optional<XJScriptResolvedSymbol>{field->second}
-                                                  : std::nullopt;
-                }
-            
-                ExpressionInfo Record(const XJScriptExpr& expression, XJScriptValueType type, bool writable)
-                {
-                    mResult.ExpressionTypes[&expression] = type;
-                    return {type, true, writable};
-                }
-            
-                bool RequireExact(const XJScriptExpr& expression, const ExpressionInfo& actual,
-                                  XJScriptValueType expected, const char* message)
-                {
-                    if (actual.Valid && actual.Type == expected)
-                        return true;
-                    Error(expression.Line, expression.Column, message);
-                    return false;
-                }
-            
-                bool RequireConversion(const XJScriptExpr& expression, const ExpressionInfo& actual,
-                                       XJScriptValueType expected, const char* message)
-                {
-                    if (!actual.Valid)
+                
+                    ExpressionInfo Record(const XJScriptExpr& expression, XJScriptValueType type, bool writable)
+                    {
+                        mResult.ExpressionTypes[&expression] = type;
+                        return {type, true, writable};
+                    }
+                
+                    bool RequireExact(const XJScriptExpr& expression, const ExpressionInfo& actual,
+                                      XJScriptValueType expected, const char* message)
+                    {
+                        if (actual.Valid && actual.Type == expected)
+                            return true;
+                        Error(expression.Line, expression.Column, message);
                         return false;
-                    if (actual.Type == expected)
-                        return true;
-                    if (actual.Type == XJScriptValueType::Int && expected == XJScriptValueType::Float)
-                    {
-                        // 转换记录挂在源表达式上，字节码编译器据此发出 IntToFloat。
-                        MarkConversion(expression);
-                        return true;
                     }
-                    Error(expression.Line, expression.Column, message);
-                    return false;
-                }
-            
-            std::optional<XJScriptValueType> ResolveNumericOperands(
-                    const XJScriptExpr& leftExpression, const ExpressionInfo& left,
-                    const XJScriptExpr& rightExpression, const ExpressionInfo& right)
-            {
-                // 混合数值运算统一提升到 float，并把转换精确记录到 int 子表达式。
-                if (!left.Valid || !right.Valid || !IsNumeric(left.Type) || !IsNumeric(right.Type))
-                        return std::nullopt;
-                    if (left.Type == right.Type)
-                        return left.Type;
-                    if (left.Type == XJScriptValueType::Int)
-                        MarkConversion(leftExpression);
-                    if (right.Type == XJScriptValueType::Int)
-                        MarkConversion(rightExpression);
-                    return XJScriptValueType::Float;
-                }
-
-                void MarkConversion(const XJScriptExpr& expression)
+                
+                    bool RequireConversion(const XJScriptExpr& expression, const ExpressionInfo& actual,
+                                           XJScriptValueType expected, const char* message)
+                    {
+                        if (!actual.Valid)
+                            return false;
+                        if (actual.Type == expected)
+                            return true;
+                        if (actual.Type == XJScriptValueType::Int && expected == XJScriptValueType::Float)
+                        {
+                            // 转换记录挂在源表达式上，字节码编译器据此发出 IntToFloat。
+                            MarkConversion(expression);
+                            return true;
+                        }
+                        Error(expression.Line, expression.Column, message);
+                        return false;
+                    }
+                
+                std::optional<XJScriptValueType> ResolveNumericOperands(
+                        const XJScriptExpr& leftExpression, const ExpressionInfo& left,
+                        const XJScriptExpr& rightExpression, const ExpressionInfo& right)
                 {
-                    mResult.Conversions[&expression] = XJScriptImplicitConversion::IntToFloat;
-                }
+                    // 混合数值运算统一提升到 float，并把转换精确记录到 int 子表达式。
+                    if (!left.Valid || !right.Valid || !IsNumeric(left.Type) || !IsNumeric(right.Type))
+                            return std::nullopt;
+                        if (left.Type == right.Type)
+                            return left.Type;
+                        if (left.Type == XJScriptValueType::Int)
+                            MarkConversion(leftExpression);
+                        if (right.Type == XJScriptValueType::Int)
+                            MarkConversion(rightExpression);
+                        return XJScriptValueType::Float;
+                    }
 
-                const XJScriptClassDecl& mDeclaration;
-                XJScriptSemanticResult mResult;
-                std::unordered_map<std::string, XJScriptResolvedSymbol> mFields;
-                std::unordered_map<std::string, std::vector<size_t>> mMethodOverloads;
-                std::vector<Scope> mScopes;
-                const XJScriptMethodDecl* mCurrentMethod = nullptr;
-                size_t mNextLocalIndex = 0;
-                std::vector<XJScriptValueType> mCurrentLocalTypes;
-            };
+                    void MarkConversion(const XJScriptExpr& expression)
+                    {
+                        mResult.Conversions[&expression] = XJScriptImplicitConversion::IntToFloat;
+                    }
 
-        
-
+                    const XJScriptClassDecl& mDeclaration;
+                    XJScriptSemanticResult mResult;
+                    std::unordered_map<std::string, XJScriptResolvedSymbol> mFields;
+                    std::unordered_map<std::string, std::vector<size_t>> mMethodOverloads;
+                    std::vector<Scope> mScopes;
+                    const XJScriptMethodDecl* mCurrentMethod = nullptr;
+                    size_t mNextLocalIndex = 0;
+                    std::vector<XJScriptValueType> mCurrentLocalTypes;
+                };
     }
 
     XJScriptSemanticResult XJScriptSemanticAnalyzer::Analyze(
-        const XJScriptClassDecl& declaration)
+        const XJScriptClassDecl& declaration,
+        std::shared_ptr<const XJScriptNativeCatalogue> catalogue)
     {
-        Analyzer analyzer(declaration);
+        Analyzer analyzer(declaration, std::move(catalogue));
         return analyzer.Run();
     }
 }

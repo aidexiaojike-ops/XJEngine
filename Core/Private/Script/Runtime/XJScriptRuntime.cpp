@@ -1,6 +1,7 @@
 #include "Script/Runtime/XJScriptRuntime.h"
 
 #include "Script/Bytecode/XJScriptBytecodeVerifier.h"
+#include "Script/Runtime/XJScriptValueNativeInvoker.h"
 
 #include <cmath>
 #include <limits>
@@ -14,10 +15,7 @@ namespace XJ
     {
         XJScriptValueType ValueType(const XJScriptValue& value)
         {
-            if (std::holds_alternative<bool>(value)) return XJScriptValueType::Bool;
-            if (std::holds_alternative<int64_t>(value)) return XJScriptValueType::Int;
-            if (std::holds_alternative<double>(value)) return XJScriptValueType::Float;
-            return XJScriptValueType::String;
+            return XJGetScriptValueType(value);
         }
 
         bool CheckedAdd(int64_t left, int64_t right, int64_t& result)
@@ -81,6 +79,12 @@ namespace XJ
                   mLimits(limits),
                   mScratch(instance.mScratch)
             {
+                mCatalogue = mModule.NativeCatalogue
+                    ? mModule.NativeCatalogue
+                    : XJGetInitialNativeCatalogue();                
+
+                mHostCatalogue = mNativeInvoker.GetNativeCatalogue();
+
                 mScratch.Begin();
             }
 
@@ -137,8 +141,7 @@ namespace XJ
                 {
                     if (ValueType(arguments[index]) != function.ParameterTypes[index])
                         return Fail(XJScriptRuntimeErrorCode::InvalidArguments, "Function argument type mismatch");
-                    if (const auto* real = std::get_if<double>(&arguments[index]);
-                        real && !std::isfinite(*real))
+                    if (!XJIsWellFormedScriptValue(arguments[index]))
                         return Fail(XJScriptRuntimeErrorCode::NonFiniteFloat,
                                     "Function argument contains a non-finite float");
                 }
@@ -227,7 +230,7 @@ namespace XJ
                     case XJScriptOpCode::FMultiply: FloatBinary([](double a, double b) { return a * b; }); break;
                     case XJScriptOpCode::FDivide: DivideFloat(); break;
                     case XJScriptOpCode::StringConcat: ConcatStrings(); break;
-
+                    //约定值
                     case XJScriptOpCode::IEqual: Compare<int64_t>([](auto a, auto b) { return a == b; }); break;
                     case XJScriptOpCode::INotEqual: Compare<int64_t>([](auto a, auto b) { return a != b; }); break;
                     case XJScriptOpCode::ILess: Compare<int64_t>([](auto a, auto b) { return a < b; }); break;
@@ -244,7 +247,7 @@ namespace XJ
                     case XJScriptOpCode::BoolNotEqual: Compare<bool>([](auto a, auto b) { return a != b; }); break;
                     case XJScriptOpCode::StringEqual: Compare<std::string>([](const auto& a, const auto& b) { return a == b; }); break;
                     case XJScriptOpCode::StringNotEqual: Compare<std::string>([](const auto& a, const auto& b) { return a != b; }); break;
-
+                    //跳跃
                     case XJScriptOpCode::Jump: frame.Pc = static_cast<uint32_t>(instruction.A); break;
                     case XJScriptOpCode::JumpIfFalse: ConditionalJump(instruction, false); break;
                     case XJScriptOpCode::JumpIfTrue: ConditionalJump(instruction, true); break;
@@ -252,13 +255,78 @@ namespace XJ
                     case XJScriptOpCode::CallNative: CallNative(instruction); break;
                     case XJScriptOpCode::ReturnVoid: ReturnVoid(); break;
                     case XJScriptOpCode::ReturnValue: ReturnValue(); break;
-                    case XJScriptOpCode::Count:
-                        Fail(XJScriptRuntimeErrorCode::InvalidBytecode, "Invalid opcode"); break;
+                    case XJScriptOpCode::Count:Fail(XJScriptRuntimeErrorCode::InvalidBytecode, "Invalid opcode"); break;
+                    //向量计算
+                    case XJScriptOpCode::Vec3GetComponent:
+                        ReadVectorComponent(static_cast<uint32_t>(instruction.A));
+                        break;
+
+                    case XJScriptOpCode::StoreFieldVec3Component:
+                        StoreVectorComponent(
+                            mInstance.mFields[static_cast<size_t>(instruction.A)],
+                            static_cast<uint32_t>(instruction.B));
+                        break;
+                        
+                    case XJScriptOpCode::StoreArgumentVec3Component:
+                        StoreVectorComponent(
+                            frame.Arguments[static_cast<size_t>(instruction.A)],
+                            static_cast<uint32_t>(instruction.B));
+                        break;
+                        
+                    case XJScriptOpCode::StoreLocalVec3Component:
+                    {
+                        auto& local = frame.Locals[static_cast<size_t>(instruction.A)];
+                    
+                        if (!local)
+                            Fail(XJScriptRuntimeErrorCode::InvalidBytecode,
+                                 "Vec3 component target is uninitialized");
+                        else
+                            StoreVectorComponent(
+                                *local, static_cast<uint32_t>(instruction.B));
+                        break;
+                    }
+
+                    case XJScriptOpCode::Vec3Negate:
+                        NegateVector(); break;
+                    case XJScriptOpCode::Vec3Add:
+                        AddSubtractVector(false); break;
+                    case XJScriptOpCode::Vec3Subtract:
+                        AddSubtractVector(true); break;
+                    case XJScriptOpCode::Vec3MultiplyFloat:
+                        ScaleVector(false, false); break;
+                    case XJScriptOpCode::FloatMultiplyVec3:
+                        ScaleVector(true, false); break;
+                    case XJScriptOpCode::Vec3DivideFloat:
+                        ScaleVector(false, true); break;
+
+                    case XJScriptOpCode::Vec3Equal:
+                        Compare<XJScriptVec3>(
+                            [](const auto& a, const auto& b) { return a == b; });
+                        break;
+                    case XJScriptOpCode::Vec3NotEqual:
+                        Compare<XJScriptVec3>(
+                            [](const auto& a, const auto& b) { return a != b; });
+                        break;
+                    case XJScriptOpCode::EntityRefEqual:
+                        Compare<XJScriptEntityRef>(
+                            [](const auto& a, const auto& b) { return a == b; });
+                        break;
+                    case XJScriptOpCode::EntityRefNotEqual:
+                        Compare<XJScriptEntityRef>(
+                            [](const auto& a, const auto& b) { return a != b; });
+                        break;
                 }
             }
 
             bool Push(XJScriptValue value)
             {
+                if (!XJIsWellFormedScriptValue(value))
+                {
+                    return Fail(
+                        XJScriptRuntimeErrorCode::NonFiniteFloat,
+                        "Invalid or non-finite script value");
+                }
+
                 XJScriptFrameScratch& frame = CurrentFrame();
                 const uint32_t capacity = mInstance.mFunctionMaxStackDepths[frame.FunctionIndex];
                 if (frame.Stack.size() >= capacity)
@@ -419,19 +487,79 @@ namespace XJ
                     PushFrame(static_cast<uint32_t>(instruction.A), mScratch.CallArguments);
             }
 
-            void CallNative(const XJScriptInstruction& instruction)
+            void CallNative(const XJScriptInstruction& instruction)//调用原生代码
             {
-                if (!PopArguments(static_cast<uint32_t>(instruction.B))) return;
+                const auto id = static_cast<XJScriptNativeFunctionId>(instruction.A);
+                const auto* expected = mCatalogue ? mCatalogue->FindById(id) : nullptr;
+            
+                const auto* actual =
+                    mHostCatalogue ? mHostCatalogue->FindById(id) : nullptr;
+            
+                if (!expected || !actual ||
+                    expected->Id != actual->Id ||
+                    expected->ObjectName != actual->ObjectName ||
+                    expected->MemberName != actual->MemberName ||
+                    expected->ReturnType != actual->ReturnType ||
+                    expected->ParameterTypes != actual->ParameterTypes ||
+                    instruction.B < 0 ||
+                    static_cast<size_t>(instruction.B) !=
+                        expected->ParameterTypes.size())
+                {
+                    Fail(
+                        XJScriptRuntimeErrorCode::NativeInvocationFailed,
+                        "Native signature is unavailable or incompatible");
+                    return;
+                }
+            
+                if (!PopArguments(static_cast<uint32_t>(instruction.B)))
+                    return;
+            
+                for (size_t index = 0;
+                     index < mScratch.CallArguments.size(); ++index)
+                {
+                    const auto& value = mScratch.CallArguments[index];
+                
+                    if (ValueType(value) != expected->ParameterTypes[index] ||
+                        !XJIsWellFormedScriptValue(value))
+                    {
+                        Fail(
+                            XJScriptRuntimeErrorCode::InvalidArguments,
+                            "Native argument type or value is invalid");
+                        return;
+                    }
+                }
+            
                 const auto result = mNativeInvoker.Invoke(
-                    static_cast<XJScriptNativeFunctionId>(instruction.A), mScratch.CallArguments, mNativeContext);
+                    id, mScratch.CallArguments, mNativeContext);
+                
                 if (!result.IsValid())
                 {
                     FailNative(result);
                     return;
                 }
-                if (result.ReturnValue)
-                    Fail(XJScriptRuntimeErrorCode::NativeInvocationFailed,
-                         "Void native returned an unexpected value");
+            
+                if (expected->ReturnType == XJScriptValueType::Void)
+                {
+                    if (result.ReturnValue)
+                    {
+                        Fail(
+                            XJScriptRuntimeErrorCode::NativeInvocationFailed,
+                            "Void native returned a value");
+                    }
+                    return;
+                }
+            
+                if (!result.ReturnValue ||
+                    ValueType(*result.ReturnValue) != expected->ReturnType ||
+                    !XJIsWellFormedScriptValue(*result.ReturnValue))
+                {
+                    Fail(
+                        XJScriptRuntimeErrorCode::NativeInvocationFailed,
+                        "Native return type or value is invalid");
+                    return;
+                }
+            
+                Push(*result.ReturnValue);
             }
 
             void ReturnVoid()
@@ -499,6 +627,117 @@ namespace XJ
                 mResult.Error->NativeErrorCode = native.ErrorCode;
             }
 
+            void ReadVectorComponent(uint32_t component)//读取向量组件
+            {
+                const auto vector = PopTyped<XJScriptVec3>();
+                if (!vector)
+                    return;
+            
+                const auto number = XJReadVec3Component(*vector, component);
+            
+                if (!number)
+                {
+                    Fail(XJScriptRuntimeErrorCode::InvalidBytecode,
+                         "Invalid Vec3 component");
+                    return;
+                }
+            
+                Push(*number);
+            }
+
+            void StoreVectorComponent(//存储向量组件
+                XJScriptValue& destination,
+                uint32_t component)
+            {
+                const auto number = PopTyped<double>();
+                if (!number)
+                    return;
+            
+                const auto* original = std::get_if<XJScriptVec3>(&destination);
+            
+                if (!original)
+                {
+                    Fail(XJScriptRuntimeErrorCode::TypeMismatch,
+                         "Vec3 component target has the wrong type");
+                    return;
+                }
+            
+                auto changed = *original;
+            
+                if (!XJWriteVec3Component(changed, component, *number))
+                {
+                    Fail(XJScriptRuntimeErrorCode::InvalidBytecode,
+                         "Invalid Vec3 component write");
+                    return;
+                }
+            
+                destination = changed;
+            }
+
+            void NegateVector()//否定向量
+            {
+                const auto vector = PopTyped<XJScriptVec3>();
+                if (vector)
+                    Push(XJScriptVec3{-vector->X, -vector->Y, -vector->Z});
+            }
+
+            void AddSubtractVector(bool subtract)//添加或减去向量
+            {
+                const auto right = PopTyped<XJScriptVec3>();
+                const auto left = PopTyped<XJScriptVec3>();
+            
+                if (!left || !right)
+                    return;
+            
+                Push(subtract
+                    ? XJScriptVec3{
+                        left->X - right->X,
+                        left->Y - right->Y,
+                        left->Z - right->Z}
+                    : XJScriptVec3{
+                        left->X + right->X,
+                        left->Y + right->Y,
+                        left->Z + right->Z});
+            }
+
+            void ScaleVector(bool scalarFirst, bool divide)//缩放向量
+            {
+                std::optional<XJScriptVec3> vector;
+                std::optional<double> scalar;
+            
+                if (scalarFirst)
+                {
+                    vector = PopTyped<XJScriptVec3>();
+                    scalar = PopTyped<double>();
+                }
+                else
+                {
+                    scalar = PopTyped<double>();
+                    vector = PopTyped<XJScriptVec3>();
+                }
+            
+                if (!vector || !scalar)
+                    return;
+            
+                if (divide && *scalar == 0.0)
+                {
+                    Fail(XJScriptRuntimeErrorCode::DivideByZero,
+                         "Vec3 division by zero");
+                    return;
+                }
+            
+                // 直接逐分量除，不先计算倒数，避免极小除数的中间溢出。
+                Push(divide
+                    ? XJScriptVec3{
+                        vector->X / *scalar,
+                        vector->Y / *scalar,
+                        vector->Z / *scalar}
+                    : XJScriptVec3{
+                        vector->X * *scalar,
+                        vector->Y * *scalar,
+                        vector->Z * *scalar});
+            }
+
             XJScriptInstance& mInstance;
             std::shared_ptr<const XJScriptBytecodeModule> mModuleOwner;
             const XJScriptBytecodeModule& mModule;
@@ -509,6 +748,8 @@ namespace XJ
             XJScriptExecutionResult mResult;
             uint32_t mCurrentFunction = 0;
             uint32_t mCurrentInstruction = 0;
+            std::shared_ptr<const XJScriptNativeCatalogue> mCatalogue;
+            std::shared_ptr<const XJScriptNativeCatalogue> mHostCatalogue;
     };
 
     bool XJScriptInstance::SetField(uint32_t index, XJScriptValue value)
@@ -518,7 +759,7 @@ namespace XJ
             return false;
         if (ValueType(value) != mModule->Fields[index].Type)
             return false;
-        if (const auto* real = std::get_if<double>(&value); real && !std::isfinite(*real))
+        if (!XJIsWellFormedScriptValue(value))
             return false;
         mFields[index] = std::move(value);
         return true;
@@ -621,8 +862,7 @@ namespace XJ
                 instance.mLastError = error;
                 return result;
             }
-            if (const auto* real = std::get_if<double>(&instance.mFields[index]);
-                real && !std::isfinite(*real))
+            if (!XJIsWellFormedScriptValue(instance.mFields[index]))
             {
                 XJScriptRuntimeError error;
                 error.Code = XJScriptRuntimeErrorCode::NonFiniteFloat;
@@ -637,7 +877,10 @@ namespace XJ
         instance.mExecuting = true;
         try
         {
-            XJScriptMachine machine(instance, nativeInvoker, nativeContext, limits);
+            XJScriptValueNativeInvoker valueInvoker(nativeInvoker);
+
+            XJScriptMachine machine(
+                instance, valueInvoker, nativeContext, limits);
             result = machine.Run(functionIndex, arguments);
         }
         catch (const std::exception& exception)

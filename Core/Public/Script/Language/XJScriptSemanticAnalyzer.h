@@ -2,7 +2,9 @@
 #define XJ_SCRIPT_SEMANTIC_ANALYZER_H
 
 #include "Script/Language/XJScriptAst.h"
+#include "Script/Native/XJScriptNativeCatalogue.h"
 
+#include <memory>
 #include <cstddef>
 #include <unordered_map>
 #include <vector>
@@ -30,8 +32,9 @@ namespace XJ
     enum class XJScriptCallKind
     {
         ScriptMethod,
-        TransformRotateY
+        NativeFunction
     };
+
 
     struct XJScriptResolvedSymbol
     {
@@ -46,6 +49,7 @@ namespace XJ
         XJScriptCallKind Kind;
         XJScriptValueType ReturnType;
         size_t MethodIndex = 0;
+        XJScriptNativeFunctionId NativeId = XJScriptNativeFunctionId::TransformRotateY;
     };
 
     struct XJScriptSemanticResult
@@ -91,6 +95,8 @@ namespace XJ
         {
             return Diagnostics.empty();
         }
+
+        std::shared_ptr<const XJScriptNativeCatalogue> NativeCatalogue;
     };
 
     class XJScriptSemanticAnalyzer
@@ -99,7 +105,8 @@ namespace XJ
             // 前置条件：declaration 来自无 Parser 诊断的 AST。
             // AST 必须保持存活且不可修改，直到所有旁表被 Compiler 消费完毕。
             static XJScriptSemanticResult Analyze(
-                const XJScriptClassDecl& declaration);
+                const XJScriptClassDecl& declaration,
+                std::shared_ptr<const XJScriptNativeCatalogue> catalogue = {});
     };
 }
 

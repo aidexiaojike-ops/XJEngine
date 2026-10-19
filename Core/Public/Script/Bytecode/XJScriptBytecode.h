@@ -2,6 +2,8 @@
 #define XJ_SCRIPT_BYTECODE_H
 
 #include "Script/Language/XJScriptAst.h"
+#include "Script/Native/XJScriptNativeCatalogue.h"
+#include <memory>
 
 #include <cstdint>
 #include <optional>
@@ -43,12 +45,21 @@ namespace XJ
         //return; 
         ReturnVoid,
         ReturnValue,
+        Vec3GetComponent,
+        StoreFieldVec3Component,
+        StoreArgumentVec3Component,
+        StoreLocalVec3Component,
+        Vec3Negate,
+        Vec3Add,
+        Vec3Subtract,
+        Vec3MultiplyFloat,
+        FloatMultiplyVec3,
+        Vec3DivideFloat,
+        Vec3Equal,
+        Vec3NotEqual,
+        EntityRefEqual,
+        EntityRefNotEqual,
         Count
-    };
-
-    enum class XJScriptNativeFunctionId : int32_t
-    {
-        TransformRotateY = 0
     };
 
     struct XJScriptStackEffect
@@ -128,6 +139,23 @@ namespace XJ
 
             case XJScriptOpCode::Count:
                 break;
+            case XJScriptOpCode::Vec3GetComponent:
+            case XJScriptOpCode::Vec3Negate:
+                return {1, 0, false};
+            case XJScriptOpCode::StoreFieldVec3Component:
+            case XJScriptOpCode::StoreArgumentVec3Component:
+            case XJScriptOpCode::StoreLocalVec3Component:
+                return {1, -1, false};
+            case XJScriptOpCode::Vec3Add:
+            case XJScriptOpCode::Vec3Subtract:
+            case XJScriptOpCode::Vec3MultiplyFloat:
+            case XJScriptOpCode::FloatMultiplyVec3:
+            case XJScriptOpCode::Vec3DivideFloat:
+            case XJScriptOpCode::Vec3Equal:
+            case XJScriptOpCode::Vec3NotEqual:
+            case XJScriptOpCode::EntityRefEqual:
+            case XJScriptOpCode::EntityRefNotEqual:
+                return {2, -1, false};
         }
         return {};
     }
@@ -140,9 +168,6 @@ namespace XJ
             false
         };
     }
-
-    using XJScriptConstant = std::variant<bool, int64_t, double, std::string>;
-    using XJScriptValue = XJScriptConstant;
 
     struct XJScriptInstruction
     {
@@ -178,6 +203,7 @@ namespace XJ
 
     struct XJScriptBytecodeModule//模型
     {
+        std::shared_ptr<const XJScriptNativeCatalogue> NativeCatalogue;
         std::string ClassName;
         std::vector<XJScriptConstant> Constants;
         std::vector<XJScriptBytecodeField> Fields;

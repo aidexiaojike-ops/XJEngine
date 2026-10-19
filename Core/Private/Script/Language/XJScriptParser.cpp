@@ -30,7 +30,7 @@ namespace XJ
                 case XJScriptValueType::Float: return 'f';
                 case XJScriptValueType::String: return 's';
             }
-            return '?';
+            return XJGetScriptTypeCode(type);
         }
 
         std::string BuildMethodSignature(const XJScriptMethodDecl& method)
@@ -216,8 +216,12 @@ namespace XJ
 
             bool IsValueTypeToken(TokenType type) const
             {
-                return type == TokenType::Bool || type == TokenType::Int ||
-                       type == TokenType::Float || type == TokenType::StringType;
+                return  type == TokenType::Bool ||
+                        type == TokenType::Int ||
+                        type == TokenType::Float ||
+                        type == TokenType::StringType ||
+                        type == TokenType::Vec3Type ||
+                        type == TokenType::EntityRefType;
             }
 
             std::optional<XJScriptValueType> ParseType(bool allowVoid)
@@ -233,6 +237,12 @@ namespace XJ
                     Error(Previous(), "Void is not valid here");
                     return std::nullopt;
                 }
+                if (Match(TokenType::Vec3Type))
+                    return XJScriptValueType::Vec3;             
+
+                if (Match(TokenType::EntityRefType))
+                    return XJScriptValueType::EntityRef;
+
                 Error(Current(), "Expected type name");
                 return std::nullopt;
             }
@@ -306,10 +316,28 @@ namespace XJ
                 if (!mFieldNames.insert(field.Name).second)
                     Error(name, "Duplicate field declaration");
                 declaration.Fields.push_back(std::move(field));
+
+                if (type == XJScriptValueType::EntityRef && field.Access == XJScriptAccess::Public)
+                {
+                    Error(name,
+                          "EntityRef is runtime-only; use a UUID string for public fields");
+                }
             }
 
             std::optional<XJScriptLiteralValue> ParseFieldLiteral(XJScriptValueType expectedType)
             {
+                if (expectedType == XJScriptValueType::Vec3)
+                    return ParseVec3FieldLiteral();
+
+                if (expectedType == XJScriptValueType::EntityRef)
+                {
+                    if (Match(TokenType::Null))
+                        return XJScriptLiteralValue{XJScriptEntityRef{}};
+                
+                    Error(Current(), "EntityRef field default must be null");
+                    return std::nullopt;
+                }
+
                 // 字段默认值在 Parser 阶段限制为字面量，确保未来可直接序列化到场景。
                 const bool negative = Match(TokenType::Minus);
                 const XJScriptToken token = Current();
@@ -472,6 +500,59 @@ namespace XJ
                 return block;
             }
 
+            std::optional<XJScriptLiteralValue> ParseVec3FieldLiteral()//向量 字段
+            {
+                if (!Consume(TokenType::Vec3Type, "Expected Vec3"))
+                    return std::nullopt;
+            
+                if (!Consume(TokenType::LeftParen, "Expected '(' after Vec3"))
+                    return std::nullopt;
+            
+                double values[3]{};
+            
+                for (uint32_t index = 0; index < 3; ++index)
+                {
+                    const bool negative = Match(TokenType::Minus);
+                    const auto* token = Consume(
+                        TokenType::Number,
+                        "Vec3 field default requires float literals");
+                    
+                    if (!token)
+                        return std::nullopt;
+                    
+                    auto literal = ParseNumber(*token);
+                    
+                    if (!literal || !std::holds_alternative<double>(*literal))
+                    {
+                        Error(*token, "Vec3 constructor requires float arguments");
+                        return std::nullopt;
+                    }
+                
+                    values[index] = std::get<double>(*literal);
+                    if (negative)
+                        values[index] = -values[index];
+                
+                    if (index != 2 &&
+                        !Consume(TokenType::Comma, "Expected ',' in Vec3"))
+                    {
+                        return std::nullopt;
+                    }
+                }
+            
+                if (!Consume(TokenType::RightParen, "Expected ')' after Vec3"))
+                    return std::nullopt;
+            
+                const XJScriptVec3 vector{values[0], values[1], values[2]};
+            
+                if (!vector.IsFinite())
+                {
+                    Error(Previous(), "Vec3 default must be finite");
+                    return std::nullopt;
+                }
+            
+                return XJScriptLiteralValue{vector};
+            }
+
             XJScriptStmtPtr ParseStatement()
             {
                 // 先识别有明确起始关键字的语句，其余内容按表达式语句处理。
@@ -479,7 +560,11 @@ namespace XJ
                 if (Match(TokenType::If)) return ParseIfStatement(Previous());
                 if (Match(TokenType::While)) return ParseWhileStatement(Previous());
                 if (Match(TokenType::Return)) return ParseReturnStatement(Previous());
-                if (IsValueTypeToken(Current().Type)) return ParseVariableStatement();
+                const bool vectorConstruction = Check(TokenType::Vec3Type) &&
+                    mIndex + 1 < mTokens.size() &&
+                    mTokens[mIndex + 1].Type == TokenType::LeftParen;
+                if (IsValueTypeToken(Current().Type) && !vectorConstruction)
+                    return ParseVariableStatement();
                 return ParseExpressionStatement();
             }
 
@@ -723,6 +808,13 @@ namespace XJ
             XJScriptExprPtr ParsePrimary()
             {
                 const XJScriptToken token = Current();
+
+                if (Match(TokenType::Null))
+                {
+                   auto literal = MakeNode<XJScriptLiteralExpr>(token);
+                   literal->Value = XJScriptEntityRef{};
+                   return literal;
+                }
                 if (Match(TokenType::True) || Match(TokenType::False))
                 {
                     auto literal = MakeNode<XJScriptLiteralExpr>(token);
@@ -747,7 +839,8 @@ namespace XJ
                     literal->Value = DecodeString(token.Text);
                     return literal;
                 }
-                if (Match(TokenType::Identifier))
+                if (Match(TokenType::Identifier)
+                    || Match(TokenType::Vec3Type))//产生普通调用 AST，随后由 Native 目录解析。
                 {
                     auto identifier = MakeNode<XJScriptIdentifierExpr>(token);
                     identifier->Name = token.Text;

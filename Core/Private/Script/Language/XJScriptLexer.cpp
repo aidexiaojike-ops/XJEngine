@@ -32,7 +32,10 @@ namespace XJ
             {"while", XJScriptTokenType::While},
             {"return", XJScriptTokenType::Return},
             {"true", XJScriptTokenType::True},
-            {"false", XJScriptTokenType::False}
+            {"false", XJScriptTokenType::False},
+            {"Vec3", XJScriptTokenType::Vec3Type},
+            {"EntityRef", XJScriptTokenType::EntityRefType},
+            {"null", XJScriptTokenType::Null}
         };
 
         auto digit = [](char ch) {

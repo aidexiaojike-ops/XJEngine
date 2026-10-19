@@ -285,6 +285,35 @@ add_test(NAME XJMaterialStateTests COMMAND $<TARGET_FILE:XJMaterialStateTests>)
 add_executable(XJViewportDisplayTests
     ${CMAKE_CURRENT_SOURCE_DIR}/Render/XJViewportDisplayTests.cpp
 )
+
+add_executable(XJScriptNativeContractTests
+    ${CMAKE_CURRENT_SOURCE_DIR}/Script/XJScriptNativeContractTests.cpp
+)
+
+target_include_directories(XJScriptNativeContractTests PRIVATE
+    ${PROJECT_SOURCE_DIR}/Core/Public
+    ${PROJECT_SOURCE_DIR}/ThirdParty/spdlog
+)
+
+target_compile_features(
+    XJScriptNativeContractTests PRIVATE cxx_std_20
+)
+
+add_test(
+    NAME XJScriptNativeContractTests
+    COMMAND $<TARGET_FILE:XJScriptNativeContractTests>
+)
+
 target_link_libraries(XJViewportDisplayTests PRIVATE Editor Core)
 target_compile_features(XJViewportDisplayTests PRIVATE cxx_std_20)
 add_test(NAME XJViewportDisplayTests COMMAND $<TARGET_FILE:XJViewportDisplayTests>)
+
+add_executable(XJScriptValueIntegrationTests
+    ${CMAKE_CURRENT_SOURCE_DIR}/Script/XJScriptValueIntegrationTests.cpp
+)
+target_link_libraries(XJScriptValueIntegrationTests PRIVATE Core)
+target_compile_features(XJScriptValueIntegrationTests PRIVATE cxx_std_20)
+if(MINGW AND CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+    target_compile_options(XJScriptValueIntegrationTests PRIVATE -Wa,-mbig-obj)
+endif()
+add_test(NAME XJScriptValueIntegrationTests COMMAND $<TARGET_FILE:XJScriptValueIntegrationTests>)

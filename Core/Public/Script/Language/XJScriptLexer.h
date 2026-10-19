@@ -31,7 +31,9 @@ namespace XJ
         PlusPlus, MinusMinus,
         Equal, EqualEqual, Bang, BangEqual,
         Less, LessEqual, Greater, GreaterEqual,
-        AndAnd, OrOr
+        AndAnd, OrOr,
+        //向量
+        Vec3Type, EntityRefType, Null
     };
 
     struct XJScriptToken

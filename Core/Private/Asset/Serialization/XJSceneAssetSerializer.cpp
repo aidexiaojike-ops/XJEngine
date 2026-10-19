@@ -10,7 +10,9 @@
 #include "ECS/XJScene.h"
 #include "Asset/Serialization/XJJsonIO.h"
 #include "ECS/XJReservedUUID.h"
+#include "Script/Serialization/XJScriptValueCodec.h"
 
+#include <stdexcept>
 #include <fstream>
 #include <algorithm>
 #include <charconv>
@@ -102,42 +104,22 @@ namespace XJ
 
     static nlohmann::json SerializeScriptValue(const XJScriptValue& value)
     {
-        if (const auto* boolean = std::get_if<bool>(&value))
-            return {{"type", "bool"}, {"value", *boolean}};
-        if (const auto* integer = std::get_if<int64_t>(&value))
-            return {{"type", "int"}, {"value", std::to_string(*integer)}};
-        if (const auto* real = std::get_if<double>(&value))
-            return {{"type", "float"}, {"value", *real}};
-        return {{"type", "string"}, {"value", std::get<std::string>(value)}};
+        auto encoded = XJEncodeScriptValue(value);
+    
+        if (!encoded)
+        {
+            spdlog::error("Cannot serialize runtime-only or invalid script value.");
+            throw std::invalid_argument("Invalid serialized script value");
+        }
+    
+        return std::move(*encoded);
     }
-
-    static std::optional<XJScriptValue> DeserializeScriptValue(const nlohmann::json& json)
+    
+    static std::optional<XJScriptValue> DeserializeScriptValue(
+        const nlohmann::json& json,
+        bool allowVec3)
     {
-        if (!json.is_object())
-            return std::nullopt;
-        const std::string type = JsonReadStringOr(json, "type");
-        if (!json.contains("value"))
-            return std::nullopt;
-        const auto& value = json["value"];
-
-        if (type == "bool" && value.is_boolean())
-            return XJScriptValue{value.get<bool>()};
-        if (type == "string" && value.is_string())
-            return XJScriptValue{value.get<std::string>()};
-        if (type == "float" && value.is_number())
-        {
-            const double real = value.get<double>();
-            return std::isfinite(real) ? std::optional<XJScriptValue>{real} : std::nullopt;
-        }
-        if (type == "int" && value.is_string())
-        {
-            const std::string text = value.get<std::string>();
-            int64_t integer = 0;
-            const auto parsed = std::from_chars(text.data(), text.data() + text.size(), integer);
-            if (parsed.ec == std::errc{} && parsed.ptr == text.data() + text.size())
-                return XJScriptValue{integer};
-        }
-        return std::nullopt;
+        return XJDecodeScriptValue(json, allowVec3);
     }
 
     static nlohmann::json SerializeScript(const XJSceneScriptData& script)
@@ -170,6 +152,7 @@ namespace XJ
         return {
             {"uuid", UUIDToString(script.UUID)},
             {"type", "ScriptComponent"},
+            {"schemaVersion", 2},
             {"slots", std::move(slots)}
         };
     }
@@ -189,7 +172,7 @@ namespace XJ
             {
                 if (fieldId == 0)
                     return false;
-                if (const auto* real = std::get_if<double>(&value); real && !std::isfinite(*real))
+                if (!XJIsSerializableScriptValue(value))
                     return false;
             }
         }
@@ -309,6 +292,15 @@ namespace XJ
             return result;
         }
 
+        uint64_t schemaVersion = 1;
+        if (json.contains("schemaVersion") &&
+            (!JsonReadUInt64(json["schemaVersion"], schemaVersion) ||
+             (schemaVersion != 1 && schemaVersion != 2)))
+        {
+            result.Valid = false;
+            return result;
+        }
+
         std::unordered_set<uint64_t> slotIds;
         for (const auto& slotJson : json["slots"])
         {
@@ -325,13 +317,14 @@ namespace XJ
                 result.Valid = false;
             }
 
+            
             if (slotJson.contains("overrides") && slotJson["overrides"].is_array())
             {
                 for (const auto& overrideJson : slotJson["overrides"])
                 {
                     const uint64_t fieldId = JsonReadUInt64Or(overrideJson, "fieldId", 0);
                     const auto value = overrideJson.contains("value")
-                        ? DeserializeScriptValue(overrideJson["value"])
+                        ? DeserializeScriptValue(overrideJson["value"], schemaVersion >= 2)
                         : std::nullopt;
                     if (fieldId == 0 || !value || !slot.FieldOverrides.emplace(fieldId, *value).second)
                     {
@@ -345,6 +338,7 @@ namespace XJ
                 result.Valid = false;
             }
 
+            
             result.Slots.push_back(std::move(slot));
         }
         return result;

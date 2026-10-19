@@ -38,9 +38,9 @@ PUBLIC
     EnTT::EnTT
     glm::glm-header-only
     tinygltf
+    nlohmann_json
 PRIVATE
     tinyobjloader
-    nlohmann_json
     spirv-reflect-static
 )
     

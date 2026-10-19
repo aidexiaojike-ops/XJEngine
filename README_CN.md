@@ -101,11 +101,14 @@ File -> Importer -> Asset (CPU) -> Factory -> Resource (GPU) -> Renderer
 ### 脚本系统
 
 - **语言管线**：`XJScriptLexer` -> `XJScriptParser` -> `XJScriptSemanticAnalyzer` -> `XJScriptCompiler`，生成带结构化诊断的不可变字节码模块
+- **脚本值类型**：`XJScriptValue` 统一 bool/int/float/string、`Vec3` 与 `EntityRef`。向量支持构造、算术、标量乘除、`x`/`y`/`z` 分量赋值，以及复合赋值和前后缀增减。
 - **验证运行时**：`XJScriptBytecodeVerifier` 在执行前验证模块；`XJScriptRuntime` 限制指令预算和调用深度，并处理类型错误、溢出、故障隔离、堆栈跟踪及重入保护，同时复用每个实例的调用帧/参数 scratch 存储
 - **ECS 生命周期**：`XJScriptSystem` 创建实体脚本实例，通过 `XJSystemScheduler` 调度 `OnCreate`、`OnUpdate`、`OnFixedUpdate`、`OnDestroy`
 - **运行时脚本槽同步**：`SynchronizeSlots()` 在安全点按组件/槽生命周期修订号同步实例，暂停时也可调用；场景销毁通知与执行作用域保证脚本 Owner 在延迟删除前有效。
 - **脚本组件**：`XJScriptComponent` 支持每个实体挂载多个可启停脚本槽、稳定槽 UUID，以及基于 `[[FieldId("...")]]` 的字段覆盖
 - **原生桥接**：`XJEcsScriptNativeInvoker` 向脚本暴露受控 ECS 操作，首批原生 API 包含 `Transform.RotateY`
+- **Native 调用契约**：`XJScriptNativeCatalogue` 校验函数 ID/签名并按参数类型解析调用，编译、字节码验证与运行时共用目录；`XJScriptValueNativeInvoker` 处理 `Vec3(float, float, float)` 构造，其余 ECS 调用交给宿主。
+- **值序列化**：`XJScriptValueCodec` 编解码带类型的标量/向量字段覆盖并拒绝非有限数值。`EntityRef` 使用运行时 scope/index/generation 句柄，不允许持久化或暴露为 public 字段，非空引用也不能写入字节码常量。
 - **资产与持久化**：`.xjs` 注册为 `XJAssetType::Script`，由 `XJScriptAssetCompiler`/`Loader` 编译缓存；场景保存脚本槽 ID、启用状态、资产引用和字段覆盖
 - **编辑器集成**：Content Browser 与 Inspector 支持脚本创建、编译、分配、排序、字段配置和错误验证
 
@@ -185,6 +188,8 @@ make -j$(nproc)
 
 渲染测试还覆盖材质上传状态、视口显示请求、能力与统计；脚本生命周期测试包含运行时槽同步与实体销毁处理。
 
+脚本值集成与 Native 契约测试覆盖向量表达式、原生参数/返回值验证、目录兼容性、无效字节码及值序列化。
+
 ```bash
 cmake -S . -B build -DXJ_BUILD_TESTS=ON
 cmake --build build --config Release
@@ -201,6 +206,9 @@ XJEngine/
 │   ├── Public/Geometry/     # 几何工具（AABB 包围盒、射线相交检测）
 │   ├── Public/Input/        # 输入系统（键盘/鼠标/轴向轮询）
 │   ├── Public/Script/       # Lexer/Parser/语义分析/编译器/字节码/运行时
+│   │   ├── Value/          # 统一标量、向量和实体引用值
+│   │   ├── Native/         # 原生函数签名目录
+│   │   └── Serialization/  # 带类型脚本值 JSON 编解码
 │   ├── Public/Asset/        # Asset 层（CPU）
 │   │   ├── Importer/        # 模型/纹理/材质导入器
 │   │   ├── Loader/          # 资产加载器

@@ -150,11 +150,14 @@ Swapchain
 
 #### **Script System**
 - **Language Pipeline**: `XJScriptLexer` -> `XJScriptParser` -> `XJScriptSemanticAnalyzer` -> `XJScriptCompiler` produces immutable bytecode modules with structured diagnostics
+- **Typed Script Values**: `XJScriptValue` centralizes bool/int/float/string, `Vec3`, and `EntityRef` values. Vectors support construction, arithmetic, scalar multiplication/division, and writable `x`/`y`/`z` components, including compound assignment and prefix/postfix updates.
 - **Verified Runtime**: `XJScriptBytecodeVerifier` validates modules before execution; `XJScriptRuntime` enforces instruction budgets, call-depth limits, type/overflow checks, fault isolation, stack traces, and re-entrancy protection while reusing per-instance frame/argument scratch storage
 - **ECS Lifecycle**: `XJScriptSystem` creates per-entity script instances and dispatches `OnCreate`, `OnUpdate`, `OnFixedUpdate`, and `OnDestroy` through `XJSystemScheduler`
 - **Live Script Slots**: `SynchronizeSlots()` reconciles component/slot lifecycle revisions at safe points, including while paused. Scene destruction notifications and execution scopes keep script owners valid until deferred deletion can run.
 - **Script Components**: `XJScriptComponent` supports multiple enabled/disabled script slots per entity, stable slot UUIDs, and per-field overrides keyed by `[[FieldId("...")]]`
 - **Native Bridge**: `XJEcsScriptNativeInvoker` exposes controlled ECS operations to scripts; the initial native API includes `Transform.RotateY`
+- **Native Contracts**: `XJScriptNativeCatalogue` validates function IDs/signatures and resolves calls by argument types; compilation, bytecode verification, and runtime invocation share the catalogue. `XJScriptValueNativeInvoker` handles `Vec3(float, float, float)` construction and delegates ECS calls to the host.
+- **Value Serialization**: `XJScriptValueCodec` encodes typed scalar/vector field overrides and rejects non-finite numbers. `EntityRef` uses runtime scope/index/generation handles, cannot be persisted or exposed as a public field, and non-null references cannot appear in bytecode constants.
 - **Assets and Persistence**: `.xjs` files are registered as `XJAssetType::Script`, compiled/cached by `XJScriptAssetCompiler`/`Loader`, and serialized in scenes with slot IDs, enabled state, references, and field overrides
 - **Editor Integration**: Content Browser and Inspector flows support creating, compiling, assigning, reordering, configuring, and validating script assets/components
 
@@ -321,6 +324,8 @@ The first-party CTest suite currently covers the complete scripting path: lexer,
 
 Render tests additionally cover material upload state and viewport display requests, capabilities, and statistics; script lifecycle tests include live slot synchronization and destruction handling.
 
+Script value integration and native contract tests cover vector expressions, native argument/return validation, catalogue compatibility, invalid bytecode, and value serialization.
+
 ```bash
 cmake -S . -B build -DXJ_BUILD_TESTS=ON
 cmake --build build --config Release
@@ -377,6 +382,9 @@ XJEngine/
 │   │   │   ├── Language/            # Lexer / Parser / AST / SemanticAnalyzer
 │   │   │   ├── Compiler/            # AST + semantic result -> bytecode
 │   │   │   ├── Bytecode/            # Module model + verifier
+│   │   │   ├── Value/               # Shared typed scalar/vector/entity values
+│   │   │   ├── Native/              # Native signature catalogue
+│   │   │   ├── Serialization/       # Typed script value JSON codec
 │   │   │   └── Runtime/             # VM, execution limits, native ECS bridge
 │   │   └── Render/         # 渲染相关
 │   │       ├── XJSampler.h
