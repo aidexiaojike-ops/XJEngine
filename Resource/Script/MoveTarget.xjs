@@ -1,0 +1,47 @@
+class MoveTarget : ScriptBehaviour
+{
+    public:
+        [[FieldId("1400000001")]]
+        string targetUUID = "";
+    
+        [[FieldId("1400000002")]]
+        float speed = 1.0f;
+    
+    private:
+        EntityRef target = null;
+    
+    public:
+        void OnCreate()
+        {
+            if (targetUUID == "")
+            {
+                Log.Warn("Target UUID is empty");
+                return;
+            }
+    
+            target = Scene.FindByUUID(targetUUID);
+    
+            if (!Entity.IsValid(target))
+            {
+                Log.Warn("Target was not found");
+                return;
+            }
+    
+            Log.Info("Target found");
+        }
+    
+        void OnUpdate(float dt)
+        {
+            if (!Entity.IsValid(target))
+                return;
+    
+            Vec3 position =
+                Transform.GetLocalPosition(target);
+    
+            position.y += speed * dt;
+    
+            Transform.SetLocalPosition(
+                target,
+                position);
+        }
+}

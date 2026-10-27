@@ -9,10 +9,14 @@ class Rotate : ScriptBehaviour
     
         void OnUpdate(float dt)
         {
-            if (enabled)
-            {
-                Transform.RotateY(
-                    speed * dt);
-            }
+            if (!enabled)
+                return;
+
+            Vec3 angles =
+                Transform.GetLocalEulerAngles();
+
+            angles.y += speed * dt;
+
+            Transform.SetLocalEulerAngles(angles);
         }
 };

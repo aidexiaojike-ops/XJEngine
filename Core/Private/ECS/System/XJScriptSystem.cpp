@@ -5,7 +5,11 @@
 #include "ECS/Component/XJScriptComponent.h"
 #include "ECS/XJEntity.h"
 #include "ECS/XJScene.h"
-#include "Script/Runtime/XJEcsScriptNativeInvoker.h"
+#include "Script/Runtime/XJScriptHostNativeInvoker.h"
+#include "Script/Host/XJEcsScriptEntityService.h"
+#include "Script/Host/XJEcsScriptTransformService.h"
+#include "Script/Host/XJScriptInputSnapshotService.h"
+#include "Script/Host/XJSpdlogScriptLogService.h"
 
 #include <algorithm>
 #include <stdexcept>
@@ -97,8 +101,11 @@ namespace XJ
             std::unordered_map<XJAssetHandle, XJScriptAssetCacheEntry> ScriptCache;
             XJScriptExecutionLimits Limits;
 
-            XJEcsScriptNativeInvoker DefaultInvoker;
-            XJScriptNativeInvoker* Invoker = &DefaultInvoker;
+            std::shared_ptr<XJEcsScriptEntityService> EntityService;
+            std::shared_ptr<XJScriptInputSnapshotService> InputService = std::make_shared<XJScriptInputSnapshotService>();
+            std::unique_ptr<XJScriptHostNativeInvoker> DefaultInvoker;
+            XJScriptNativeInvoker* Invoker = nullptr;
+            uint64_t HostFrameId = 0;
 
             std::vector<RuntimeScriptSlot> RuntimeSlots;
             std::vector<XJEntity*> EntityScratch;
@@ -115,6 +122,56 @@ namespace XJ
             {
                 return Scene && !SceneLifetime.expired();
             }
+            void InitializeHost()//初始化主机
+            {
+                EntityService = std::make_shared<XJEcsScriptEntityService>(*Scene);
+
+                auto transforms =
+                    std::make_shared<XJEcsScriptTransformService>(
+                        EntityService);
+
+                auto log =
+                    std::make_shared<XJSpdlogScriptLogService>();
+
+                XJScriptHostServices services;
+
+                services.Entities = EntityService;
+                services.Transforms = std::move(transforms);
+                services.Input = InputService;
+                services.Log = std::move(log);
+
+                DefaultInvoker =
+                    std::make_unique<XJScriptHostNativeInvoker>(
+                        std::move(services));
+
+                // 自定义 Invoker 不覆盖。
+                if (!Invoker)
+                    Invoker = DefaultInvoker.get();
+
+                InputService->Reset();
+            }
+
+            XJScriptNativeContext MakeNativeContext(//上下文构造函数
+                XJEntity& owner,
+                XJUUID slotId,
+                XJScriptPhase phase)
+            {
+                XJScriptNativeContext context;
+
+                context.Owner = &owner;
+
+                context.Call.Owner =
+                    EntityService->Capture(owner);
+
+                context.Call.SlotId =
+                    static_cast<uint64_t>(slotId);
+
+                context.Call.FrameId = HostFrameId;
+                context.Call.Phase = phase;
+
+                return context;
+            }
+
 
             const XJScriptSlot* FindSource(const RuntimeScriptSlot& runtime) const
             {
@@ -177,7 +234,7 @@ namespace XJ
                     XJScriptRuntime::ClearFault(runtime.Instance);
 
                     XJScene::ScriptExecutionScope executionScope(*Scene);
-                    XJScriptNativeContext context{owner};
+                    auto context = MakeNativeContext(*owner, runtime.SlotId, XJScriptPhase::Destroy);
 
                     const auto result = XJScriptRuntime::Execute(
                         runtime.Instance,
@@ -205,7 +262,6 @@ namespace XJ
                     spdlog::error("Script cleanup failed with unknown exception.");
                 }
             }
-
             void BeforeEntityDestroy(XJEntity& entity) noexcept
             {
                 XJScriptStatisticsRecorder::Scope statisticsScope(Statistics);
@@ -273,7 +329,10 @@ namespace XJ
                     if (runtime.Asset->Module->OnCreate)
                     {
                         XJScene::ScriptExecutionScope executionScope(*Scene);
-                        XJScriptNativeContext nativeContext{&entity};
+                        auto nativeContext = MakeNativeContext(
+                            entity,
+                            runtime.SlotId,
+                            XJScriptPhase::Create);
 
                         const auto result = XJScriptRuntime::Execute(
                             runtime.Instance,
@@ -417,7 +476,7 @@ namespace XJ
                         continue;
 
                     XJScene::ScriptExecutionScope executionScope(*Scene);
-                    XJScriptNativeContext context{owner};
+                    auto context = MakeNativeContext(*owner,runtime.SlotId,fixed ? XJScriptPhase::FixedUpdate : XJScriptPhase::Update);
 
                     const auto result = XJScriptRuntime::Execute(
                         runtime.Instance,
@@ -485,6 +544,7 @@ namespace XJ
             throw std::runtime_error("ScriptSystem Scene is unavailable");
         }
 
+        mImpl->InitializeHost();
         mImpl->Started = true;
         mImpl->DestroyConnection =
             mImpl->Scene->BeforeEntityDestroy()
@@ -509,6 +569,19 @@ namespace XJ
     void XJScriptSystem::OnUpdate(float deltaTime)
     {
         mImpl->Tick(deltaTime, false);
+    }
+
+    void XJScriptSystem::PublishInput(
+        const XJInputState& input,
+        bool enabled)
+    {
+        if (mImpl->Busy)
+        {
+            spdlog::error("Cannot publish script input during execution.");
+            throw std::logic_error("Script input publication is reentrant");
+        }
+
+        mImpl->InputService->Publish(input, enabled && mImpl->Started);
     }
 
     void XJScriptSystem::OnFixedUpdate(float fixedDeltaTime)
@@ -543,6 +616,14 @@ namespace XJ
         mImpl->RuntimeSlots.clear();
         mImpl->EntityScratch.clear();
         mImpl->PendingCreations.clear();
+
+        // 必须在所有 OnDestroy 执行完之后释放服务。
+        if (mImpl->Invoker == mImpl->DefaultInvoker.get())
+            mImpl->Invoker = nullptr;
+
+        mImpl->DefaultInvoker.reset();
+        mImpl->EntityService.reset();
+        mImpl->InputService->Reset();
     }
 
     void XJScriptSystem::BeginStatisticsFrame(uint64_t frameId)
@@ -552,6 +633,7 @@ namespace XJ
             spdlog::error("Cannot reset ScriptSystem statistics during execution.");
             throw std::logic_error("ScriptSystem statistics frame is reentrant");
         }
+        mImpl->HostFrameId = frameId;
 
         mImpl->Statistics.BeginFrame(frameId);
     }

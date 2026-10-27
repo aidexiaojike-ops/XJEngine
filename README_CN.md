@@ -106,7 +106,11 @@ File -> Importer -> Asset (CPU) -> Factory -> Resource (GPU) -> Renderer
 - **ECS 生命周期**：`XJScriptSystem` 创建实体脚本实例，通过 `XJSystemScheduler` 调度 `OnCreate`、`OnUpdate`、`OnFixedUpdate`、`OnDestroy`
 - **运行时脚本槽同步**：`SynchronizeSlots()` 在安全点按组件/槽生命周期修订号同步实例，暂停时也可调用；场景销毁通知与执行作用域保证脚本 Owner 在延迟删除前有效。
 - **脚本组件**：`XJScriptComponent` 支持每个实体挂载多个可启停脚本槽、稳定槽 UUID，以及基于 `[[FieldId("...")]]` 的字段覆盖
-- **原生桥接**：`XJEcsScriptNativeInvoker` 向脚本暴露受控 ECS 操作，首批原生 API 包含 `Transform.RotateY`
+- **宿主服务**：`XJScriptHostNativeInvoker` 作为默认 ECS 脚本桥接，注入实体、Transform、输入和日志服务；调用携带 Owner、槽、帧和生命周期阶段上下文，服务保持到 `OnDestroy` 完成。
+- **Transform API**：读写本地位置、欧拉角和缩放；读取世界位置、欧拉角和有损缩放，通过 `TrySetWorldPosition`/`TrySetWorldEulerAngles`/`TrySetWorldScale` 判断世界空间写入是否成功。每项操作支持当前 Owner 或显式 `EntityRef`；无效、非有限数值或父变换不可逆等失败不会部分修改状态，保留 `Transform.RotateY`。
+- **实体 API**：`Scene.FindByUUID` 接收十进制或 `0x` 十六进制 UUID 字符串；`Entity.Self`、`Entity.IsValid`、`Entity.GetUUID` 提供会话隔离的实体句柄与失效引用保护。UUID 格式有效但未找到实体时返回 null。
+- **脚本输入**：`Input.GetAxis("Horizontal"/"Vertical")` 映射 WASD/方向键，并支持具名按键的保持、按下和释放查询。编辑器仅在 Playing、Game 与应用窗口聚焦且无活动 UI 控件、文本输入或弹窗时提供输入；按键边沿仅在 Update 可见，重新获得焦点首帧抑制边沿。
+- **脚本日志**：`Log.Info`/`Warn`/`Error` 通过 spdlog 记录调用上下文，并用每槽/全局配额限制日志突发，避免刷满 Console。
 - **Native 调用契约**：`XJScriptNativeCatalogue` 校验函数 ID/签名并按参数类型解析调用，编译、字节码验证与运行时共用目录；`XJScriptValueNativeInvoker` 处理 `Vec3(float, float, float)` 构造，其余 ECS 调用交给宿主。
 - **值序列化**：`XJScriptValueCodec` 编解码带类型的标量/向量字段覆盖并拒绝非有限数值。`EntityRef` 使用运行时 scope/index/generation 句柄，不允许持久化或暴露为 public 字段，非空引用也不能写入字节码常量。
 - **资产与持久化**：`.xjs` 注册为 `XJAssetType::Script`，由 `XJScriptAssetCompiler`/`Loader` 编译缓存；场景保存脚本槽 ID、启用状态、资产引用和字段覆盖
@@ -190,6 +194,8 @@ make -j$(nproc)
 
 脚本值集成与 Native 契约测试覆盖向量表达式、原生参数/返回值验证、目录兼容性、无效字节码及值序列化。
 
+宿主服务测试覆盖实体生命周期与会话隔离、本地/世界变换及失败写入原子性、输入焦点/阶段行为、日志配额和 VM 原生分发。
+
 ```bash
 cmake -S . -B build -DXJ_BUILD_TESTS=ON
 cmake --build build --config Release
@@ -208,6 +214,7 @@ XJEngine/
 │   ├── Public/Script/       # Lexer/Parser/语义分析/编译器/字节码/运行时
 │   │   ├── Value/          # 统一标量、向量和实体引用值
 │   │   ├── Native/         # 原生函数签名目录
+│   │   ├── Host/           # 实体、Transform、输入和日志服务
 │   │   └── Serialization/  # 带类型脚本值 JSON 编解码
 │   ├── Public/Asset/        # Asset 层（CPU）
 │   │   ├── Importer/        # 模型/纹理/材质导入器
@@ -249,6 +256,8 @@ surfaceComp.AddMesh(mesh, surfaceMat);
 ```
 
 ### 脚本示例
+
+`Resource/Script/` 提供 `PlayerMove.xjs`（键盘移动）、`MoveTarget.xjs`（UUID 查找与跨实体移动）、`WorldPosition.xjs`/`WorldScale.xjs`（检查世界空间写入结果），以及旋转和生命周期示例。
 
 ```cpp
 class Rotate : ScriptBehaviour

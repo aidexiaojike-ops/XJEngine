@@ -21,6 +21,10 @@
 #include "UI/Viewports/XJEditorViewportSystem.h"
 #include "UI/Viewports/XJGamePreview.h"
 #include "Input/XJEditorInputBindings.h"
+#include "Input/XJInput.h"
+
+#include <imgui.h>
+#include <GLFW/glfw3.h>
 
 #include "Runtime/XJEditorPlayState.h"
 #include "UI/XJEditorUIState.h"
@@ -733,7 +737,49 @@ namespace XJ
         mImpl->ApplyRuntimeScriptRequests();
 
         if (mImpl->PlayController)
+        {
+            bool allowGameInput = false;
+
+            if (mImpl->Window &&
+                mImpl->Viewports &&
+                ImGui::GetCurrentContext())
+            {
+                XJGamePreview* game =
+                    mImpl->Viewports->GetGamePreview();
+
+                GLFWwindow* window =
+                    mImpl->Window->XJGetImplWindowPointer();
+
+                const bool windowFocused =
+                    window &&
+                    glfwGetWindowAttrib(
+                        window,
+                        GLFW_FOCUSED) == GLFW_TRUE;
+
+                const bool popupOpen =
+                    ImGui::IsPopupOpen(
+                        nullptr,
+                        ImGuiPopupFlags_AnyPopupId |
+                        ImGuiPopupFlags_AnyPopupLevel);
+
+                // Game 是 ImGui 窗口，不能直接用 WantCaptureKeyboard
+                // 作为唯一否决条件，否则聚焦 Game 时也可能始终禁用输入。
+                // 当前采用保守策略：任何活动控件都阻断游戏键盘。
+                allowGameInput =
+                    game &&
+                    game->IsGameInputFocused() &&
+                    windowFocused &&
+                    !ImGui::GetIO().WantTextInput &&
+                    !ImGui::IsAnyItemActive() &&
+                    !popupOpen;
+            }
+
+            mImpl->PlayController->PublishScriptInput(
+                XJInput::XJGetInstance().GetInputState(),
+                allowGameInput);
+
             mImpl->PlayController->Update(deltaTime);
+        }
 
         if (mImpl->Input)
             mImpl->Input->EndUIFrame();

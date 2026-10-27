@@ -3,6 +3,7 @@
 
 #include "Script/Bytecode/XJScriptBytecode.h"
 #include "Script/Native/XJScriptNativeCatalogue.h"
+#include "Script/Host/XJScriptHostServices.h"
 
 #include <optional>
 #include <span>
@@ -17,7 +18,11 @@ namespace XJ
     // VM 本身不直接依赖 ECS。
     struct XJScriptNativeContext
     {
+        // 暂时保留，兼容现有宿主和测试。
         XJEntity* Owner = nullptr;
+
+        // 新 Dispatcher 使用这个上下文，不从 VM 访问 ECS。
+        XJScriptCallContext Call;
     };
 
     enum class XJScriptNativeErrorCode
@@ -31,10 +36,12 @@ namespace XJ
         MissingTransform,
 
         NonFiniteInput,
-        NonFiniteResult
+        NonFiniteResult,
+
+        HostFailure
     };
 
-    struct XJScriptNativeInvokeResult
+    struct XJScriptNativeInvokeResult//脚本原生调用结果
     {
         // void Native 保持为空；有返回值的 Native 写入这里。
         std::optional<XJScriptValue>
@@ -49,22 +56,19 @@ namespace XJ
             return ErrorCode == XJScriptNativeErrorCode::None;
         }
 
-        static XJScriptNativeInvokeResult
-        Success()
+        static XJScriptNativeInvokeResult Success()
         {
             return {};
         }
 
-        static XJScriptNativeInvokeResult
-        Success(XJScriptValue value)
+        static XJScriptNativeInvokeResult Success(XJScriptValue value)//成功
         {
             XJScriptNativeInvokeResult result;
             result.ReturnValue = std::move(value);
             return result;
         }
 
-        static XJScriptNativeInvokeResult
-        Failure(XJScriptNativeErrorCode code, std::string message)
+        static XJScriptNativeInvokeResult Failure(XJScriptNativeErrorCode code, std::string message)//失败
         {
             XJScriptNativeInvokeResult result;
             result.ErrorCode = code;

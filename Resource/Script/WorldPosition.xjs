@@ -1,0 +1,28 @@
+class WorldPosition : ScriptBehaviour
+{
+    public:
+        [[FieldId("1000000001")]]
+        float speed = 0.1f;
+    
+        [[FieldId("1000000002")]]
+        bool enabled = true;
+    
+        void OnUpdate(float dt)
+        {
+            if (!enabled)
+                return;
+
+            Vec3 position =
+                Transform.GetWorldPosition();
+        
+            position.y += speed * dt;
+        
+            bool applied =
+                Transform.TrySetWorldPosition(position);
+        
+            if (!applied)
+            {
+                Log.Warn("Cannot apply world position");
+            }
+        }
+};

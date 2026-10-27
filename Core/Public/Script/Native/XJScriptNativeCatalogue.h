@@ -20,7 +20,24 @@ namespace XJ
         TransformRotateY = 0,
 
         // 数学与构造函数使用独立编号段。
-        Vec3Create = 100
+        Vec3Create = 100,
+
+        // 200..223：12 个 Transform 操作，每个包含 Owner/EntityRef 两种形式。
+        TransformApiBegin = 200,
+
+        SceneFindByUUID = 300,
+        EntityIsValid = 301,
+        EntityGetUUID = 302,
+        EntitySelf = 303,
+
+        InputGetAxis = 400,
+        InputIsKeyHeld = 401,
+        InputWasKeyPressed = 402,
+        InputWasKeyReleased = 403,
+
+        LogInfo = 500,
+        LogWarn = 501,
+        LogError = 502
     };
 
     struct XJScriptNativeDescriptor
@@ -171,7 +188,7 @@ namespace XJ
         using Type = XJScriptValueType;
         using Id = XJScriptNativeFunctionId;
 
-        return XJScriptNativeCatalogue::Build(
+        std::vector<XJScriptNativeDescriptor> descriptors
         {
             {
                 Id::TransformRotateY,
@@ -186,8 +203,145 @@ namespace XJ
                 "Vec3",
                 Type::Vec3,
                 {Type::Float, Type::Float, Type::Float}
+            },
+
+            {
+                Id::SceneFindByUUID,
+                "Scene",
+                "FindByUUID",
+                Type::EntityRef,
+                {Type::String}
+            },
+            {
+                Id::EntityIsValid,
+                "Entity",
+                "IsValid",
+                Type::Bool,
+                {Type::EntityRef}
+            },
+            {
+                Id::EntityGetUUID,
+                "Entity",
+                "GetUUID",
+                Type::String,
+                {Type::EntityRef}
+            },
+            {
+                Id::EntitySelf,
+                "Entity",
+                "Self",
+                Type::EntityRef,
+                {}
+            },
+
+            {
+                Id::InputGetAxis,
+                "Input",
+                "GetAxis",
+                Type::Float,
+                {Type::String}
+            },
+            {
+                Id::InputIsKeyHeld,
+                "Input",
+                "IsKeyHeld",
+                Type::Bool,
+                {Type::String}
+            },
+            {
+                Id::InputWasKeyPressed,
+                "Input",
+                "WasKeyPressed",
+                Type::Bool,
+                {Type::String}
+            },
+            {
+                Id::InputWasKeyReleased,
+                "Input",
+                "WasKeyReleased",
+                Type::Bool,
+                {Type::String}
+            },
+
+            {
+                Id::LogInfo,
+                "Log",
+                "Info",
+                Type::Void,
+                {Type::String}
+            },
+            {
+                Id::LogWarn,
+                "Log",
+                "Warn",
+                Type::Void,
+                {Type::String}
+            },
+            {
+                Id::LogError,
+                "Log",
+                "Error",
+                Type::Void,
+                {Type::String}
             }
-        }, error);
+        };
+
+        // 这个顺序同时是 Dispatcher 的操作编号，发布后不要重新排序。
+        constexpr const char* names[] = {
+            "GetLocalPosition",       // 0
+            "SetLocalPosition",       // 1
+            "GetWorldPosition",       // 2
+            "TrySetWorldPosition",    // 3
+
+            "GetLocalEulerAngles",    // 4
+            "SetLocalEulerAngles",    // 5
+            "GetWorldEulerAngles",    // 6
+            "TrySetWorldEulerAngles", // 7
+
+            "GetLocalScale",          // 8
+            "SetLocalScale",          // 9
+            "GetLossyWorldScale",     // 10
+            "TrySetWorldScale"        // 11
+        };
+
+        for (int operation = 0; operation < 12; ++operation)
+        {
+            const bool write = operation % 2 != 0;
+            const bool world = operation % 4 >= 2;
+
+            const Type returnType =
+                !write ? Type::Vec3 :
+                world ? Type::Bool :
+                        Type::Void;
+
+            // 每个操作都有两种形式：
+            // 偶数 ID：操作当前脚本 Owner。
+            // 奇数 ID：第一个参数显式传 EntityRef。
+            for (int explicitEntity = 0;
+                 explicitEntity < 2;
+                 ++explicitEntity)
+            {
+                std::vector<Type> parameters;
+
+                if (explicitEntity)
+                    parameters.push_back(Type::EntityRef);
+
+                if (write)
+                    parameters.push_back(Type::Vec3);
+
+                descriptors.push_back({
+                    static_cast<Id>(
+                        200 + operation * 2 + explicitEntity),
+                    "Transform",
+                    names[operation],
+                    returnType,
+                    std::move(parameters)
+                });
+            }
+        }
+
+        return XJScriptNativeCatalogue::Build(
+            std::move(descriptors), error);
     }
 
     inline std::shared_ptr<const XJScriptNativeCatalogue> XJGetInitialNativeCatalogue()

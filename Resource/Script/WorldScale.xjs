@@ -1,0 +1,26 @@
+class WorldScale : ScriptBehaviour
+{
+    public:
+        [[FieldId("1000000001")]]
+        float speed = 45.0f;
+    
+        [[FieldId("1000000002")]]
+        bool enabled = true;
+    
+        void OnUpdate(float dt)
+        {
+            if (!enabled)
+                return;
+
+            Vec3 scale =
+                Transform.GetLossyWorldScale();
+            
+            scale.y = 2.0f;
+            
+            bool applied =
+                Transform.TrySetWorldScale(scale);
+
+            if (!applied)
+                Log.Warn("Cannot apply world scale");
+        }
+};

@@ -58,6 +58,11 @@ namespace XJ
                 mUIState = state;
             }
 
+            bool IsGameInputFocused() const
+            {
+                return mFocused;
+            }
+
         private:
             void DrawPlayControls();
 

@@ -317,3 +317,14 @@ if(MINGW AND CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
     target_compile_options(XJScriptValueIntegrationTests PRIVATE -Wa,-mbig-obj)
 endif()
 add_test(NAME XJScriptValueIntegrationTests COMMAND $<TARGET_FILE:XJScriptValueIntegrationTests>)
+
+add_executable(XJScriptHostServicesTests
+    ${CMAKE_CURRENT_SOURCE_DIR}/Script/XJScriptHostServicesTests.cpp
+)
+target_link_libraries(XJScriptHostServicesTests PRIVATE Core)
+target_compile_features(XJScriptHostServicesTests PRIVATE cxx_std_20)
+target_compile_definitions(XJScriptHostServicesTests PRIVATE XJ_TEST_SOURCE_DIR="${PROJECT_SOURCE_DIR}")
+if(MINGW AND CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+    target_compile_options(XJScriptHostServicesTests PRIVATE -Wa,-mbig-obj)
+endif()
+add_test(NAME XJScriptHostServicesTests COMMAND $<TARGET_FILE:XJScriptHostServicesTests>)

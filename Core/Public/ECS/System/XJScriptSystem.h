@@ -13,6 +13,7 @@ namespace XJ
 {
     class XJAssetRegistry;
     class XJScene;
+    struct XJInputState;
 
     
     class XJScriptSystem final
@@ -41,7 +42,7 @@ namespace XJ
             void OnDestroy() override;
             // 必须在主线程、VM 未执行时调用。暂停状态也可以调用。
             void SynchronizeSlots();
-
+            void PublishInput(const XJInputState& input, bool enabled);
         private:
             class Impl;
             std::unique_ptr<Impl> mImpl;

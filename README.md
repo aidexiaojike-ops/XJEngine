@@ -155,7 +155,11 @@ Swapchain
 - **ECS Lifecycle**: `XJScriptSystem` creates per-entity script instances and dispatches `OnCreate`, `OnUpdate`, `OnFixedUpdate`, and `OnDestroy` through `XJSystemScheduler`
 - **Live Script Slots**: `SynchronizeSlots()` reconciles component/slot lifecycle revisions at safe points, including while paused. Scene destruction notifications and execution scopes keep script owners valid until deferred deletion can run.
 - **Script Components**: `XJScriptComponent` supports multiple enabled/disabled script slots per entity, stable slot UUIDs, and per-field overrides keyed by `[[FieldId("...")]]`
-- **Native Bridge**: `XJEcsScriptNativeInvoker` exposes controlled ECS operations to scripts; the initial native API includes `Transform.RotateY`
+- **Host Services**: `XJScriptHostNativeInvoker` is the default ECS script bridge, backed by injectable entity, transform, input, and logging services. Calls carry owner, slot, frame, and lifecycle-phase context; services remain available through `OnDestroy`.
+- **Transform API**: Read/write local position, Euler angles, and scale; read world position, Euler angles, and lossy scale, or use `TrySetWorldPosition`/`TrySetWorldEulerAngles`/`TrySetWorldScale` to check whether a world-space write succeeds. Each operation accepts either the current owner or an explicit `EntityRef`; invalid/non-finite or non-invertible-parent writes are rejected without partial changes. `Transform.RotateY` remains supported.
+- **Entity API**: `Scene.FindByUUID` accepts decimal or `0x` hexadecimal UUID strings; `Entity.Self`, `Entity.IsValid`, and `Entity.GetUUID` expose session-scoped handles with stale/cross-session reference protection. A valid UUID with no matching entity returns null.
+- **Script Input**: `Input.GetAxis("Horizontal"/"Vertical")` maps WASD/arrow keys; held/pressed/released queries use named keys. In the editor, input requires focused Game and application windows, Playing state, and no active UI control, text entry, or popup. Edges are Update-only and suppressed on focus acquisition.
+- **Script Logging**: `Log.Info`/`Warn`/`Error` use spdlog with call context and bounded per-slot/global quotas, preventing script log bursts from flooding the Console.
 - **Native Contracts**: `XJScriptNativeCatalogue` validates function IDs/signatures and resolves calls by argument types; compilation, bytecode verification, and runtime invocation share the catalogue. `XJScriptValueNativeInvoker` handles `Vec3(float, float, float)` construction and delegates ECS calls to the host.
 - **Value Serialization**: `XJScriptValueCodec` encodes typed scalar/vector field overrides and rejects non-finite numbers. `EntityRef` uses runtime scope/index/generation handles, cannot be persisted or exposed as a public field, and non-null references cannot appear in bytecode constants.
 - **Assets and Persistence**: `.xjs` files are registered as `XJAssetType::Script`, compiled/cached by `XJScriptAssetCompiler`/`Loader`, and serialized in scenes with slot IDs, enabled state, references, and field overrides
@@ -326,6 +330,8 @@ Render tests additionally cover material upload state and viewport display reque
 
 Script value integration and native contract tests cover vector expressions, native argument/return validation, catalogue compatibility, invalid bytecode, and value serialization.
 
+Host service tests cover entity lifetime/session isolation, local/world transforms and failed-write atomicity, input focus/phase behavior, logging quotas, and native dispatch through the VM.
+
 ```bash
 cmake -S . -B build -DXJ_BUILD_TESTS=ON
 cmake --build build --config Release
@@ -384,6 +390,7 @@ XJEngine/
 │   │   │   ├── Bytecode/            # Module model + verifier
 │   │   │   ├── Value/               # Shared typed scalar/vector/entity values
 │   │   │   ├── Native/              # Native signature catalogue
+│   │   │   ├── Host/                # Entity, transform, input, and logging services
 │   │   │   ├── Serialization/       # Typed script value JSON codec
 │   │   │   └── Runtime/             # VM, execution limits, native ECS bridge
 │   │   └── Render/         # 渲染相关
@@ -587,6 +594,8 @@ for (auto& entity : entities) {
 ```
 
 ### Script Example
+
+`Resource/Script/` includes `PlayerMove.xjs` (keyboard movement), `MoveTarget.xjs` (UUID lookup and cross-entity movement), and `WorldPosition.xjs`/`WorldScale.xjs` (checked world-space writes), alongside rotation and lifecycle examples.
 
 ```cpp
 class Rotate : ScriptBehaviour

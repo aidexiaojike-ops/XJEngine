@@ -15,6 +15,7 @@ namespace XJ
     class XJSystem;
     class XJTexture;
     class XJSampler;
+    struct XJInputState;
 
     class XJEditorPlayController
     {
@@ -47,6 +48,7 @@ namespace XJ
 
             void BeginStatisticsFrame(uint64_t frameId);
             XJScriptStatistics GetScriptStatistics() const;
+            void PublishScriptInput(const XJInputState& input, bool enabled);
 
         private:
             class Impl;

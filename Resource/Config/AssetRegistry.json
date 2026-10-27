@@ -13,13 +13,6 @@
     "source": "Mesh/Cube.glb",
     "type": 1
   },
-  "1526164114675906749": {
-    "handle": 1526164114675906749,
-    "imported": "",
-    "name": "Position",
-    "source": "Script/Position.xjs",
-    "type": 6
-  },
   "2208031170186802523": {
     "handle": 2208031170186802523,
     "imported": "",
@@ -48,6 +41,20 @@
     "source": "Texture/R.png",
     "type": 2
   },
+  "3328211838789328890": {
+    "handle": 3328211838789328890,
+    "imported": "",
+    "name": "WorldPosition",
+    "source": "Script/WorldPosition.xjs",
+    "type": 6
+  },
+  "3861348922834424344": {
+    "handle": 3861348922834424344,
+    "imported": "",
+    "name": "MoveTarget",
+    "source": "Script/MoveTarget.xjs",
+    "type": 6
+  },
   "536870913": {
     "handle": 536870913,
     "imported": "",
@@ -68,6 +75,13 @@
     "name": "Plane",
     "source": "Mesh/Plane.glb",
     "type": 1
+  },
+  "7030299552070515421": {
+    "handle": 7030299552070515421,
+    "imported": "",
+    "name": "WorldScale",
+    "source": "Script/WorldScale.xjs",
+    "type": 6
   },
   "7727386359093277130": {
     "handle": 7727386359093277130,
@@ -104,18 +118,18 @@
     "source": "Material/NewMaterial.xjmat",
     "type": 3
   },
+  "8761222450485973188": {
+    "handle": 8761222450485973188,
+    "imported": "",
+    "name": "PlayerMove",
+    "source": "Script/PlayerMove.xjs",
+    "type": 6
+  },
   "878030584296088097": {
     "handle": 878030584296088097,
     "imported": "",
     "name": "Plane",
     "source": "Material/Plane.xjmat",
     "type": 3
-  },
-  "8907151027684800149": {
-    "handle": 8907151027684800149,
-    "imported": "",
-    "name": "Scale",
-    "source": "Script/Scale.xjs",
-    "type": 6
   }
 }

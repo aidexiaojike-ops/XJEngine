@@ -261,4 +261,15 @@ namespace XJ
             ? mImpl->Scripts->GetStatistics()
             : mImpl->CachedScriptStatistics;
     }
+
+    void XJEditorPlayController::PublishScriptInput(const XJInputState& input, bool enabled)
+    {
+        if (!mImpl->Scripts)
+            return;
+
+        mImpl->Scripts->PublishInput(
+            input,
+            enabled &&
+            mImpl->State == XJEditorPlayState::Playing);
+    }
 }

@@ -39,8 +39,7 @@ namespace XJ
         bool operator == (const XJScriptVec3&) const = default;
     };
 
-    // RuntimeSession 的句柄，不是 UUID，也不是实体指针。
-    struct XJScriptEntityRef
+    struct XJScriptEntityRef//// RuntimeSession 的句柄，不是 UUID，也不是实体指针。
     {
         uint64_t ScopeId = 0;
         uint32_t Index = 0;
