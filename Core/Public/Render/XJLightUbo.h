@@ -1,7 +1,7 @@
 #ifndef XJ_LIGHT_UBO_H
 #define XJ_LIGHT_UBO_H
 
-#include "Edit/Mathinclude.h"
+#include <glm/vec4.hpp>
 #include <cstddef>
 #include <cstdint>
 

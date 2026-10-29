@@ -328,3 +328,54 @@ if(MINGW AND CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
     target_compile_options(XJScriptHostServicesTests PRIVATE -Wa,-mbig-obj)
 endif()
 add_test(NAME XJScriptHostServicesTests COMMAND $<TARGET_FILE:XJScriptHostServicesTests>)
+
+add_executable(XJTransformComponentTests
+    ${CMAKE_CURRENT_SOURCE_DIR}/Script/XJTransformComponentTests.cpp
+    ${PROJECT_SOURCE_DIR}/Core/Private/ECS/Component/XJTransformComponent.cpp
+    ${PROJECT_SOURCE_DIR}/Core/Private/ECS/XJScene.cpp
+    ${PROJECT_SOURCE_DIR}/Core/Private/ECS/XJNode.cpp
+    ${PROJECT_SOURCE_DIR}/Core/Private/ECS/XJUUID.cpp
+)
+
+# 独立验证 Transform 基础层，不引入 GPU/编辑器依赖。
+target_include_directories(XJTransformComponentTests PRIVATE
+    ${PROJECT_SOURCE_DIR}/Core/Public
+)
+target_compile_definitions(XJTransformComponentTests PRIVATE GLM_ENABLE_EXPERIMENTAL)
+target_link_libraries(
+    XJTransformComponentTests
+    PRIVATE
+        EnTT::EnTT
+        glm::glm-header-only
+        spdlog
+)
+
+target_compile_features(
+    XJTransformComponentTests
+    PRIVATE
+        cxx_std_20
+)
+
+if(MINGW AND CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+    target_compile_options(
+        XJTransformComponentTests
+        PRIVATE
+            -Wa,-mbig-obj
+    )
+endif()
+
+add_test(
+    NAME XJTransformComponentTests
+    COMMAND
+        $<TARGET_FILE:XJTransformComponentTests>
+)
+
+add_executable(XJTransformIntegrationTests
+    ${CMAKE_CURRENT_SOURCE_DIR}/ECS/XJTransformIntegrationTests.cpp
+)
+target_link_libraries(XJTransformIntegrationTests PRIVATE Editor Core)
+target_compile_features(XJTransformIntegrationTests PRIVATE cxx_std_20)
+if(MINGW AND CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+    target_compile_options(XJTransformIntegrationTests PRIVATE -Wa,-mbig-obj)
+endif()
+add_test(NAME XJTransformIntegrationTests COMMAND $<TARGET_FILE:XJTransformIntegrationTests>)

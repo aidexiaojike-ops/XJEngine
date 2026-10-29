@@ -88,6 +88,7 @@ File -> Importer -> Asset (CPU) -> Factory -> Resource (GPU) -> Renderer
 - **资产扫描**：`XJAssetRegistryScanner` 自动扫描 Resource 目录，按扩展名注册资产
 - **场景系统**：`.xjscene` -> `XJSceneAssetSerializer` -> `XJSceneInstantiator` -> ECS 实体；灯光序列化包含类型、颜色、强度、范围和聚光灯内外锥角
 - **场景切换**：支持多个 `.xjscene` 文件，通过 ECS 生命周期创建/销毁实体
+- **场景格式 v4**：保存本地 TRS 及相机轨道模式、目标点和半径；加载 v2/v3 时将旧 yaw/pitch 相机世界姿态迁移为新父级相对变换，无法表示的旧姿态安全失败。
 - **注册表**：`XJAssetRegistry` 用于持久化资产句柄与元数据；运行时生成的句柄使用高位命名空间，与稳定的注册表句柄隔离，避免冲突
 - **资产元数据**：`.xjmeta` 旁置文件（`XJAssetMetadata`）存储每个资产的句柄/类型/导入器信息；`XJAssetMetadataSerializer` 负责读写；`XJPersistentAssetHandleGenerator` 确保唯一句柄生成
 - **Submesh 渲染**：`XJMesh` 通过 `XJSubmesh` 索引范围共享顶点/索引缓冲，提供 `Bind`/`Draw`/`DrawSubmesh`；`XJMaterialRenderItem` 携带 `SubmeshIndex`，使每个 primitive 使用各自材质槽绘制
@@ -157,6 +158,9 @@ File -> Importer -> Asset (CPU) -> Factory -> Resource (GPU) -> Renderer
 
 - **材质系统**：`XJBaseMaterialSystem`、`XJSurfaceMaterialSystem`、`XJMaterialRenderSystemBase`、`XJSurfaceMaterialComponent`、`XJMaterialParameterBlock`/`Builder`/`Writer`
 - **摄像机系统**：`XJCameraController`（Core/Camera）、`XJCameraMath`（数学工具）、`XJCameraSystem`（ECS 适配）
+- **统一 Transform**：`XJTransformComponent` 将本地 TRS 私有化，使用归一化四元数旋转，通过角度制 XYZ 欧拉角接口（`Rx * Ry * Rz`）与带校验的原子 setter 修改，不再直接写成员。世界求值检查父链环和非有限数值，渲染、灯光、拾取、相机、Inspector 与脚本服务共用同一套语义；世界旋转独立于缩放合成，有损世界缩放取矩阵轴长。
+- **安全世界编辑**：世界位置、旋转、姿态和缩放修改返回 `XJTransformStatus`，失败不改变本地状态；世界求值使用 double，在 GPU/拾取消费边界检查 float 可表示性；`Transform.RotateY` 以四元数绕本地 Y 轴旋转。
+- **相机姿态**：统一读取世界位置/旋转，本地前方为 `-Z`、上方为 `+Y`；View Matrix getter 不再修改 ECS 或轨道参数。Free/Orbit 控制器提交带校验的世界姿态，成功后才更新对应轨道半径/旋转中心。
 - **资产系统**：`XJModelImporter`、`XJTextureImporter`、`XJAssetRegistry`、`XJAssetRegistryScanner`、`XJAssetBootstrap`、`XJSceneRuntimeUtil`、`XJMeshAssetLoader`、`XJJsonIO`
 - **ECS 基础**：`XJEntity` 通过场景生命周期 token 校验避免悬垂访问；Scene 维护 UUID -> EnTT 索引以直接查找并拒绝重复 UUID；`XJSystemScheduler` 提供事务式 Start/Stop、固定步进上限和安全点回调；`XJInput` 提供键盘/鼠标边沿查询；`XJLightComponent` 支持 Directional/Point/Spot 灯光
 - **编辑器系统**：`XJEditorSceneController`、`XJEditorCameraManager`、`XJEditorSceneService`、`XJUIContext`、`XJEditorRenderer`、`XJEditorUILayer`、编辑器面板
@@ -195,6 +199,8 @@ make -j$(nproc)
 脚本值集成与 Native 契约测试覆盖向量表达式、原生参数/返回值验证、目录兼容性、无效字节码及值序列化。
 
 宿主服务测试覆盖实体生命周期与会话隔离、本地/世界变换及失败写入原子性、输入焦点/阶段行为、日志配额和 VM 原生分发。
+
+Transform 组件与 ECS 集成测试进一步覆盖四元数/TRS 数学、父级继承、失败原子性、相机控制与只读视图查询、世界空间灯光/拾取/包围盒、Inspector 本地编辑，以及 v2/v3 到 v4 的场景迁移与往返保存。
 
 ```bash
 cmake -S . -B build -DXJ_BUILD_TESTS=ON

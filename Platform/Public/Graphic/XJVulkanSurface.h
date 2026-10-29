@@ -2,7 +2,6 @@
 #define XJ_VULKAN_SURFACE_H
 
 
-#include "Edit/EditIncludes.h"
 #include "Edit/XJGlfwWindow.h"
 #include "Graphic/XJVulkanInstance.h"
 

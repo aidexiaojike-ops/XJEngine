@@ -51,10 +51,7 @@ namespace XJ
             return nullptr;
 
         auto& transform = previewCamera->GetComponent<XJTransformComponent>();
-        transform.position = glm::vec3(0.0f, 1.5f, 3.0f);
-        transform.rotation = glm::vec3(-90.0f, 0.0f, 0.0f);
-        transform.scale = glm::vec3(1.0f);
-        transform.UpdateModelMatrix();
+        transform.SetLocalTRSEuler({0.0, 1.5, 3.0}, {0.0, 0.0, 0.0}, {1.0, 1.0, 1.0});
 
         auto& camera = previewCamera->AddComponent<XJCameraComponent>();
         camera.XJSetFov(65.0f);

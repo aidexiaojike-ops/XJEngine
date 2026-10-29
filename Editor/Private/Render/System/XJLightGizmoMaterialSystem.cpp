@@ -14,6 +14,7 @@
 #include <cmath>
 #include <cstddef>
 #include <glm/gtc/constants.hpp>
+#include <glm/gtc/matrix_transform.hpp>
 #include <vector>
 
 namespace XJ
@@ -251,7 +252,9 @@ namespace XJ
             if (!mesh || !mesh->IsValid())
                 return;
 
-            glm::mat4 model = glm::translate(glm::mat4(1.0f), transform.position);
+            glm::vec3 position;
+            if (transform.ReadWorldPosition(position) != XJTransformStatus::Success) return;
+            glm::mat4 model = glm::translate(glm::mat4(1.0f), position);
             if (light.XJGetLightType() != XJLightType::Point)
                 model *= BuildDirectionRotation(XJLightSceneUtils::BuildDirection(transform));
             model = glm::scale(model, scale);

@@ -90,9 +90,7 @@ namespace XJ
                 return false;
 
             auto& transform = runtimeCamera->GetComponent<XJTransformComponent>();
-            transform.position = glm::vec3(0.0f, 1.5f, 3.0f);
-            transform.rotation = glm::vec3(-90.0f, 0.0f, 0.0f);
-            transform.UpdateModelMatrix();
+            transform.SetLocalTRSEuler({0.0, 1.5, 3.0}, {0.0, 0.0, 0.0}, {1.0, 1.0, 1.0});
 
             auto& camera = runtimeCamera->AddComponent<XJCameraComponent>();
             camera.XJSetFov(60.0f);

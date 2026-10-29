@@ -2,7 +2,7 @@
 #define XJ_LIGHT_COMPONENT_H
 
 #include "ECS/XJComponent.h"
-#include "Edit/Mathinclude.h"
+#include <glm/vec3.hpp>
 #include <algorithm>
 
 namespace XJ

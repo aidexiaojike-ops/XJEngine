@@ -45,8 +45,12 @@ namespace XJ
             return false;
 
         auto& transform = entity->GetComponent<XJTransformComponent>();
-        transform.position = CalculateSpawnPositionFromDropRay(scene, payload);
-        transform.UpdateModelMatrix();// 更新模型矩阵以应用位置
+        if (transform.TrySetWorldPosition(glm::dvec3{CalculateSpawnPositionFromDropRay(scene, payload)}) !=
+            XJTransformStatus::Success)
+        {
+            scene.DestroyEntity(entity);
+            return false;
+        }
   
         if (instantiateContext.SourceScene.IsValid())
         {
@@ -174,7 +178,9 @@ namespace XJ
                 return;
             }
 
-            const XJBoundingBox worldBounds = mesh->GetBounds().Transformed( transform.GetModelMatrix());
+            glm::mat4 worldMatrix;
+            if (transform.ReadWorldMatrix(worldMatrix) != XJTransformStatus::Success) return;
+            const XJBoundingBox worldBounds = mesh->GetBounds().Transformed(worldMatrix);
 
             if (!worldBounds.IsValid())
                 return;

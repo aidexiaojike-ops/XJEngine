@@ -11,6 +11,7 @@
 #include "Asset/Serialization/XJJsonIO.h"
 #include "ECS/XJReservedUUID.h"
 #include "Script/Serialization/XJScriptValueCodec.h"
+#include "Camera/XJCameraMath.h"
 
 #include <stdexcept>
 #include <fstream>
@@ -21,6 +22,7 @@
 #include <optional>
 #include <string>
 #include <unordered_set>
+#include <unordered_map>
 
 namespace XJ
 {
@@ -83,7 +85,10 @@ namespace XJ
             {"fov", c.Fov},
             {"near", c.NearClip},
             {"far", c.FarClip},
-            {"primary", c.Primary}
+            {"primary", c.Primary},
+            {"orbit", c.Orbit},
+            {"target", SerializeVec3(c.Target)},
+            {"radius", c.Radius}
         };
     }
 
@@ -263,6 +268,9 @@ namespace XJ
         c.NearClip = JsonReadFloatOr(j, "near", c.NearClip);
         c.FarClip = JsonReadFloatOr(j, "far", c.FarClip);
         c.Primary = JsonReadBoolOr(j, "primary", false);
+        c.Orbit = JsonReadBoolOr(j, "orbit", false);
+        if (j.contains("target")) c.Target = DeserializeVec3(j["target"], c.Target);
+        c.Radius = std::max(JsonReadFloatOr(j, "radius", c.Radius), 0.1f);
         return c;
     }
 
@@ -401,6 +409,66 @@ namespace XJ
         return e;
     }
 
+    static bool MigrateLegacyCameras(XJSceneAsset& asset)
+    {
+        if (std::none_of(asset.Entities.begin(), asset.Entities.end(),
+            [](const auto& data) { return data.HasCamera && data.HasTransform; })) return true;
+
+        // v2/v3 的相机不继承父级，并把 rot.x/y 解释成 yaw/pitch。
+        // 在临时 ECS 中先还原新父链，再将旧世界姿态换算成新 Local。
+        // 普通物体保留 Local；它们从 v4 开始真正继承父级。
+        XJScene scene;
+        std::unordered_map<XJUUID, XJEntity*> entities;
+        for (const auto& data : asset.Entities)
+        {
+            auto* entity = scene.CreateEntityWithUUID(data.UUID, data.Name);
+            if (!entity) return false;
+            entities.emplace(data.UUID, entity);
+            if (data.HasTransform &&
+                entity->AddComponent<XJTransformComponent>().SetLocalTRSEuler(
+                    glm::dvec3{data.Transform.Position}, glm::dvec3{data.Transform.Rotation},
+                    glm::dvec3{data.Transform.Scale}) != XJTransformStatus::Success)
+                return false;
+        }
+        for (const auto& data : asset.Entities)
+        {
+            if (data.Parent == 0) continue;
+            const auto parent = entities.find(data.Parent);
+            if (parent == entities.end()) return false;
+            parent->second->XJAddChild(entities.at(data.UUID));
+            if (entities.at(data.UUID)->XJGetParent() != parent->second) return false;
+        }
+        std::vector<std::pair<size_t, XJSceneEntityData*>> ordered;
+        for (auto& data : asset.Entities)
+        {
+            if (!data.HasCamera || !data.HasTransform) continue;
+            size_t depth = 0;
+            for (auto* node = entities.at(data.UUID)->XJGetParent(); node; node = node->XJGetParent()) ++depth;
+            ordered.emplace_back(depth, &data);
+        }
+        std::sort(ordered.begin(), ordered.end(), [](const auto& a, const auto& b) { return a.first < b.first; });
+        for (const auto& [depth, data] : ordered)
+        {
+            auto& transform = entities.at(data->UUID)->GetComponent<XJTransformComponent>();
+            const glm::vec3 outward = CameraMath::BuildForwardFromYawPitch(
+                std::remainder(data->Transform.Rotation.x, 360.0f), data->Transform.Rotation.y);
+            const glm::vec3 forward = data->Camera.Orbit ? -outward : outward;
+            const glm::dvec3 position = data->Camera.Orbit
+                ? glm::dvec3{data->Camera.Target} + glm::dvec3{outward} * static_cast<double>(data->Camera.Radius)
+                : glm::dvec3{data->Transform.Position};
+            if (transform.TrySetWorldPose(position, CameraMath::RotationFromForward(forward)) !=
+                XJTransformStatus::Success)
+            {
+                spdlog::error("Legacy camera migration failed: parent cannot represent pose, entity={}",
+                              static_cast<uint64_t>(data->UUID));
+                return false;
+            }
+            data->Transform.Position = transform.GetLocalPosition();
+            data->Transform.Rotation = transform.GetLocalEulerAngles();
+        }
+        return true;
+    }
+
     bool XJSceneAssetSerializer::SaveToFile(const XJSceneAsset& sceneAsset, const std::filesystem::path& path)
     {
         for (const auto& entity : sceneAsset.Entities)
@@ -410,7 +478,7 @@ namespace XJ
         }
 
         nlohmann::json root;
-        root["version"] = 3;
+        root["version"] = 4;
         root["asset"] = {
             {"handle", std::to_string(sceneAsset.mHandle)},
             {"type", "Scene"},
@@ -441,7 +509,7 @@ namespace XJ
         }
     
         const int version = JsonReadIntOr(j, "version", 0);
-        if (version != 2 && version != 3)
+        if (version != 2 && version != 3 && version != 4)
             return nullptr;
     
         auto asset = std::make_shared<XJSceneAsset>();
@@ -461,6 +529,9 @@ namespace XJ
         
             asset->Entities.push_back(DeserializeEntity(objectJson));
         }
+
+        if (version < 4 && !MigrateLegacyCameras(*asset))
+            return nullptr;
     
         return asset;
     }
@@ -506,9 +577,9 @@ namespace XJ
             auto& t = entity.GetComponent<XJTransformComponent>();
             data.HasTransform = true;
             data.Transform.UUID = t.XJGetUUID();
-            data.Transform.Position = t.position;
-            data.Transform.Rotation = t.rotation;
-            data.Transform.Scale = t.scale;
+            data.Transform.Position = t.GetLocalPosition();
+            data.Transform.Rotation = t.GetLocalEulerAngles();
+            data.Transform.Scale = t.GetLocalScale();
         }
 
         if (entity.HasComponent<XJMeshAssetRefComponent>())
@@ -534,6 +605,9 @@ namespace XJ
             data.Camera.Fov = c.XJGetFov();
             data.Camera.NearClip = c.XJGetNear();
             data.Camera.FarClip = c.XJGetFar();
+            data.Camera.Orbit = c.XJGetCameraMode() == CameraMode::Orbit;
+            data.Camera.Target = c.XJGetTarget();
+            data.Camera.Radius = c.XJGetRadius();
         }
 
         if(entity.HasComponent<XJLightComponent>())

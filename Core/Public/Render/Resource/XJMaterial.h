@@ -1,7 +1,9 @@
 #ifndef XJ_MATERIAL_H
 #define XJ_MATERIAL_H
 
-#include "Edit/Mathinclude.h"
+#include <glm/mat4x4.hpp>
+#include <glm/vec2.hpp>
+#include <glm/vec4.hpp>
 
 #include "Render/Material/XJMaterialParameterBlock.h"
 #include "Render/Material/XJMaterialParameterLayout.h"

@@ -58,6 +58,7 @@ namespace XJ
             virtual ~IXJScriptTransformService() = default;
             virtual XJScriptHostResult<XJScriptVec3> Read(XJScriptEntityRef entity, XJScriptSpace space, XJScriptTransformProperty property) = 0;
             virtual XJScriptHostStatus Write(XJScriptEntityRef entity, XJScriptSpace space, XJScriptTransformProperty property, XJScriptVec3 value) = 0;
+            virtual XJScriptHostStatus RotateLocalY(XJScriptEntityRef entity, double deltaDegrees) = 0;
     };
 
     class IXJScriptInputService//脚本 输入

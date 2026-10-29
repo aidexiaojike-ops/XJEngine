@@ -1,7 +1,8 @@
 #ifndef XJ_CAMERA_CONTROLLER_H
 #define XJ_CAMERA_CONTROLLER_H
 
-#include "Edit/Mathinclude.h"
+#include <glm/vec2.hpp>
+#include <glm/vec3.hpp>
 #include "Edit/XJGlfwWindow.h"
 #include "Event/XJMouseEvent.h"
 

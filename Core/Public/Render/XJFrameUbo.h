@@ -1,7 +1,9 @@
 #ifndef XJ_FRAME_UBO_H
 #define XJ_FRAME_UBO_H
 
-#include "Edit/Mathinclude.h"
+#include <glm/mat4x4.hpp>
+#include <glm/vec2.hpp>
+#include <glm/vec4.hpp>
 
 #include <cstddef>
 #include <cstdint>

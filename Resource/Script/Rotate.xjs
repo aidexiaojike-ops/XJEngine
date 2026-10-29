@@ -12,11 +12,6 @@ class Rotate : ScriptBehaviour
             if (!enabled)
                 return;
 
-            Vec3 angles =
-                Transform.GetLocalEulerAngles();
-
-            angles.y += speed * dt;
-
-            Transform.SetLocalEulerAngles(angles);
+            Transform.RotateY(speed * dt);
         }
 };

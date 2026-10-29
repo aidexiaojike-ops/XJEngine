@@ -1,7 +1,6 @@
 #ifndef SPDLOG_DEBUG_H
 #define SPDLOG_DEBUG_H
 
-#include "Edit/EditIncludes.h"
 #include <spdlog/spdlog.h>
 #include <spdlog/sinks/basic_file_sink.h>// 基础文件 sink（支持普通文件输出）
 #include <spdlog/sinks/stdout_color_sinks.h>// 带颜色的控制台 sink

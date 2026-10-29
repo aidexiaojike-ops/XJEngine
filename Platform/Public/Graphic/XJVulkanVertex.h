@@ -1,7 +1,11 @@
 #ifndef XJ_VULKAN_VERTEX_H
 #define XJ_VULKAN_VERTEX_H
 
-#include "Edit/Mathinclude.h"
+#include <glm/vec2.hpp>
+#include <glm/vec3.hpp>
+
+// GPU layouts require packed GLM types; do not enable aligned gentypes.
+static_assert(sizeof(glm::vec3) == 12, "XJEngine requires packed glm::vec3 (12 bytes)");
 
 namespace XJ
 {

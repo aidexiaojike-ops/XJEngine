@@ -10,6 +10,8 @@
 #include "Script/Runtime/XJScriptRuntime.h"
 
 #include <spdlog/sinks/base_sink.h>
+#include <glm/gtc/matrix_transform.hpp>
+#include <glm/gtx/euler_angles.hpp>
 #include <array>
 #include <cstdlib>
 #include <filesystem>
@@ -103,21 +105,20 @@ namespace
         Check(service.Write(ref, Space::Local, Property::Position, {1, 2, 3}).IsValid(), "local position writes");
         Check(Near(*service.Read(ref, Space::Local, Property::Position).Value, {1, 2, 3}), "local position reads");
         Check(service.Write(ref, Space::Local, Property::EulerAngles, {17, 31, -29}).IsValid(), "Euler write");
-        const glm::mat4 candidate = local.modelMatrix;
-        local.UpdateModelMatrix();
+        const glm::mat4 candidate = local.GetLocalMatrix();
+        const glm::mat4 expectedLocal = glm::translate(glm::mat4{1}, glm::vec3{1, 2, 3}) *
+            glm::eulerAngleXYZ(glm::radians(17.0f), glm::radians(31.0f), glm::radians(-29.0f));
         for (int column = 0; column < 4; ++column)
             for (int row = 0; row < 4; ++row)
-                Check(std::abs(candidate[column][row] - local.modelMatrix[column][row]) < 1.0e-5f,
+                Check(std::abs(candidate[column][row] - expectedLocal[column][row]) < 1.0e-5f,
                       "service matrix agrees with engine Rx Ry Rz convention");
 
         auto* parent = fixture.Scene.CreateEntityWithTransform("Parent");
         parent->XJAddChild(fixture.Owner);
         auto& p = parent->GetComponent<XJTransformComponent>();
-        p.position = {10, 20, 30};
-        p.rotation = {15, 30, -20};
-        p.scale = {2, 3, 4};
-        p.UpdateModelMatrix();
-        const auto expected = p.modelMatrix * local.modelMatrix;
+        Check(p.SetLocalTRSEuler({10, 20, 30}, {15, 30, -20}, {2, 3, 4}) == XJTransformStatus::Success,
+              "parent setup");
+        const auto expected = p.GetLocalMatrix() * local.GetLocalMatrix();
         Check(Near(*service.Read(ref, Space::World, Property::Position).Value,
                    {expected[3].x, expected[3].y, expected[3].z}), "parent matrix propagates to world position");
 
@@ -125,16 +126,16 @@ namespace
         Check(Near(*service.Read(ref, Space::World, Property::Position).Value, {40, -5, 9}), "world position read after write");
         Check(service.Write(ref, Space::World, Property::EulerAngles, {20, 35, -15}).IsValid(), "world rotation writes");
         Check(Near(*service.Read(ref, Space::World, Property::EulerAngles).Value, {20, 35, -15}), "world rotation read after write");
-        local.scale.x = -1.0f;
+        Check(local.SetLocalScale({-1, 1, 1}) == XJTransformStatus::Success, "local reflection setup");
         Check(service.Write(ref, Space::World, Property::Scale, {5, 6, 7}).IsValid(), "lossy world scale writes with shear");
-        Check(local.scale.x < 0 && Near(*service.Read(ref, Space::World, Property::Scale).Value, {5, 6, 7}),
+        Check(local.GetLocalScale().x < 0 && Near(*service.Read(ref, Space::World, Property::Scale).Value, {5, 6, 7}),
               "scale axes hit target while preserving reflection");
 
-        const auto oldPosition = local.position;
-        const auto oldRotation = local.rotation;
-        const auto oldScale = local.scale;
-        const auto oldMatrix = local.modelMatrix;
-        p.scale = {0, 0, 0};
+        const auto oldPosition = local.GetLocalPosition();
+        const auto oldRotation = local.GetLocalRotation();
+        const auto oldScale = local.GetLocalScale();
+        const auto oldMatrix = local.GetLocalMatrix();
+        Check(p.SetLocalScale({0, 0, 0}) == XJTransformStatus::Success, "singular parent setup");
         Check(!service.Write(ref, Space::World, Property::Position, {1, 2, 3}).IsValid(), "singular parent rejects world position");
         Check(!service.Write(ref, Space::World, Property::Scale, {1, 2, 3}).IsValid(), "collapsed axes reject world scale");
         Check(!service.Write(ref, Space::World, Property::Scale, {-1, 2, 3}).IsValid(), "negative world scale rejected");
@@ -143,8 +144,8 @@ namespace
         Check(!service.Write(ref, Space::Local, Property::Position, {1.0e300, 0, 0}).IsValid(), "float storage overflow rejected");
         Check(!service.Write(ref, Space::Local, Property::Scale, {1.0e-300, 1, 1}).IsValid(),
               "float underflow cannot silently collapse an axis");
-        Check(local.position == oldPosition && local.rotation == oldRotation &&
-              local.scale == oldScale && local.modelMatrix == oldMatrix, "failed writes preserve all transform state");
+        Check(local.GetLocalPosition() == oldPosition && local.GetLocalRotation() == oldRotation &&
+              local.GetLocalScale() == oldScale && local.GetLocalMatrix() == oldMatrix, "failed writes preserve all transform state");
         Check(!service.Read(ref, static_cast<Space>(99), Property::Position).IsValid(), "invalid space rejected");
         Check(!service.Write(ref, static_cast<Space>(99), Property::Position, {}).IsValid(), "invalid write space rejected");
         Check(!service.Read(ref, Space::Local, static_cast<Property>(99)).IsValid(), "invalid property rejected");
@@ -168,7 +169,8 @@ namespace
         for (int level = 0; level < 8; ++level)
         {
             auto* ancestor = huge.Scene.CreateEntityWithTransform("LargeScale");
-            ancestor->GetComponent<XJTransformComponent>().scale = {1.0e30f, 1.0e30f, 1.0e30f};
+            Check(ancestor->GetComponent<XJTransformComponent>().SetLocalScale({1.0e30, 1.0e30, 1.0e30}) ==
+                  XJTransformStatus::Success, "large ancestor scale");
             ancestor->XJAddChild(child);
             child = ancestor;
         }
@@ -262,6 +264,15 @@ namespace
     void TestDispatcherAndVM()
     {
         Fixture fixture;
+        const std::array<XJScriptValue, 1> rotationStep{15.0};
+        for (int index = 0; index < 31; ++index)
+            Check(fixture.Invoker.Invoke(Id::TransformRotateY, rotationStep, fixture.Context).IsValid(),
+                  "host multi-turn RotateY succeeds");
+        const auto expectedRotation = XJTransformComponent::RotationFromEulerXYZ({0, 465, 0});
+        const auto actualRotation = glm::normalize(glm::dquat{
+            fixture.Owner->GetComponent<XJTransformComponent>().GetLocalRotation()});
+        Check(std::abs(glm::dot(expectedRotation, actualRotation)) > 0.99999,
+              "host RotateY does not reverse at Euler singularities");
         const auto catalogue = fixture.Invoker.GetNativeCatalogue();
         const char* names[] = {
             "GetLocalPosition", "SetLocalPosition", "GetWorldPosition", "TrySetWorldPosition",
@@ -325,7 +336,8 @@ namespace
 
         auto* parent = fixture.Scene.CreateEntityWithTransform("Singular");
         parent->XJAddChild(fixture.Owner);
-        parent->GetComponent<XJTransformComponent>().scale = {0, 0, 0};
+        Check(parent->GetComponent<XJTransformComponent>().SetLocalScale({0, 0, 0}) ==
+              XJTransformStatus::Success, "singular dispatcher parent");
         const auto* setter = catalogue->Resolve("Transform", "TrySetWorldPosition",
             std::array{XJScriptValueType::Vec3});
         const std::array<XJScriptValue, 1> position{XJScriptVec3{1, 2, 3}};
@@ -379,17 +391,17 @@ namespace
         system.OnCreate();
         system.PublishInput({}, true);
         system.OnUpdate(0.5f);
-        Check(owner->GetComponent<XJTransformComponent>().position.y == 2.5f, "default host runs new APIs during Update");
+        Check(owner->GetComponent<XJTransformComponent>().GetLocalPosition().y == 2.5f, "default host runs new APIs during Update");
         component.SetSlotEnabled(slotId, false);
         system.SynchronizeSlots();
-        Check(owner->GetComponent<XJTransformComponent>().position.x == 11.0f, "disable cleanup retains entity service");
+        Check(owner->GetComponent<XJTransformComponent>().GetLocalPosition().x == 11.0f, "disable cleanup retains entity service");
         component.SetSlotEnabled(slotId, true);
         system.SynchronizeSlots();
         system.OnDestroy();
-        Check(owner->GetComponent<XJTransformComponent>().position.x == 11.0f, "Stop cleans before releasing host");
+        Check(owner->GetComponent<XJTransformComponent>().GetLocalPosition().x == 11.0f, "Stop cleans before releasing host");
         system.OnCreate();
         system.OnUpdate(0.25f);
-        Check(system.GetStatistics().ActiveInstances == 1 && owner->GetComponent<XJTransformComponent>().position.y == 2.25f,
+        Check(system.GetStatistics().ActiveInstances == 1 && owner->GetComponent<XJTransformComponent>().GetLocalPosition().y == 2.25f,
               "restart rebuilds default host without dangling Invoker");
         system.OnDestroy();
         std::filesystem::remove(path);

@@ -15,6 +15,32 @@ namespace XJ
             const glm::vec3 up = glm::normalize(glm::cross(right, forward));
             return glm::mat3(right, up, forward);
         }
+
+        bool ReadCameraPose(const XJTransformComponent& transform, glm::vec3& position, glm::vec3& forward)
+        {
+            glm::dquat rotation;
+            if (transform.ReadWorldPosition(position) != XJTransformStatus::Success ||
+                transform.ReadWorldRotation(rotation) != XJTransformStatus::Success)
+                return false;
+            forward = glm::vec3{rotation * glm::dvec3{0, 0, -1}};
+            return true;
+        }
+
+        glm::vec3 DragForward(const glm::vec3& forward, const glm::vec2& delta, float sensitivity)
+        {
+            // yaw/pitch 仅用于鼠标控制，不存入 Transform 分量。
+            const float yaw = glm::degrees(std::atan2(forward.z, forward.x)) + delta.x * sensitivity;
+            const float pitch = glm::degrees(std::asin(glm::clamp(forward.y, -1.0f, 1.0f))) + delta.y * sensitivity;
+            return CameraMath::BuildForwardFromYawPitch(yaw, pitch);
+        }
+
+        bool ApplyOrbit(XJTransformComponent& transform, const XJCameraComponent& camera,
+                        const glm::vec3& forward, float radius)
+        {
+            return transform.TrySetWorldPose(
+                glm::dvec3{camera.XJGetTarget()} - glm::dvec3{forward} * static_cast<double>(radius),
+                CameraMath::RotationFromForward(forward)) == XJTransformStatus::Success;
+        }
     }
 
     XJCameraController::XJCameraController(
@@ -64,6 +90,7 @@ namespace XJ
 
     void XJCameraController::OnMouseScroll(float yOffset, XJEntity* cameraEntity)
     {
+        if (!std::isfinite(yOffset)) return;
         if (!cameraEntity || !XJEntity::HasComponent<XJCameraComponent>(cameraEntity))
             return;
 
@@ -77,12 +104,10 @@ namespace XJ
                     
              auto& transformComp = cameraEntity->GetComponent<XJTransformComponent>();
                     
-              const glm::vec3 forward = CameraMath::BuildForwardFromYawPitch(
-                  transformComp.rotation.x,
-                  transformComp.rotation.y);
-                
-             transformComp.position += forward * yOffset * mCameraMoveSpeed * 10.0f;
-             transformComp.UpdateModelMatrix();
+              glm::vec3 position, forward;
+              if (!ReadCameraPose(transformComp, position, forward)) return;
+              transformComp.TrySetWorldPosition(glm::dvec3{position} +
+                  glm::dvec3{forward} * static_cast<double>(yOffset * mCameraMoveSpeed * 10.0f));
         }
         else if (mode == CameraMode::Orbit)
         {
@@ -90,7 +115,11 @@ namespace XJ
             if (radius < 0.1f)
                 radius = 0.1f;
 
-            cameraComp.XJSetRadius(radius);
+            if (!XJEntity::HasComponent<XJTransformComponent>(cameraEntity)) return;
+            auto& transform = cameraEntity->GetComponent<XJTransformComponent>();
+            glm::vec3 position, forward;
+            if (ReadCameraPose(transform, position, forward) && ApplyOrbit(transform, cameraComp, forward, radius))
+                cameraComp.XJSetRadius(radius);
         }
     }
 
@@ -136,33 +165,24 @@ namespace XJ
 
         if (leftDown)
         {
-            float yaw = transformComp.rotation.x;
-            float pitch = transformComp.rotation.y;
-
-            const glm::vec3 oldForward = CameraMath::BuildForwardFromYawPitch(yaw, pitch);
-
-            yaw += mouseDelta.x * mMouseSensitivity;
-            pitch += mouseDelta.y * mMouseSensitivity;
-            pitch = CameraMath::ClampPitch(pitch);
+            glm::vec3 position, oldForward;
+            if (!ReadCameraPose(transformComp, position, oldForward)) return;
+            const glm::vec3 newForward = DragForward(oldForward, mouseDelta, mMouseSensitivity);
 
             if (mHasOrbitPivot)
             {
-                const glm::vec3 newForward = CameraMath::BuildForwardFromYawPitch(yaw, pitch);
                 const glm::mat3 rotationDelta =
                     BuildCameraBasis(newForward) * glm::transpose(BuildCameraBasis(oldForward));
-                transformComp.position = mOrbitPivot + rotationDelta * (transformComp.position - mOrbitPivot);
+                position = mOrbitPivot + rotationDelta * (position - mOrbitPivot);
             }
 
-            transformComp.rotation.x = yaw;
-            transformComp.rotation.y = pitch;
-            transformComp.UpdateModelMatrix();
+            transformComp.TrySetWorldPose(glm::dvec3{position}, CameraMath::RotationFromForward(newForward));
         }
 
         if (rightDown)
         {
-            const glm::vec3 forward = CameraMath::BuildForwardFromYawPitch(
-                transformComp.rotation.x,
-                transformComp.rotation.y);
+            glm::vec3 position, forward;
+            if (!ReadCameraPose(transformComp, position, forward)) return;
                     
             const glm::vec3 right = CameraMath::BuildRightFromForward(forward);
             const glm::vec3 up = glm::normalize(glm::cross(right, forward));
@@ -170,10 +190,9 @@ namespace XJ
             const glm::vec3 moveVector =
                 (right * -mouseDelta.x + up * mouseDelta.y) * mCameraMoveSpeed;
                     
-            transformComp.position += moveVector;
-            if (mHasOrbitPivot)
+            if (transformComp.TrySetWorldPosition(glm::dvec3{position} + glm::dvec3{moveVector}) ==
+                XJTransformStatus::Success && mHasOrbitPivot)
                 mOrbitPivot += moveVector;
-            transformComp.UpdateModelMatrix();
         }
     }
 
@@ -220,16 +239,10 @@ namespace XJ
 
         if (leftDown)
         {
-            float yaw = transformComp.rotation.x;
-            float pitch = transformComp.rotation.y;
-
-            yaw += mouseDelta.x * mMouseSensitivity;
-            pitch += mouseDelta.y * mMouseSensitivity;
-            pitch = CameraMath::ClampPitch(pitch);
-
-            transformComp.rotation.x = yaw;
-            transformComp.rotation.y = pitch;
-            transformComp.UpdateModelMatrix();
+            glm::vec3 position, forward;
+            if (!ReadCameraPose(transformComp, position, forward)) return;
+            ApplyOrbit(transformComp, cameraComp, DragForward(forward, mouseDelta, mMouseSensitivity),
+                       cameraComp.XJGetRadius());
         }
 
         if (rightDown)
@@ -238,7 +251,9 @@ namespace XJ
             if (radius < 0.1f)
                 radius = 0.1f;
 
-            cameraComp.XJSetRadius(radius);
+            glm::vec3 position, forward;
+            if (ReadCameraPose(transformComp, position, forward) && ApplyOrbit(transformComp, cameraComp, forward, radius))
+                cameraComp.XJSetRadius(radius);
         }
     }
 }

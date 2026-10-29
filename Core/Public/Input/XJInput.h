@@ -1,7 +1,7 @@
 #ifndef XJ_INPUT_H
 #define XJ_INPUT_H
 
-#include "Edit/Mathinclude.h"
+#include <glm/vec2.hpp>
 #include "Event/XJKeyEvent.h"
 #include "Event/XJMouseEvent.h"
 

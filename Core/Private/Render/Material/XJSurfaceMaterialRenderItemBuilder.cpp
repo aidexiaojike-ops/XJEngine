@@ -25,6 +25,10 @@ namespace XJ
         {
             (void)entity;
 
+            glm::mat4 worldMatrix;
+            if (transComp.ReadWorldMatrix(worldMatrix) != XJTransformStatus::Success)
+                return;
+
             for (const auto& slot : matComp.XJGetSlots())
             {
                 if (!slot.Mesh || !slot.Material)
@@ -38,7 +42,7 @@ namespace XJ
                 item.Material = material;
                 item.Mesh = slot.Mesh;
                 item.SubmeshIndex = slot.SubmeshIndex;
-                item.ModelMatrix = transComp.GetModelMatrix();
+                item.ModelMatrix = worldMatrix;
             
                 outItems.push_back(item);
             }

@@ -2,7 +2,7 @@
 #define XJ_EDITOR_ASSET_VIEW_MODEL_H
 
 #include "Asset/XJAsset.h"
-#include "Edit/Mathinclude.h"
+#include <glm/vec3.hpp>
 
 #include <filesystem>
 #include <string>

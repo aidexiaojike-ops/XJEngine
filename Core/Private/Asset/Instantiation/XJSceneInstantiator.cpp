@@ -199,6 +199,19 @@ namespace XJ
                 return false;
             }
 
+            if (entityData.HasTransform)
+            {
+                XJTransformComponent candidate;
+                if (candidate.SetLocalTRSEuler(glm::dvec3{entityData.Transform.Position},
+                    glm::dvec3{entityData.Transform.Rotation}, glm::dvec3{entityData.Transform.Scale}) !=
+                    XJTransformStatus::Success)
+                {
+                    spdlog::error("Scene validation failed: invalid local Transform, entity={}",
+                                  static_cast<uint64_t>(entityData.UUID));
+                    return false;
+                }
+            }
+
             if (entityData.HasScript)
             {
                 if (!entityData.Script.Valid || entityData.Script.UUID == 0 ||
@@ -539,10 +552,12 @@ namespace XJ
         if (data.Transform.UUID != 0)
             t.XJSetUUID(data.Transform.UUID);
 
-        t.position = data.Transform.Position;
-        t.rotation = data.Transform.Rotation;
-        t.scale = data.Transform.Scale;
-        t.UpdateModelMatrix();
+        if (t.SetLocalTRSEuler(glm::dvec3{data.Transform.Position}, glm::dvec3{data.Transform.Rotation},
+                              glm::dvec3{data.Transform.Scale}) != XJTransformStatus::Success)
+        {
+            spdlog::error("Scene instantiate failed: invalid Transform.");
+            throw std::invalid_argument("Invalid scene Transform");
+        }
     }
 
     bool XJSceneInstantiator::ApplyMeshRenderer(const XJSceneEntityData& data, XJEntity& entity, XJSceneInstantiateContext& ctx)
@@ -638,6 +653,9 @@ namespace XJ
         cam.XJSetFov(data.Camera.Fov);
         cam.XJSetNear(data.Camera.NearClip);
         cam.XJSetFar(data.Camera.FarClip);
+        cam.XJSetCameraMode(data.Camera.Orbit ? CameraMode::Orbit : CameraMode::Free);
+        cam.XJSetTarget(data.Camera.Target);
+        cam.XJSetRadius(data.Camera.Radius);
     }
 
     bool XJSceneInstantiator::ApplyHierarchy(const XJSceneAsset& asset, XJSceneInstantiateContext& ctx)

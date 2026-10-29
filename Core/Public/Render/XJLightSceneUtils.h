@@ -14,15 +14,13 @@ namespace XJ
     class XJLightSceneUtils
     {
         public:
-            // 灯光局部 +X 为照射方向，旋转顺序与 XJTransformComponent::UpdateModelMatrix 一致。
+            // 灯光保留局部 +X 约定，使用父链组合后的纯世界旋转。
             static glm::vec3 BuildDirection(const XJTransformComponent& transform)
             {
-                glm::mat4 rotation(1.0f);
-                rotation = glm::rotate(rotation, glm::radians(transform.rotation.x), glm::vec3(1.0f, 0.0f, 0.0f));
-                rotation = glm::rotate(rotation, glm::radians(transform.rotation.y), glm::vec3(0.0f, 1.0f, 0.0f));
-                rotation = glm::rotate(rotation, glm::radians(transform.rotation.z), glm::vec3(0.0f, 0.0f, 1.0f));
-
-                const glm::vec3 direction = glm::vec3(rotation * glm::vec4(1.0f, 0.0f, 0.0f, 0.0f));
+                glm::dquat rotation;
+                if (transform.ReadWorldRotation(rotation) != XJTransformStatus::Success)
+                    return {1.0f, 0.0f, 0.0f};
+                const glm::vec3 direction{rotation * glm::dvec3{1.0, 0.0, 0.0}};
                 return glm::dot(direction, direction) > 0.000001f
                     ? glm::normalize(direction)
                     : glm::vec3(1.0f, 0.0f, 0.0f);
@@ -38,6 +36,10 @@ namespace XJ
                 view.each([&](auto, const XJLightComponent& lc, const XJTransformComponent& tc)
                 {
                     if (!lc.XJGetEnable())
+                        return;
+
+                    glm::vec3 position;
+                    if (tc.ReadWorldPosition(position) != XJTransformStatus::Success)
                         return;
 
                     switch (lc.XJGetLightType())
@@ -57,7 +59,7 @@ namespace XJ
                                 return;
 
                             auto& p = out.Points[out.PointCount++];
-                            p.PositionIntensity = glm::vec4(tc.position, lc.XJGetIntensity());
+                            p.PositionIntensity = glm::vec4(position, lc.XJGetIntensity());
                             p.ColorEnabled = glm::vec4(lc.XJGetColor(), 1.0f);
                             p.RangeData = glm::vec4(lc.XJGetRange(), 0.0f, 0.0f, 0.0f);
                             break;
@@ -69,7 +71,7 @@ namespace XJ
                                 return;
 
                             auto& s = out.Spots[out.SpotCount++];
-                            s.PositionIntensity = glm::vec4(tc.position, lc.XJGetIntensity());
+                            s.PositionIntensity = glm::vec4(position, lc.XJGetIntensity());
                             s.ColorEnabled = glm::vec4(lc.XJGetColor(), 1.0f);
                             // 组件保存半角度数，GPU 使用其余弦进行锥体判定。
                             const float innerCos = std::cos(glm::radians(lc.XJGetInnerAngleDegrees()));

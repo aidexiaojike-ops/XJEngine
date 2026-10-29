@@ -401,7 +401,7 @@ Check(registry.RegisterAsset({
           "update and stop preserve the completed statistics frame");
 
     const auto& transform = entity->GetComponent<XJ::XJTransformComponent>();
-    Check(std::abs(transform.rotation.y - 17.0f) < 0.0001f,
+    Check(std::abs(transform.GetLocalEulerAngles().y - 17.0f) < 0.0001f,
           "all script lifecycle methods execute with override");
 
     TestDynamicLifecycle(registry, 9001, 9003, 9004);

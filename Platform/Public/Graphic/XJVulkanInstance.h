@@ -2,7 +2,7 @@
 #define XJ_VULKAN_INSTANCE_H
 
 #include "Graphic/VulkanCommon.h"
-#include "Edit/EditIncludes.h"
+#include <cstdint>
 #include "Edit/SpdlogDebug.h"
 
 

@@ -2,7 +2,7 @@
 #define XJ_EDITOR_DRAG_PAYLOAD_H
 
 #include "Asset/XJAsset.h"
-#include "Edit/Mathinclude.h"
+#include <glm/vec3.hpp>
 #include "UI/XJEditorAssetDragPayload.h"
 
 //拖拽到场景

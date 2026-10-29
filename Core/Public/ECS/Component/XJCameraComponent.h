@@ -2,7 +2,9 @@
 #define XJ_CAMERA_COMPONENT_H
 
 #include "ECS/XJComponent.h"
-#include "Edit/Mathinclude.h"
+#include <glm/common.hpp>
+#include <glm/mat4x4.hpp>
+#include <glm/vec3.hpp>
 
 #include <algorithm>
 
@@ -39,11 +41,11 @@ namespace XJ
             void XJSetFar(float farVal) { mFar = std::max(farVal, mNear + 0.001f); }
 
             // 轨道模式专用接口
-            const glm::vec3& XJGetPosition() const { return mPosition; }//获取摄像机位置
+            glm::vec3 XJGetPosition() const;//读取 Transform 世界位置
             float XJGetRadius() const { return mRadius; }//获取半径
             const glm::vec3& XJGetTarget() const { return mTarget; }///   轨道模式专用数据
    
-            void XJSetPosition(const glm::vec3& position) { mPosition = position; }//设置摄像机位置
+            void XJSetPosition(const glm::vec3& position);//通过 Transform 写入世界位置
             void XJSetRadius(float radius) { mRadius = std::max(radius, 0.1f); }//设置半径
             void XJSetTarget(const glm::vec3& target) { mTarget = target; }///   轨道模式专用数据
 
@@ -52,9 +54,6 @@ namespace XJ
             CameraMode XJGetCameraMode() const { return mMode; }
 
         private:
-             // 内部计算函数
-            const glm::mat4& UpdateOrbitView();
-            const glm::mat4& UpdateFreeView();
              // 投影参数
             float mFov{65.f};//视野
             float mAspectRatio{1.0f};//宽高比
@@ -62,7 +61,6 @@ namespace XJ
             float mFar{100.0f};//远裁剪面
             bool mEnabled{true};
             glm::vec3 mTarget{0.0f, 0.0f, 0.0f};//摄像机目标点 // 轨道模式专用数据
-            glm::vec3 mPosition{0.0f, 1.0f, 0.0f};//摄像机位置
 
              // 轨道模式专用数据
             float mRadius{6.f};//半径

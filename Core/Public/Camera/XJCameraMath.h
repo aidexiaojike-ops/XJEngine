@@ -1,7 +1,11 @@
 #ifndef XJ_CAMERA_MATH_H
 #define XJ_CAMERA_MATH_H
 
-#include "Edit/Mathinclude.h"
+#include <glm/common.hpp>
+#include <glm/geometric.hpp>
+#include <glm/trigonometric.hpp>
+#include <glm/vec3.hpp>
+#include <glm/gtc/quaternion.hpp>
 
 #include <cmath>
 
@@ -50,6 +54,15 @@ namespace XJ
                 return glm::vec3{1.0f, 0.0f, 0.0f};
 
             return glm::normalize(right);
+        }
+
+        // 所有相机的局部前方为 -Z，局部上方为 +Y。
+        inline glm::dquat RotationFromForward(const glm::vec3& direction)
+        {
+            const glm::vec3 forward = glm::normalize(direction);
+            const glm::vec3 right = glm::normalize(glm::cross(forward, BuildSafeUp(forward)));
+            const glm::vec3 up = glm::cross(right, forward);
+            return glm::normalize(glm::quat_cast(glm::dmat3{right, up, -forward}));
         }
     }
 }

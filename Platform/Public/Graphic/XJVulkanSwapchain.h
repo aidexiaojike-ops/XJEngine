@@ -1,7 +1,8 @@
 #ifndef XJ_VULKAN_SWAPCHAIN_H
 #define XJ_VULKAN_SWAPCHAIN_H
 
-#include "Edit/EditIncludes.h"
+#include <cstdint>
+#include <vector>
 #include "Graphic/VulkanCommon.h"
 //交换链
 namespace XJ

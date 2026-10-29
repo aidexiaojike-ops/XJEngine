@@ -1,7 +1,7 @@
 #ifndef XJ_VULKAN_PHYSICALDEVICES_H
 #define XJ_VULKAN_PHYSICALDEVICES_H
 
-#include "Edit/EditIncludes.h"
+#include <cstdint>
 #include "Graphic/XJVulkanInstance.h"
 #include "Graphic/XJVulkanSurface.h"
 

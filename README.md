@@ -141,6 +141,10 @@ Swapchain
 - **Entity Management**: Lightweight entity handles with automatic lifetime tracking and scene lifetime-token validation (`XJEntity::GetSceneChecked`) to guard against dangling scene access; scenes maintain a UUID-to-EnTT index for direct stable-ID lookup and duplicate rejection
 - **Reserved UUID Range**: Engine/editor-owned UUIDs live in a reserved range (`XJReservedUUID`), and user UUID generation skips it to avoid collisions
 - **Component Storage**: Dense array storage for optimal cache performance
+- **Unified Transform**: `XJTransformComponent` owns private local TRS with normalized quaternion rotation, degree-based XYZ Euler accessors (`Rx * Ry * Rz`), and checked atomic setters instead of writable fields. World evaluation walks the parent chain with cycle/finite-value checks; rendering, lighting, picking, cameras, Inspector, and script services share these semantics. World rotation composes quaternions independently of scale; lossy world scale measures matrix-axis lengths.
+- **Checked World Edits**: World position, rotation, pose, and scale setters return `XJTransformStatus` and leave local state unchanged on failure. Double-precision world evaluation is checked for float representability at GPU/picking boundaries; `Transform.RotateY` applies a local-axis quaternion rotation.
+- **Camera Pose**: Cameras use world position/rotation with local forward `-Z` and up `+Y`. View-matrix reads do not mutate ECS state or orbit settings; Free/Orbit controllers apply checked world-pose edits, updating orbit radius/pivot only after successful changes.
+- **Scene Format v4**: Scene files persist local TRS plus camera orbit mode, target, and radius. Loading v2/v3 migrates legacy yaw/pitch camera poses into the new parent-relative transform convention; unrepresentable legacy poses fail safely.
 - **Light Component**: `XJLightComponent` supports Directional/Point/Spot lights with enable toggle, color, intensity, range, and validated spot inner/outer cone angles
 - **System Scheduling**: Flexible system registration and execution order
 - **System Scheduler**: `XJSystemScheduler` provides transactional Start/Stop lifecycle handling, configurable fixed-step updates, a per-frame fixed-step cap, and a safe-point callback for deferred runtime mutations
@@ -331,6 +335,8 @@ Render tests additionally cover material upload state and viewport display reque
 Script value integration and native contract tests cover vector expressions, native argument/return validation, catalogue compatibility, invalid bytecode, and value serialization.
 
 Host service tests cover entity lifetime/session isolation, local/world transforms and failed-write atomicity, input focus/phase behavior, logging quotas, and native dispatch through the VM.
+
+Transform component and ECS integration tests additionally cover quaternion/TRS math, parent inheritance, atomic failure behavior, camera controls and read-only view queries, world-space lighting/picking/bounds, Inspector local edits, and v2/v3-to-v4 scene migration and round trips.
 
 ```bash
 cmake -S . -B build -DXJ_BUILD_TESTS=ON
@@ -532,14 +538,14 @@ Check the `XJEngineApp` class in `Src/main.cpp` to learn how to:
 
 ### Creating Entities
 ```cpp
-XJ::XJEntity* entity = scene->CreateEntity("Cube");
+XJ::XJEntity* entity = scene->CreateEntityWithTransform("Cube");
 auto& transform = entity->GetComponent<XJ::XJTransformComponent>();
 auto& material = entity->AddComponent<XJ::XJBaseMaterialComponent>();
 
-transform.position = glm::vec3(0.0f, 0.0f, 0.0f);
-transform.rotation = glm::vec3(0.0f, 0.0f, 0.0f);
-transform.scale = glm::vec3(1.0f, 1.0f, 1.0f);
-transform.UpdateModelMatrix();
+const auto status = transform.SetLocalTRSEuler(
+    glm::dvec3(0.0), glm::dvec3(0.0), glm::dvec3(1.0));
+if (status != XJ::XJTransformStatus::Success)
+    spdlog::error("Cube transform could not be applied");
 ```
 
 ### Using Surface Materials
@@ -622,12 +628,18 @@ mObserver->OnEvent<XJ::XJFrameBufferResizeEvent>([this](const XJ::XJFrameBufferR
 ### Advanced Example: Camera Controller
 ```cpp
 // Create a camera entity
-XJ::XJEntity* camera = scene->CreateEntity("MainCamera");
+XJ::XJEntity* camera = scene->CreateEntityWithTransform("MainCamera");
 camera->AddComponent<XJ::XJCameraComponent>();
 auto& cameraComp = camera->GetComponent<XJ::XJCameraComponent>();
 cameraComp.XJSetCameraMode(XJ::CameraMode::Orbit);
 cameraComp.XJSetRadius(5.0f);
 cameraComp.XJSetTarget(glm::vec3(0.0f, 0.0f, 0.0f));
+
+// Orbit settings do not move the camera in the view-matrix getter.
+const auto poseStatus = camera->GetComponent<XJ::XJTransformComponent>()
+    .TrySetWorldPose(glm::dvec3(0.0, 0.0, 5.0), glm::dquat(1.0, 0.0, 0.0, 0.0));
+if (poseStatus != XJ::XJTransformStatus::Success)
+    spdlog::error("Camera pose could not be applied");
 
 // Set camera as active camera in render target
 mRenderTarget->XJSetCamera(camera);

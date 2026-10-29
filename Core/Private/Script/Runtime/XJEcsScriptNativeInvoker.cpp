@@ -84,41 +84,9 @@ namespace XJ
             context.Owner->GetComponent<
                 XJTransformComponent>();
 
-        if (!std::isfinite(
-                static_cast<double>(
-                    transform.rotation.y)))
-        {
+        if (transform.RotateLocalY(deltaDegrees) != XJTransformStatus::Success)
             return XJScriptNativeInvokeResult::Failure(
-                XJScriptNativeErrorCode::
-                    NonFiniteInput,
-                "Transform rotation is not finite");
-        }
-
-        const double result =
-            static_cast<double>(
-                transform.rotation.y) +
-            deltaDegrees;
-
-        constexpr double maxFloat =
-            static_cast<double>(
-                std::numeric_limits<float>::max());
-
-        if (!std::isfinite(result) ||
-            result > maxFloat ||
-            result < -maxFloat)
-        {
-            return XJScriptNativeInvokeResult::Failure(
-                XJScriptNativeErrorCode::
-                    NonFiniteResult,
-                "Transform.RotateY result "
-                "is outside float range");
-        }
-
-        transform.rotation.y =
-            static_cast<float>(result);
-
-        // Transform 数据改变后必须同步 model matrix。
-        transform.UpdateModelMatrix();
+                XJScriptNativeErrorCode::NonFiniteResult, "Cannot apply Transform.RotateY result");
 
         return
             XJScriptNativeInvokeResult::Success();

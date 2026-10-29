@@ -37,6 +37,9 @@ namespace XJ
         float NearClip = 0.1f;
         float FarClip = 1000.0f;
         bool Primary = false;
+        bool Orbit = false;
+        glm::vec3 Target{0.0f};
+        float Radius = 6.0f;
     };
 
     struct XJSceneLightData

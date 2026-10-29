@@ -6,7 +6,7 @@
 
 #include <cmath>
 #include <cstdlib>
-#include <iostream>
+#include <spdlog/spdlog.h>
 #include <limits>
 #include <string_view>
 
@@ -18,10 +18,7 @@ namespace
     {
         if (!condition)
         {
-            std::cerr
-                << "FAILED: "
-                << message
-                << '\n';
+            spdlog::error("FAILED: {}", message);
 
             std::exit(EXIT_FAILURE);
         }
@@ -64,9 +61,17 @@ int main()
 
     Check(
         std::abs(
-            transform.rotation.y -
+            transform.GetLocalEulerAngles().y -
             15.0f) < 0.0001f,
         "RotateY changes rotation");
+
+    const XJ::XJScriptValue step = 15.0;
+    for (int index = 0; index < 30; ++index)
+        Check(invoker.Invoke(XJ::XJScriptNativeFunctionId::TransformRotateY,
+            std::span<const XJ::XJScriptValue>{&step, 1}, context).IsValid(), "multi-turn RotateY succeeds");
+    const glm::dquat expected = XJ::XJTransformComponent::RotationFromEulerXYZ({0, 465, 0});
+    Check(std::abs(glm::dot(glm::normalize(glm::dquat{transform.GetLocalRotation()}), expected)) > 0.99999,
+          "RotateY continues through Euler singularities and multiple turns");
 
     const XJ::XJScriptValue wrongType =
         int64_t{15};
@@ -153,9 +158,7 @@ int main()
                 NonFiniteInput,
         "non-finite angle rejected");
 
-    std::cout
-        << "XJEcsScriptNativeInvoker "
-           "tests passed\n";
+    spdlog::info("XJEcsScriptNativeInvoker tests passed.");
 
     return EXIT_SUCCESS;
 }

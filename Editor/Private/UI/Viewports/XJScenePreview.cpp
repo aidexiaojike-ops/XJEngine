@@ -111,11 +111,12 @@ namespace XJ
 //
         //if(std::abs(rayWorld.y) > 0.001f) //避免与水平面平行的情况
         //{
-        //    distanceFromCamera = -transformComp.position.y / rayWorld.y;//计算射线与水平面的交点距离
+        //    distanceFromCamera = -worldPosition.y / rayWorld.y;//计算射线与水平面的交点距离
         //}
-        //glm::vec3 dropPosition = transformComp.position + rayWorld * distanceFromCamera;
+        //glm::vec3 dropPosition = worldPosition + rayWorld * distanceFromCamera;
 
-        outOrigin = transformComp.position;
+        if (transformComp.ReadWorldPosition(outOrigin) != XJTransformStatus::Success)
+            return false;
         outDirection = rayWorld;
         outMaxDistance = cameraComp.XJGetFar();
 

@@ -282,9 +282,9 @@ namespace XJ
                     selected->GetComponent<XJTransformComponent>();
 
                 state.SelectedEntityDetails.Transform.Valid = true;
-                state.SelectedEntityDetails.Transform.Position = transform.position;
-                state.SelectedEntityDetails.Transform.Rotation = transform.rotation;
-                state.SelectedEntityDetails.Transform.Scale = transform.scale;
+                state.SelectedEntityDetails.Transform.Position = transform.GetLocalPosition();
+                state.SelectedEntityDetails.Transform.Rotation = transform.GetLocalEulerAngles();
+                state.SelectedEntityDetails.Transform.Scale = transform.GetLocalScale();
             }
 
 

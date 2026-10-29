@@ -154,10 +154,7 @@ namespace XJ
                 return;
 
             auto& transform = entity.AddComponent<XJTransformComponent>();
-            transform.position = glm::vec3(0.0f);
-            transform.rotation = glm::vec3(0.0f);
-            transform.scale = glm::vec3(1.0f);
-            transform.UpdateModelMatrix();
+            transform.SetLocalTRSEuler({0, 0, 0}, {0, 0, 0}, {1, 1, 1});
         }
 
         std::shared_ptr<XJSurfaceMaterial> CreateMaterialForSlot(XJEntity& entity, uint32_t slotIndex, XJAssetRegistry& assetRegistry, const std::shared_ptr<XJTexture>& defaultTexture, const std::shared_ptr<XJSampler>& defaultSampler)//创建材质插槽
@@ -664,6 +661,8 @@ namespace XJ
 
         view.each([&](auto enttEntity, const XJTransformComponent& transform, const XJSurfaceMaterialComponent& renderComponent)
         {
+            glm::mat4 worldMatrix;
+            if (transform.ReadWorldMatrix(worldMatrix) != XJTransformStatus::Success) return;
             for (const auto& slot : renderComponent.XJGetSlots())
             {
                 if (!slot.Mesh)
@@ -673,7 +672,7 @@ namespace XJ
                 if (!submesh || !submesh->Bounds.IsValid())
                     continue;
 
-                const XJBoundingBox worldBounds = submesh->Bounds.Transformed(transform.GetModelMatrix());
+                const XJBoundingBox worldBounds = submesh->Bounds.Transformed(worldMatrix);
                 XJRayAABBHit boundsHit;
 
                 if (XJIntersectRayAABB(
@@ -688,7 +687,7 @@ namespace XJ
                     if (!RaycastSubmeshTriangles(
                             *slot.Mesh,
                             *submesh,
-                            transform.GetModelMatrix(),
+                            worldMatrix,
                             rayOrigin,
                             glm::normalize(rayDirection),
                             closestDistance,
@@ -714,6 +713,8 @@ namespace XJ
         auto lightView = registry.view<XJTransformComponent, XJLightComponent>();
         lightView.each([&](auto enttEntity, const XJTransformComponent& transform, const XJLightComponent& light)
         {
+            glm::vec3 position;
+            if (transform.ReadWorldPosition(position) != XJTransformStatus::Success) return;
             XJBoundingBox bounds;
             constexpr float pointRadius = 0.3f;
             constexpr float directionalLength = 0.8f;
@@ -722,8 +723,8 @@ namespace XJ
 
             if (light.XJGetLightType() == XJLightType::Point)
             {
-                bounds.Min = transform.position - glm::vec3(pointRadius);
-                bounds.Max = transform.position + glm::vec3(pointRadius);
+                bounds.Min = position - glm::vec3(pointRadius);
+                bounds.Max = position + glm::vec3(pointRadius);
             }
             else
             {
@@ -736,9 +737,9 @@ namespace XJ
                 const float length = light.XJGetLightType() == XJLightType::Spot
                     ? spotLength
                     : directionalLength;
-                const glm::vec3 end = transform.position + direction * length;
-                bounds.Expand(transform.position - glm::vec3(0.08f));
-                bounds.Expand(transform.position + glm::vec3(0.08f));
+                const glm::vec3 end = position + direction * length;
+                bounds.Expand(position - glm::vec3(0.08f));
+                bounds.Expand(position + glm::vec3(0.08f));
                 bounds.Expand(end - glm::vec3(radius));
                 bounds.Expand(end + glm::vec3(radius));
             }
@@ -831,9 +832,9 @@ namespace XJ
         {
             const auto& transform = entity->GetComponent<XJTransformComponent>();
             details.Transform.Valid = true;
-            details.Transform.Position = transform.position;
-            details.Transform.Rotation = transform.rotation;
-            details.Transform.Scale = transform.scale;
+            details.Transform.Position = transform.GetLocalPosition();
+            details.Transform.Rotation = transform.GetLocalEulerAngles();
+            details.Transform.Scale = transform.GetLocalScale();
         }
 
         if (entity->HasComponent<XJCameraComponent>())
@@ -959,10 +960,9 @@ namespace XJ
             return;
 
         auto& transform = entity->GetComponent<XJTransformComponent>();
-        transform.position = request.Position;
-        transform.rotation = request.Rotation;
-        transform.scale = request.Scale;
-        transform.UpdateModelMatrix();
+        if (transform.SetLocalTRSEuler(glm::dvec3{request.Position}, glm::dvec3{request.Rotation},
+                                     glm::dvec3{request.Scale}) != XJTransformStatus::Success)
+            spdlog::warn("Inspector rejected invalid local Transform for entity={}", request.EntityId);
     }
 
     void XJEditorSceneService::UpdateLight(XJScene& scene, const XJEditorUpdateLightRequest& request)
@@ -1024,10 +1024,7 @@ namespace XJ
                     return false;
 
                 auto& transform = entity->AddComponent<XJTransformComponent>();
-                transform.position = glm::vec3(0.0f);
-                transform.rotation = glm::vec3(0.0f);
-                transform.scale = glm::vec3(1.0f);
-                transform.UpdateModelMatrix();
+                transform.SetLocalTRSEuler({0, 0, 0}, {0, 0, 0}, {1, 1, 1});
                 return true;
             }
 
@@ -1039,10 +1036,7 @@ namespace XJ
                 if (!entity->HasComponent<XJTransformComponent>())
                 {
                     auto& transform = entity->AddComponent<XJTransformComponent>();
-                    transform.position = glm::vec3(0.0f);
-                    transform.rotation = glm::vec3(0.0f);
-                    transform.scale = glm::vec3(1.0f);
-                    transform.UpdateModelMatrix();
+                    transform.SetLocalTRSEuler({0, 0, 0}, {0, 0, 0}, {1, 1, 1});
                 }
 
                 auto& camera = entity->AddComponent<XJCameraComponent>();
@@ -1071,10 +1065,7 @@ namespace XJ
                 if(!entity->HasComponent<XJTransformComponent>())
                 {
                     auto& transform = entity->AddComponent<XJTransformComponent>();
-                    transform.position = glm::vec3(0.0f);
-                    transform.rotation = glm::vec3(0.0f);
-                    transform.scale = glm::vec3(1.0f);
-                    transform.UpdateModelMatrix();
+                    transform.SetLocalTRSEuler({0, 0, 0}, {0, 0, 0}, {1, 1, 1});
                 }
                 entity->AddComponent<XJLightComponent>();
                 return true;

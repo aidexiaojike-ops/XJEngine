@@ -1,7 +1,9 @@
 #ifndef XJ_UUID_H
 #define XJ_UUID_H
 
-#include "Edit/EditIncludes.h"
+#include <cstddef>
+#include <cstdint>
+#include <functional>
 
 namespace XJ
 {

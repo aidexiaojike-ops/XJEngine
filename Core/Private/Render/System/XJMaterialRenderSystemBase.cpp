@@ -83,7 +83,7 @@ namespace XJ
 
             XJEntity* camera = renderTarget->XJGetCamera();
             if (camera && camera->HasComponent<XJTransformComponent>())
-                context.CameraPosition = camera->GetComponent<XJTransformComponent>().position;
+                camera->GetComponent<XJTransformComponent>().ReadWorldPosition(context.CameraPosition);
         }
 
         if (XJApplication* app = XJGetApp())

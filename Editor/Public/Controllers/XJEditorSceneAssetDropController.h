@@ -2,7 +2,7 @@
 #define XJ_EDITOR_SCENE_ASSET_DROP_CONTROLLER_H
 
 #include "Asset/XJAsset.h"
-#include "Edit/Mathinclude.h"
+#include <glm/vec3.hpp>
 #include "UI/XJEditorSelection.h"
 
 #include <memory>

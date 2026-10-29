@@ -2,6 +2,8 @@
 #define XJ_NODE_H
 
 #include "ECS/XJUUID.h"
+#include <string>
+#include <vector>
 
 namespace XJ
 {

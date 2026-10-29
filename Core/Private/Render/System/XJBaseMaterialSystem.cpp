@@ -301,7 +301,8 @@ namespace XJ
                     continue;
                 }
 
-                mInstanceUbo[frameSlot].modelMat = transComp.GetModelMatrix();//设置实例UBO的模型矩阵
+                if (transComp.ReadWorldMatrix(mInstanceUbo[frameSlot].modelMat) != XJTransformStatus::Success)
+                    continue;
                 const uint32_t dynamicOffset = drawIndex * mDynamicAlignment;//计算动态偏移
                 mInstanceBuffers[frameSlot]->WriteDataOffset(&mInstanceUbo[frameSlot], dynamicOffset, sizeof(InstanceUbo));//UBO写入数据偏移
                 VkDescriptorSet descriptorSet = mDescriptorSets[frameSlot];

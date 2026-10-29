@@ -2,7 +2,7 @@
 #define XJ_EDITOR_SCENE_VIEW_MODEL_H
 
 #include "Asset/XJAsset.h"
-#include "Edit/Mathinclude.h"
+#include <glm/vec3.hpp>
 #include "UI/XJEditorSelection.h"
 #include "UI/XJEditorMaterialTypes.h"
 

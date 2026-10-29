@@ -1,7 +1,8 @@
 #ifndef XJ_EDITOR_UI_STATE_H
 #define XJ_EDITOR_UI_STATE_H
 
-#include "Edit/Mathinclude.h"
+#include <glm/vec2.hpp>
+#include <glm/vec3.hpp>
 #include "UI/XJEditorAssetRequests.h"
 #include "UI/XJEditorSceneViewModel.h"
 #include "UI/XJEditorSelection.h"

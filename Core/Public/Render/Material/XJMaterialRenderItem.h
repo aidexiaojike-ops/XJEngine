@@ -1,7 +1,7 @@
 #ifndef XJ_MATERIAL_RENDER_ITEM_H
 #define XJ_MATERIAL_RENDER_ITEM_H
 
-#include "Edit/Mathinclude.h"
+#include <glm/mat4x4.hpp>
 #include <cstdint>
 #include <memory>
 

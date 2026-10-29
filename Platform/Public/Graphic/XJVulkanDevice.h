@@ -1,7 +1,9 @@
 #ifndef XJ_VULKAN_DEVICE_H
 #define XJ_VULKAN_DEVICE_H
 
-#include "Edit/EditIncludes.h"
+#include <cstdint>
+#include <memory>
+#include <vector>
 #include "Graphic/VulkanCommon.h"
 #include "Graphic/XJVulkanQueue.h"
 //逻辑设备

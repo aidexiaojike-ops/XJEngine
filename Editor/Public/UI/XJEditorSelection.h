@@ -2,7 +2,7 @@
 #define XJ_EDITOR_SELECTION_H
 
 #include "Asset/XJAsset.h"
-#include "Edit/Mathinclude.h"
+#include <glm/vec3.hpp>
 #include "UI/XJEditorComponentTypes.h"
 #include "UI/XJEditorMaterialTypes.h"
 

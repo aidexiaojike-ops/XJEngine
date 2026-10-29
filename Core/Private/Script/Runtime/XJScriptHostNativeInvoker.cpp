@@ -177,29 +177,8 @@ namespace XJ
                 if (!mServices.Transforms)
                     return Unavailable("Transform");
 
-                const auto current = mServices.Transforms->Read(
-                        context.Call.Owner,
-                        XJScriptSpace::Local,
-                        XJScriptTransformProperty::EulerAngles);
-
-                if (!current.IsValid())
-                    return Convert(current);
-
-                auto angles = *current.Value;
-                angles.Y += std::get<double>(arguments[0]);
-
-                if (!angles.IsFinite())
-                {
-                    return NativeResult::Failure(
-                        XJScriptNativeErrorCode::NonFiniteResult,
-                        "RotateY produced a non-finite angle");
-                }
-
-                return Convert(mServices.Transforms->Write(
-                        context.Call.Owner,
-                        XJScriptSpace::Local,
-                        XJScriptTransformProperty::EulerAngles,
-                        angles));
+                return Convert(mServices.Transforms->RotateLocalY(
+                    context.Call.Owner, std::get<double>(arguments[0])));
             }
 
             case Id::SceneFindByUUID:

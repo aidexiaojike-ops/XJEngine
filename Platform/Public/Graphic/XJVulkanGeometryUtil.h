@@ -2,6 +2,7 @@
 #define XJ_VULKAN_GEOMETRY_UTIL_H
 
 #include "Graphic/XJVulkanVertex.h"
+#include <glm/mat4x4.hpp>
 #include <cstdint>
 #include <vector>
 

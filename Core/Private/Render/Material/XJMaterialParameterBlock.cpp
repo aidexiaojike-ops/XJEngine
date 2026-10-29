@@ -78,7 +78,7 @@ namespace XJ
         // std140：vec3 对齐 16、载荷仅 12 字节，末 4 字节是填充，由调用方 offset（shader 反射）保证对齐。
         // 若 GLM 启用了 GLM_FORCE_DEFAULT_ALIGNED_GENTYPES，sizeof(glm::vec3)==16，
         // 直接写 sizeof(value) 会把 4 字节 padding 垃圾写进紧邻的下一个成员，导致 shader 读到脏数据。
-        // 这里固定只写 12 字节载荷，使布局不依赖 GLM 的编译配置（详见 Mathinclude.h 对齐策略说明）。
+        // 这里固定只写 12 字节载荷，使布局不依赖 GLM 的编译配置。
         const uint32_t std140Vec3PayloadSize = 12u;
         return SetBytes(offset, glm::value_ptr(value), std140Vec3PayloadSize);
     }

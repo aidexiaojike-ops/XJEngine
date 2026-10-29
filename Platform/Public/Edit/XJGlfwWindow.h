@@ -2,13 +2,12 @@
 #define GLFW_WINDOW_H
 
 
-#include "Edit/EditIncludes.h"
 // 第三方库
 #define GLFW_INCLUDE_VULKAN
 #include <GLFW/glfw3.h>
 #include <GLFW/glfw3native.h>
 #include "Event/XJMouseEvent.h"
-#include "Edit/Mathinclude.h"
+#include <glm/vec2.hpp>
 
 #include <functional>
 

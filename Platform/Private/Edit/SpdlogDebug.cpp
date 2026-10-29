@@ -1,4 +1,6 @@
 #include <Edit/SpdlogDebug.h>
+#include <filesystem>
+#include <memory>
 
 #ifdef _WIN32
 #include <windows.h>
@@ -20,7 +22,7 @@ namespace XJ
         consoleMode |= ENABLE_VIRTUAL_TERMINAL_PROCESSING;
         if (!SetConsoleMode(hConsole, consoleMode))
         {
-            std::cerr << "启用控制台颜色失败" << std::endl;
+            spdlog::error("启用控制台颜色失败");
         }
     }
 #endif
@@ -62,7 +64,7 @@ namespace XJ
         }
         catch (const std::exception& e)
         {
-            std::cerr << "日志初始化失败" << e.what() << std::endl;
+            spdlog::error("日志初始化失败: {}", e.what());
         }
     }
 }
