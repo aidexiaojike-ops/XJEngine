@@ -39,6 +39,35 @@ namespace XJ
         constexpr uint32_t kMaxMaterialSlotCount = 64;
         constexpr size_t kMaterialInspectorCacheMaxEntries = 256;
 
+        const char* DescribeTransformFailure(XJTransformStatus status)//描述变换失败
+        {
+            switch (status)
+            {
+                case XJTransformStatus::Success:
+                    return "";
+
+                case XJTransformStatus::InvalidArgument:
+                    return
+                        "Invalid Transform value. "
+                        "World scale must be non-negative.";
+
+                case XJTransformStatus::InvalidHierarchy:
+                    return "Transform hierarchy is invalid.";
+
+                case XJTransformStatus::NonInvertibleParent:
+                    return
+                        "The parent transform cannot represent "
+                        "the requested value.";
+
+                case XJTransformStatus::NonFiniteResult:
+                    return
+                        "Transform result exceeds the supported "
+                        "numeric range.";
+            }
+
+            return "Unknown Transform failure.";
+        }
+
         bool IntersectRayTriangle(
             const glm::vec3& origin,
             const glm::vec3& direction,
@@ -812,6 +841,65 @@ namespace XJ
         return viewModel;
     }
 
+    XJEditorTransformView XJEditorSceneService::BuildTransformView(XJScene& scene, XJEditorEntityId entityId)
+    {
+        XJEditorTransformView view;
+        
+        const auto* entity = FindEntityById(scene, entityId);
+        if (!entity ||
+            !entity->IsValid() ||
+            !entity->HasComponent<XJTransformComponent>())
+        {
+            return view;
+        }
+
+        const auto& transform = entity->GetComponent<XJTransformComponent>();
+
+        view.Valid = true;
+        view.Position = transform.GetLocalPosition();
+        view.Rotation = transform.GetLocalEulerAngles();
+        view.Scale = transform.GetLocalScale();
+
+        XJTransformWorldState world;
+        const auto status = transform.EvaluateWorld(world);
+
+        if (status != XJTransformStatus::Success)
+        {
+            view.World.Error = DescribeTransformFailure(status);
+            return view;
+        }
+        //计算世界缩放
+        const glm::dvec3 worldScale{
+            std::hypot(
+                world.Matrix[0].x,
+                world.Matrix[0].y,
+                world.Matrix[0].z),
+            std::hypot(
+                world.Matrix[1].x,
+                world.Matrix[1].y,
+                world.Matrix[1].z),
+            std::hypot(
+                world.Matrix[2].x,
+                world.Matrix[2].y,
+                world.Matrix[2].z)
+        };
+        //
+        if (!std::isfinite(worldScale.x) ||
+            !std::isfinite(worldScale.y) ||
+            !std::isfinite(worldScale.z))
+        {
+            view.World.Error = DescribeTransformFailure(XJTransformStatus::NonFiniteResult);
+            return view;
+        }
+
+        view.World.Position = glm::dvec3{world.Matrix[3]};
+        view.World.Rotation = XJTransformComponent::EulerXYZFromRotation(world.Rotation);
+        view.World.Scale = worldScale;
+        view.World.Valid = true;
+
+        return view;
+    }
+
     XJEditorEntityDetailsView XJEditorSceneService::BuildEntityDetailsView(XJScene& scene, XJEditorEntityId entityId, XJAssetRegistry* assetRegistry, const ShouldExposeEntityCallback& shouldExposeEntity)
     {
         XJEditorEntityDetailsView details;
@@ -827,15 +915,7 @@ namespace XJ
         details.Valid = true;
         details.Id = entityId;
         details.Name = entity->XJGetName().empty() ? "XJUnnamed" : entity->XJGetName();
-
-        if (entity->HasComponent<XJTransformComponent>())
-        {
-            const auto& transform = entity->GetComponent<XJTransformComponent>();
-            details.Transform.Valid = true;
-            details.Transform.Position = transform.GetLocalPosition();
-            details.Transform.Rotation = transform.GetLocalEulerAngles();
-            details.Transform.Scale = transform.GetLocalScale();
-        }
+        details.Transform = BuildTransformView(scene, entityId);
 
         if (entity->HasComponent<XJCameraComponent>())
         {
@@ -953,16 +1033,118 @@ namespace XJ
         entity->XJSetName(name);
     }
 
-    void XJEditorSceneService::UpdateTransform(XJScene& scene, const XJEditorUpdateTransformRequest& request)
+    XJEditorTransformEditResult XJEditorSceneService::UpdateTransform(XJScene& scene, const XJEditorUpdateTransformRequest& request)
     {
+        using Outcome = XJEditorTransformEditOutcome;
+        //是否变化
+        if (!IsValidTransformSpace(request.Space) ||
+            !IsValidTransformFields(request.Fields))
+        {
+            return {
+                Outcome::Rejected,
+                "Invalid Transform edit space or fields."
+            };
+        }
+
         XJEntity* entity = FindEntityById(scene, request.EntityId);
         if (!entity || !entity->IsValid() || !entity->HasComponent<XJTransformComponent>())
-            return;
+        {
+            return {
+                Outcome::Rejected,
+                "The target entity has no valid Transform."
+            };
+        }
 
         auto& transform = entity->GetComponent<XJTransformComponent>();
-        if (transform.SetLocalTRSEuler(glm::dvec3{request.Position}, glm::dvec3{request.Rotation},
-                                     glm::dvec3{request.Scale}) != XJTransformStatus::Success)
-            spdlog::warn("Inspector rejected invalid local Transform for entity={}", request.EntityId);
+
+        // 仅复制到临时候选对象。
+        // Owner 保持不变，使候选对象能读取同一条父链。
+        // 不将整个组件赋回 ECS，避免覆盖组件身份。
+        auto candidate = transform;
+        const bool editPosition = HasTransformField(request.Fields, XJEditorTransformFields::Position);
+        const bool editRotation = HasTransformField(request.Fields, XJEditorTransformFields::Rotation);
+        const bool editScale = HasTransformField(request.Fields, XJEditorTransformFields::Scale);
+
+        XJTransformStatus status = XJTransformStatus::Success;
+
+        if (request.Space == XJEditorTransformSpace::Local)//如果是本地空间直接设置transform的本地位置、旋转、缩放
+        {
+            if (editPosition)
+            {
+                status = candidate.SetLocalPosition(request.Position);
+            }
+
+            if (status == XJTransformStatus::Success && editRotation)
+            {
+                status = candidate.SetLocalEulerAngles(request.Rotation);
+            }
+
+            if (status == XJTransformStatus::Success && editScale)
+            {
+                status = candidate.SetLocalScale(request.Scale);
+            }
+        }
+        else
+        {
+            if (editPosition && editRotation)
+            {
+                const auto& angles = request.Rotation;
+
+                if (!std::isfinite(angles.x) ||
+                    !std::isfinite(angles.y) ||
+                    !std::isfinite(angles.z))
+                {
+                    status = XJTransformStatus::InvalidArgument;
+                }
+                else
+                {
+                    status = candidate.TrySetWorldPose(
+                        request.Position,
+                        XJTransformComponent::
+                            RotationFromEulerXYZ(angles));
+                }
+            }
+            else if (editPosition)
+            {
+                status = candidate.TrySetWorldPosition(request.Position);
+            }
+            else if (editRotation)
+            {
+                status = candidate.TrySetWorldEulerAngles(request.Rotation);
+            }
+
+            // 先确定旋转，再计算对应旋转下的 lossy scale。
+            if (status == XJTransformStatus::Success && editScale)
+            {
+                status = candidate.TrySetWorldScale(request.Scale);
+            }
+        }
+
+        if (status != XJTransformStatus::Success)
+        {
+            return {Outcome::Rejected, DescribeTransformFailure(status)};
+        }
+
+        if (candidate.GetLocalPosition() == transform.GetLocalPosition() &&
+            candidate.GetLocalRotation() == transform.GetLocalRotation() &&
+            candidate.GetLocalScale() == transform.GetLocalScale())
+        {
+            return {Outcome::Unchanged, {}};
+        }
+
+        // 最后一步才修改真实组件。
+        // SetLocalTRS 本身具有失败原子性。
+        status = transform.SetLocalTRS(
+            glm::dvec3{candidate.GetLocalPosition()},
+            glm::dquat{candidate.GetLocalRotation()},
+            glm::dvec3{candidate.GetLocalScale()});
+
+        if (status != XJTransformStatus::Success)
+        {
+            return {Outcome::Rejected, DescribeTransformFailure(status)};
+        }
+
+        return {Outcome::Applied, {}};
     }
 
     void XJEditorSceneService::UpdateLight(XJScene& scene, const XJEditorUpdateLightRequest& request)

@@ -220,6 +220,9 @@ Swapchain
 - **Editor Play Mode**: `XJEditorPlayController` manages game simulation lifecycle (Start/Pause/Resume/Stop), clones the editor scene into a runtime scene, and wires `XJSystemScheduler` with registered system factories; `XJEditorPlayState` (`Edit`/`Playing`/`Paused`) tracks the current mode; `XJEditorWorkspaceMode` (`Edit`/`PlayReadOnly`/`PlayRuntime`) controls workspace editing permissions
 - **Editor Workspace**: `XJEditorWorkspace` manages the in-engine project workspace (resource root, asset registry, scene wiring)
 - **Runtime Inspection**: During Play/Pause, Hierarchy and Inspector read RuntimeScene snapshots and accept requests to add/remove script components or slots, toggle slots, and replace scripts. Stopping restores the editor selection.
+- **Local/World Transform Editing**: The Scene toolbar switches the Inspector coordinate space through `XJEditorTransformToolsController`; switching is Edit-only and changes neither scene data nor Undo history. Inspector uses double-precision world snapshots and field-specific requests, preserving untouched local components. World scale is non-negative lossy scale with local reflection signs preserved; component copy/paste always uses Local TRS. Runtime inspection remains read-only for Transform edits.
+- **Transform Feedback & History**: Scene services validate edits on a temporary candidate before committing. Rejected edits show an entity/space-specific reason without marking the scene dirty or changing Undo/Redo history; unchanged edits also create no history.
+- **Scene World Grid**: A Scene-only Vulkan line pass draws a depth-tested, non-depth-writing world grid with adaptive 1/2/5 spacing (minimum 1 meter), X/Z coordinate labels, ticks, spacing text, and edge fading. Layout is derived from the camera and viewport; invalid camera poses skip grid rendering rather than reuse a cached view. Game Preview is unaffected.
 - **Viewport Display Controls**: `XJEditorViewportDisplayController`/`Service` apply display requests and publish ViewModels for Scene/Game previews. Render modes are capability-gated: currently only Final is implemented; BaseColor, LinearDepth, WorldNormal, and Lighting remain unavailable.
 - **Performance Snapshots**: Viewport overlays expose completed-frame time/FPS, script CPU time and active instances, draw calls, and material upload counts, with a 128-sample frame history. Collection uses snapshots rather than per-frame logging.
 - **Frame Renderer**: `XJEditorFrameRenderer` + `XJEditorRenderResources` own ImGui/Vulkan frame rendering and shared editor render resources; `XJEditorUIHost` hosts the UI layer
@@ -337,6 +340,8 @@ Script value integration and native contract tests cover vector expressions, nat
 Host service tests cover entity lifetime/session isolation, local/world transforms and failed-write atomicity, input focus/phase behavior, logging quotas, and native dispatch through the VM.
 
 Transform component and ECS integration tests additionally cover quaternion/TRS math, parent inheritance, atomic failure behavior, camera controls and read-only view queries, world-space lighting/picking/bounds, Inspector local edits, and v2/v3-to-v4 scene migration and round trips.
+
+Transform acceptance tests cover Local/World switching, field isolation, reflected/lossy scale, rejection feedback, and Undo/Redo preservation. World grid layout tests validate adaptive spacing, labels, and camera/viewport edge cases without requiring GPU rendering.
 
 ```bash
 cmake -S . -B build -DXJ_BUILD_TESTS=ON

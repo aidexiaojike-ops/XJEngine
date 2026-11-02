@@ -473,6 +473,165 @@ namespace
               "overflowing world read fails");
         Check(output == glm::dvec3{7, 8, 9}, "failed position read preserves output");
     }
+    void TestWorldPoseContract()
+    {
+        XJScene scene;
+        auto* parent = scene.CreateEntityWithTransform("Parent");
+        auto* child = scene.CreateEntityWithTransform("Child");
+        parent->XJAddChild(child);
+        auto& p = parent->GetComponent<XJTransformComponent>();
+        auto& c = child->GetComponent<XJTransformComponent>();
+
+        CheckSuccess(p.SetLocalTRSEuler({10, 20, 30}, {13, 27, -19}, {-2, 3, 4}),
+                     "pose parent setup");
+        CheckSuccess(c.SetLocalTRSEuler({1, 2, 3}, {17, -21, 33}, {-1, 2, 3}),
+                     "pose child setup");
+        const auto originalScale = c.GetLocalScale();
+        const glm::dvec3 targetPosition{40, -5, 9};
+        const auto targetRotation =
+            XJTransformComponent::RotationFromEulerXYZ({31, -23, 47});
+
+        CheckSuccess(c.TrySetWorldPose(targetPosition, targetRotation),
+                     "world pose succeeds under reflected nonuniform parent");
+        glm::dvec3 actualPosition;
+        glm::dquat actualRotation;
+        CheckSuccess(c.ReadWorldPosition(actualPosition), "world pose position read");
+        CheckSuccess(c.ReadWorldRotation(actualRotation), "world pose rotation read");
+        Check(Near(actualPosition, targetPosition), "world pose reaches requested position");
+        Check(Near(glm::mat4_cast(actualRotation), glm::mat4_cast(targetRotation)),
+              "world pose reaches requested pure rotation");
+        Check(c.GetLocalScale() == originalScale,
+              "world pose preserves local scale and reflection");
+
+        const auto position = c.GetLocalPosition();
+        const auto rotation = c.GetLocalRotation();
+        const auto scale = c.GetLocalScale();
+        const auto matrix = c.GetLocalMatrix();
+        const auto unchanged = [&]
+        {
+            Check(c.GetLocalPosition() == position && c.GetLocalRotation() == rotation &&
+                  c.GetLocalScale() == scale && c.GetLocalMatrix() == matrix,
+                  "failed world pose preserves complete local state");
+        };
+
+        const double infinity = std::numeric_limits<double>::infinity();
+        const double nan = std::numeric_limits<double>::quiet_NaN();
+        for (const double invalid : {infinity, nan})
+        {
+            Check(c.TrySetWorldPose({invalid, 0, 0}, targetRotation) ==
+                  XJTransformStatus::InvalidArgument, "world pose rejects non-finite position");
+            unchanged();
+            Check(c.TrySetWorldPose(targetPosition, {1, invalid, 0, 0}) ==
+                  XJTransformStatus::InvalidArgument, "world pose rejects non-finite rotation");
+            unchanged();
+        }
+        Check(c.TrySetWorldPose(targetPosition, {0, 0, 0, 0}) ==
+              XJTransformStatus::InvalidArgument, "world pose rejects zero quaternion");
+        unchanged();
+        Check(c.TrySetWorldPose({1.0e300, 0, 0}, targetRotation) ==
+              XJTransformStatus::NonFiniteResult, "world pose rejects unrepresentable local position");
+        unchanged();
+
+        CheckSuccess(p.SetLocalScale({0, 0, 0}), "world pose singular parent setup");
+        // 即便请求位置恰好可达，Pose 接口也统一要求父矩阵可逆。
+        Check(c.TrySetWorldPose({10, 20, 30}, targetRotation) ==
+              XJTransformStatus::NonInvertibleParent,
+              "world pose requires invertible parent even at reachable position");
+        unchanged();
+    }
+
+    void TestFloatWorldReadContract()
+    {
+        XJScene scene;
+        auto* parent = scene.CreateEntityWithTransform("Parent");
+        auto* child = scene.CreateEntityWithTransform("Child");
+        parent->XJAddChild(child);
+        auto& p = parent->GetComponent<XJTransformComponent>();
+        auto& c = child->GetComponent<XJTransformComponent>();
+
+        // Local 均可由 float 表示，但组合后的世界缩放超出 float 范围。
+        CheckSuccess(p.SetLocalScale({1.0e30, 1.0e30, 1.0e30}), "large float-read parent");
+        CheckSuccess(c.SetLocalScale({1.0e20, 1.0e20, 1.0e20}), "large float-read child scale");
+        XJTransformWorldState world;
+        CheckSuccess(c.EvaluateWorld(world), "large world remains representable as double");
+
+        const glm::mat4 matrixSentinel{7.0f};
+        glm::mat4 matrix = matrixSentinel;
+        Check(c.ReadWorldMatrix(matrix) == XJTransformStatus::NonFiniteResult,
+              "float world matrix rejects overflow");
+        Check(matrix == matrixSentinel, "failed float matrix read preserves output");
+
+        glm::vec3 position{7, 8, 9};
+        CheckSuccess(c.ReadWorldPosition(position),
+                     "float position can succeed despite oversized world scale");
+        Check(position == glm::vec3{0},
+              "float position reads translation independently of scale range");
+
+        CheckSuccess(c.SetLocalPosition({1.0e20, 0, 0}), "large float-read child position");
+        const glm::vec3 positionSentinel{7, 8, 9};
+        position = positionSentinel;
+        Check(c.ReadWorldPosition(position) == XJTransformStatus::NonFiniteResult,
+              "float world position rejects overflow");
+        Check(position == positionSentinel, "failed float position read preserves output");
+
+        // 世界位置和缩放约为 1e-50；位置拒绝下溢，矩阵允许元素归零。
+        CheckSuccess(p.SetLocalScale({1.0e-30, 1.0e-30, 1.0e-30}), "tiny float-read parent");
+        CheckSuccess(c.SetLocalTRSEuler({1.0e-20, 0, 0}, {0, 0, 0},
+                                      {1.0e-20, 1.0e-20, 1.0e-20}), "tiny float-read child");
+        glm::dvec3 doublePosition;
+        CheckSuccess(c.ReadWorldPosition(doublePosition),
+                     "tiny world position remains readable as double");
+        Check(doublePosition.x > 0.0 && doublePosition.x <
+              static_cast<double>(std::numeric_limits<float>::denorm_min()),
+              "tiny world position is nonzero but outside float nonzero range");
+        position = positionSentinel;
+        Check(c.ReadWorldPosition(position) == XJTransformStatus::NonFiniteResult,
+              "float position rejects nonzero underflow");
+        Check(position == positionSentinel, "underflowing position read preserves output");
+        CheckSuccess(c.ReadWorldMatrix(matrix), "float matrix permits tiny elements to become zero");
+        Check(matrix[0][0] == 0.0f && matrix[1][1] == 0.0f && matrix[2][2] == 0.0f &&
+              matrix[3][0] == 0.0f && matrix[3][3] == 1.0f,
+              "tiny affine matrix retains homogeneous element");
+    }
+
+    void TestRotateLocalYContract()
+    {
+        XJTransformComponent transform;
+        CheckSuccess(transform.SetLocalTRSEuler({1, 2, 3}, {37, -23, 61}, {-2, 3, 4}),
+                     "local Y rotation setup");
+        const auto position = transform.GetLocalPosition();
+        const auto scale = transform.GetLocalScale();
+        const auto initial = glm::normalize(glm::dquat{transform.GetLocalRotation()});
+        const auto delta = XJTransformComponent::RotationFromEulerXYZ({0, 45, 0});
+
+        CheckSuccess(transform.RotateLocalY(45), "local Y rotation succeeds");
+        const auto actual = glm::normalize(glm::dquat{transform.GetLocalRotation()});
+        Check(Near(glm::mat4_cast(actual), glm::mat4_cast(glm::normalize(initial * delta))),
+              "local Y rotation post-multiplies delta");
+        Check(!Near(glm::mat4_cast(actual), glm::mat4_cast(glm::normalize(delta * initial)), 1.0e-3),
+              "local Y rotation is not parent-space Y rotation");
+        Check(transform.GetLocalPosition() == position && transform.GetLocalScale() == scale,
+              "local Y rotation preserves position and scale");
+
+        const auto rotation = transform.GetLocalRotation();
+        const auto matrix = transform.GetLocalMatrix();
+        for (const double invalid : {std::numeric_limits<double>::infinity(),
+                                     std::numeric_limits<double>::quiet_NaN()})
+        {
+            Check(transform.RotateLocalY(invalid) == XJTransformStatus::InvalidArgument,
+                  "local Y rotation rejects non-finite angle");
+            Check(transform.GetLocalPosition() == position && transform.GetLocalRotation() == rotation &&
+                  transform.GetLocalScale() == scale && transform.GetLocalMatrix() == matrix,
+                  "invalid local Y rotation preserves all local state");
+        }
+
+        CheckSuccess(transform.RotateLocalY(720), "complete local Y turns succeed");
+        Check(Near(glm::mat4_cast(glm::dquat{transform.GetLocalRotation()}), glm::mat4_cast(actual)),
+              "complete local Y turns preserve orientation");
+        CheckSuccess(transform.RotateLocalY(-45), "negative local Y rotation succeeds");
+        Check(Near(glm::mat4_cast(glm::dquat{transform.GetLocalRotation()}), glm::mat4_cast(initial)),
+              "negative local Y rotation reverses the increment");
+    }
 }
 
 int main()
@@ -486,6 +645,9 @@ int main()
     TestWorldRotationAndCollapsedScale();
     TestExtremeParentScales();
     TestWorldOverflowIsAtomic();
+    TestWorldPoseContract();
+    TestFloatWorldReadContract();
+    TestRotateLocalYContract();
 
     spdlog::info("Transform component tests passed.");
     return EXIT_SUCCESS;

@@ -22,6 +22,8 @@ namespace XJ
         public:
             const glm::mat4& XJGetProjectionMatrix();//获取投影矩阵
             const glm::mat4& XJGetViewMatrix();//获取视图矩阵
+            // 显式读取当前世界姿态；失败时不修改输出，也不返回缓存矩阵。
+            bool TryGetViewMatrix(glm::mat4& outView) const;
 
             bool XJGetEnabled() const { return mEnabled; }
             void XJSetEnabled(bool enabled) { mEnabled = enabled; }

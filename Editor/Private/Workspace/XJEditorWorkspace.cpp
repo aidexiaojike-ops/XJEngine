@@ -5,6 +5,7 @@
 #include "Controllers/XJEditorAssetController.h"
 #include "Controllers/XJEditorSceneController.h"
 #include "Controllers/XJEditorSceneAssetDropController.h"
+#include "Controllers/XJEditorTransformToolsController.h"
 #include "UI/XJEditorDragPayload.h"
 #include "UI/XJEditorUIState.h"
 #include "ECS/XJScene.h"
@@ -40,6 +41,7 @@ namespace XJ
             XJEditorAssetController AssetController;
             XJEditorSceneController SceneController;
             XJEditorSceneAssetDropController SceneAssetDropController;
+            XJEditorTransformToolsController TransformToolsController;
 
             std::shared_ptr<XJTexture> DefaultTexture;
             std::shared_ptr<XJSampler> DefaultSampler;
@@ -89,6 +91,7 @@ namespace XJ
         state.AssetRequests = {};
         state.SceneView = {};
         state.SelectedEntityDetails = {};
+        state.TransformEditFeedback = {};
 
         if (!scene && wasRuntime)
         {
@@ -218,12 +221,19 @@ namespace XJ
         mImpl->UIState.SceneRequests = {};
         mImpl->UIState.SceneView = {};
         mImpl->UIState.SelectedEntityDetails = {};
+        mImpl->UIState.TransformEditFeedback = {};
+        mImpl->UIState.TransformToolRequests.clear();
 
         mImpl->Scene = nullptr;
+        mImpl->TransformToolsController.ProcessRequests(mImpl->UIState, false);
     }
 
     void XJEditorWorkspace::Update()
     {
+        //是否处于编辑模式下
+        const bool canChangeTransformSpace = mImpl->Initialized && mImpl->Scene != nullptr && mImpl->Mode == XJEditorWorkspaceMode::Edit;
+        mImpl->TransformToolsController.ProcessRequests(mImpl->UIState, canChangeTransformSpace);
+
         if (!mImpl->Initialized || !mImpl->Scene)
             return;
 
@@ -278,13 +288,7 @@ namespace XJ
              // Transform 是运行数据，每帧更新已有快照，不重建材质/资产详情。
             if (selected && selected->HasComponent<XJTransformComponent>())
             {
-                const auto& transform =
-                    selected->GetComponent<XJTransformComponent>();
-
-                state.SelectedEntityDetails.Transform.Valid = true;
-                state.SelectedEntityDetails.Transform.Position = transform.GetLocalPosition();
-                state.SelectedEntityDetails.Transform.Rotation = transform.GetLocalEulerAngles();
-                state.SelectedEntityDetails.Transform.Scale = transform.GetLocalScale();
+                state.SelectedEntityDetails.Transform = XJEditorSceneService::BuildTransformView(scene, state.SelectedEntityDetails.Id);
             }
 
 
@@ -308,7 +312,9 @@ namespace XJ
            mImpl->UIState.SceneRequests.RequestOpenScene = false;
            mImpl->UIState.SceneRequests.RequestedScenePath.clear();
            mImpl->UIState.SceneRequests.RequestedSceneHandle = 0;
-        
+
+           mImpl->UIState.TransformEditFeedback = {};
+
            mImpl->SceneController.OpenSceneAsset(
                mImpl->UIState,
                scenePath,
@@ -324,6 +330,21 @@ namespace XJ
         // 所有请求完成后统一创建一次 UI 快照。
         mImpl->SceneController.RefreshViewModels(
             mImpl->UIState);
+
+        auto& state = mImpl->UIState;
+
+        if (state.SelectedEntityDetails.Valid)
+        {
+            state.SelectedEntityDetails.Transform =
+                XJEditorSceneService::BuildTransformView(
+                    *mImpl->Scene,
+                    state.SelectedEntityDetails.Id);
+        }
+
+        if (state.TransformEditFeedback.EntityId != state.Selection.SelectedEntity)
+        {
+            state.TransformEditFeedback = {};
+        }
     }
 
     XJEditorUIState& XJEditorWorkspace::GetUIState()
@@ -349,7 +370,13 @@ namespace XJ
         {
             mImpl->UIState.SceneRequests = {};
             mImpl->UIState.AssetRequests = {};
+            mImpl->UIState.TransformToolRequests.clear();
         }
+        mImpl->TransformToolsController.ProcessRequests(
+            mImpl->UIState,
+            mImpl->Initialized &&
+            mImpl->Scene != nullptr &&
+            mode == XJEditorWorkspaceMode::Edit);
     }
 
     XJEditorWorkspaceMode XJEditorWorkspace::GetMode() const
@@ -383,6 +410,7 @@ namespace XJ
         mImpl->Initialized = false;
         mImpl->Mode = XJEditorWorkspaceMode::Edit;
         mImpl->UIState.WorkspaceReadOnly = false;
+        mImpl->TransformToolsController.Reset(mImpl->UIState);
         mImpl->DefaultSampler.reset();
         mImpl->DefaultTexture.reset();
     }

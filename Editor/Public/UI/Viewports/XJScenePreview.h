@@ -11,6 +11,7 @@ namespace XJ
 {
     class XJEntity;
     class XJScene;
+    struct XJEditorUIState;
 
     class XJScenePreview : public XJViewport
     {
@@ -71,6 +72,11 @@ namespace XJ
                 return mHovered || mFocused;
             }
 
+            void BindUIState(XJEditorUIState* state)
+            {
+                mUIState = state;
+            }
+
         private:
             friend class XJEditorViewportSystem;
             XJViewportRenderSurface mSurface;
@@ -80,6 +86,8 @@ namespace XJ
             bool CalculateDropPositionFromViewportRay(const ImVec2& imageMin, const ImVec2& imageSize, glm::vec3& outOrigin, glm::vec3& outDirection, float& outMaxDistance) const;//根据鼠标在视口中的位置计算拖放物体在世界空间中的位置
             AssetDropCallback mAssetDropCallback;
             EntityPickCallback mEntityPickCallback;
+            // 非拥有指针；生命周期由 Workspace/ViewportSystem 协调。
+            XJEditorUIState* mUIState = nullptr;
 
         protected:
             ImTextureID GetViewportTextureID() const override;

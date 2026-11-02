@@ -1,4 +1,5 @@
 #include "UI/Viewports/XJScenePreview.h"
+#include "UI/XJTransformToolWidgets.h"
 
 #include "ECS/XJEntity.h"
 #include "ECS/Component/XJCameraComponent.h"
@@ -17,11 +18,12 @@ namespace XJ
         return mSurface.Init(renderContext, mSettings.mWidth, mSettings.mHeight, true);
     }
 
-    void XJScenePreview::Shutdown()
+    void XJScenePreview::Shutdown()//清空绑定
     {
         mAssetDropCallback = {};
         mEntityPickCallback = {};
         mSurface.Shutdown();
+        mUIState = nullptr;
     }
 
     void XJScenePreview::PrepareBeforeRender()
@@ -136,6 +138,13 @@ namespace XJ
         if(ImGui::Begin(mSettings.mViewportName, &mOpen))
         {
             mFocused = ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows);
+
+            if (mUIState)
+            {
+                XJTransformToolWidgets::DrawSpaceButton(*mUIState);
+                ImGui::Separator();
+            }
+
 
             ImVec2 avail = ImGui::GetContentRegionAvail();
 

@@ -50,6 +50,224 @@ namespace
         return true;
     }
 
+    void TestInspectorTransformEditing()
+    {
+        using Space = XJEditorTransformSpace;
+        using Fields = XJEditorTransformFields;
+        using Outcome = XJEditorTransformEditOutcome;
+
+        XJScene scene;
+
+        auto* parent =
+            scene.CreateEntityWithTransform("Parent");
+
+        auto* child =
+            scene.CreateEntityWithTransform("Child");
+
+        parent->XJAddChild(child);
+
+        auto& p =
+            parent->GetComponent<XJTransformComponent>();
+
+        auto& c =
+            child->GetComponent<XJTransformComponent>();
+
+        Success(
+            p.SetLocalTRSEuler(
+                {10, 0, 0},
+                {0, 0, 0},
+                {2, 3, 4}),
+            "Inspector parent setup");
+
+        Success(
+            c.SetLocalTRSEuler(
+                {1, 2, 3},
+                {17, 31, -29},
+                {-1, 2, 3}),
+            "Inspector child setup");
+
+        const auto id =
+            static_cast<XJEditorEntityId>(
+                child->XJGetUUID());
+
+        const auto view =
+            XJEditorSceneService::BuildTransformView(
+                scene, id);
+
+        Check(
+            view.Valid && view.World.Valid,
+            "Inspector publishes both coordinate spaces");
+
+        Check(
+            view.Position == glm::vec3{1, 2, 3} &&
+            Near(view.World.Position, {12, 6, 12}),
+            "Inspector keeps Local and World separate");
+
+        const auto originalRotation =
+            c.GetLocalRotation();
+
+        const auto originalScale =
+            c.GetLocalScale();
+
+        XJEditorUpdateTransformRequest request;
+
+        request.EntityId = id;
+        request.Space = Space::World;
+        request.Fields = Fields::Position;
+        request.Position = {20, 9, 16};
+
+        // 未选择的字段必须完全忽略。
+        const double nan =
+            std::numeric_limits<double>::quiet_NaN();
+
+        request.Rotation = {nan, nan, nan};
+        request.Scale = {nan, nan, nan};
+
+        auto result =
+            XJEditorSceneService::UpdateTransform(
+                scene, request);
+
+        Check(
+            result.Outcome == Outcome::Applied,
+            "Inspector applies selected World field");
+
+        glm::dvec3 position;
+
+        Success(
+            c.ReadWorldPosition(position),
+            "Inspector edited World position read");
+
+        Check(
+            Near(position, request.Position),
+            "Inspector World position reaches target");
+
+        Check(
+            c.GetLocalRotation() == originalRotation &&
+            c.GetLocalScale() == originalScale,
+            "position edit preserves rotation and scale");
+
+        result =
+            XJEditorSceneService::UpdateTransform(
+                scene, request);
+
+        Check(
+            result.Outcome == Outcome::Unchanged,
+            "identical Inspector edit is unchanged");
+
+        const auto oldPosition = c.GetLocalPosition();
+        const auto oldRotation = c.GetLocalRotation();
+        const auto oldScale = c.GetLocalScale();
+        const auto oldMatrix = c.GetLocalMatrix();
+
+        request.Fields =
+            Fields::Position | Fields::Scale;
+
+        request.Position = {100, 200, 300};
+        request.Scale = {-1, 2, 3};
+
+        result =
+            XJEditorSceneService::UpdateTransform(
+                scene, request);
+
+        Check(
+            result.Rejected() && !result.Error.empty(),
+            "invalid combined edit reports failure");
+
+        Check(
+            c.GetLocalPosition() == oldPosition &&
+            c.GetLocalRotation() == oldRotation &&
+            c.GetLocalScale() == oldScale &&
+            c.GetLocalMatrix() == oldMatrix,
+            "combined edit failure is atomic");
+
+        Success(
+            p.SetLocalScale({0, 0, 0}),
+            "Inspector singular parent");
+
+        request.Fields = Fields::Position;
+        request.Position = {1, 2, 3};
+
+        result =
+            XJEditorSceneService::UpdateTransform(
+                scene, request);
+
+        Check(
+            result.Rejected(),
+            "Inspector rejects World position under singular parent");
+
+        request.Space = Space::Local;
+        request.Position = {4, 5, 6};
+
+        result =
+            XJEditorSceneService::UpdateTransform(
+                scene, request);
+
+        Check(
+            result.Changed() &&
+            c.GetLocalPosition() == glm::vec3{4, 5, 6},
+            "Local editing remains available under singular parent");
+
+        const auto refreshed =
+            XJEditorSceneService::BuildTransformView(
+                scene, id);
+
+        Check(
+            refreshed.Valid && refreshed.World.Valid &&
+            Near(refreshed.World.Position, {10, 0, 0}),
+            "Transform snapshot reflects current parent state");
+    }
+
+    void TestCameraViewFailure()
+    {
+        XJScene scene;
+        auto* entity = scene.CreateEntityWithTransform("Camera validation");
+        auto& camera = entity->AddComponent<XJCameraComponent>();
+        Success(entity->GetComponent<XJTransformComponent>().SetLocalPosition({8, 10, 8}),
+            "camera validation setup");
+        glm::mat4 view;
+        Check(camera.TryGetViewMatrix(view), "valid camera returns current view");
+        Check(Near(view, camera.XJGetViewMatrix()), "explicit view agrees with legacy getter");
+        const auto lastValid = view;
+
+        entity->RemoveComponent<XJTransformComponent>();
+        Check(!camera.TryGetViewMatrix(view) && Near(view, lastValid),
+            "missing Transform rejects view without returning cached pose");
+
+        auto* parent = scene.CreateEntityWithTransform("Large parent");
+        parent->XJAddChild(entity);
+        auto& transform = entity->AddComponent<XJTransformComponent>();
+        const double large = double(std::numeric_limits<float>::max()) * 0.75;
+        Success(parent->GetComponent<XJTransformComponent>().SetLocalPosition({large, 0, 0}),
+            "large camera parent position");
+        Success(transform.SetLocalPosition({large, 0, 0}), "large camera local position");
+        Check(!camera.TryGetViewMatrix(view) && Near(view, lastValid),
+            "view outside float range rejects instead of using cached pose");
+
+        Success(parent->GetComponent<XJTransformComponent>().SetLocalPosition({0, 0, 0}),
+            "restore camera parent position");
+        Success(transform.SetLocalPosition({1, 2, 3}), "restore camera local position");
+        Check(camera.TryGetViewMatrix(view) && !Near(view, lastValid),
+            "valid camera recovers with fresh view after failure");
+
+        // Build a finite local hierarchy whose composed world matrix overflows double.
+        auto* ancestor = parent;
+        for (int i = 0; i < 10; ++i)
+        {
+            auto* next = scene.CreateEntityWithTransform("Overflow ancestor");
+            Success(next->GetComponent<XJTransformComponent>().SetLocalScale({large, large, large}),
+                "overflow ancestor scale");
+            next->XJAddChild(ancestor);
+            ancestor = next;
+        }
+        const auto beforeFailure = view;
+        Check(!camera.TryGetViewMatrix(view) && Near(view, beforeFailure),
+            "world evaluation failure rejects view without changing output");
+
+        XJCameraComponent detached;
+        Check(!detached.TryGetViewMatrix(view) && Near(view, beforeFailure),
+            "camera without owner rejects view instead of returning identity");
+    }
+
     void TestCamera()
     {
         XJScene scene;
@@ -225,8 +443,10 @@ int main()
         ("XJTransformIntegrationTests-" + std::to_string(static_cast<uint64_t>(XJ::XJUUID{})));
     std::filesystem::create_directories(root);
     TestCamera();
+    TestCameraViewFailure();
     TestLightPickingAndInspector();
     TestSceneMigration(root);
+    TestInspectorTransformEditing();
     std::filesystem::remove(root);
     spdlog::info("Transform integration tests passed.");
     return EXIT_SUCCESS;

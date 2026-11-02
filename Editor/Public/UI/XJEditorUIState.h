@@ -9,9 +9,12 @@
 #include "UI/XJEditorComponentTypes.h"
 #include "UI/XJEditorViewportDisplayViewModel.h"
 #include "UI/XJEditorViewportRequests.h"
+#include "UI/XJEditorTransformToolsViewModel.h"
+#include "UI/XJEditorTransformToolRequests.h"
 
 #include <filesystem>
 #include <vector>
+#include <string>
 
 
 namespace XJ
@@ -59,6 +62,14 @@ namespace XJ
         bool Enabled = true;
     };
 
+    struct XJEditorTransformEditFeedback//变换编辑反馈
+    {
+        XJEditorEntityId EntityId = XJ_INVALID_EDITOR_ENTITY_ID;
+        XJEditorTransformSpace Space = XJEditorTransformSpace::Local;
+
+        std::string Error;
+    };
+
     struct XJEditorUIState//编辑器 UI 全局状态
     {
         XJAssetRegistry* AssetRegistry = nullptr;// // 指向资产注册表的指针
@@ -75,6 +86,10 @@ namespace XJ
 
         XJEditorSceneViewModel SceneView;
         XJEditorEntityDetailsView SelectedEntityDetails;
+        //移动编辑器
+        XJEditorTransformToolsViewModel TransformTools;
+        std::vector<XJEditorTransformToolRequest> TransformToolRequests;
+        XJEditorTransformEditFeedback TransformEditFeedback;// 变换编辑反馈
         // ---------- 面板可见性控制 ----------
         bool ShowContentBrowser = true;
         bool ShowHierarchy = true;

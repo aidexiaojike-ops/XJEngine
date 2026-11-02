@@ -7,6 +7,8 @@
 #include "UI/XJEditorSelection.h"
 #include "UI/XJEditorComponentTypes.h"
 
+#include "Tools/XJEditorTransformEditTypes.h"
+
 #include <functional>
 #include <string>
 #include <vector>
@@ -56,10 +58,11 @@ namespace XJ
             static XJEditorSceneViewModel BuildSceneViewModel(XJScene& scene, const ShouldExposeEntityCallback& shouldExposeEntity = {});//显示模型
 
             static XJEditorEntityDetailsView BuildEntityDetailsView(XJScene& scene, XJEditorEntityId entityId, XJAssetRegistry* assetRegistry, const ShouldExposeEntityCallback& shouldExposeEntity);
+            static XJEditorTransformView BuildTransformView(XJScene& scene, XJEditorEntityId entityId);//构建变换组件视图
             static void InvalidateMaterialInspectorCache(XJAssetHandle materialHandle);//材质文件被外部恢复后，强制刷新 Inspector 参数快照
 
             static void RenameEntity(XJScene& scene, XJEditorEntityId entityId, const std::string& name);//通过ID修改名字
-            static void UpdateTransform(XJScene& scene, const XJEditorUpdateTransformRequest& request);//更改位置
+            static XJEditorTransformEditResult UpdateTransform(XJScene& scene, const XJEditorUpdateTransformRequest& request);//更改位置
             static void UpdateCamera(XJScene& scene, const XJEditorUpdateCameraRequest& request);//更新摄像机
             static void UpdateLight(XJScene& scene, const XJEditorUpdateLightRequest& request);//更新灯光
 

@@ -314,73 +314,127 @@ namespace XJ
         if (!DrawComponentFrame("Transform", XJEditorComponentType::Transform, details))
             return;
 
-        glm::vec3 position = details.Transform.Position;
-        glm::vec3 rotation = details.Transform.Rotation;
-        glm::vec3 scale = details.Transform.Scale;
+        const auto space = mState.TransformTools.Space;
+        const bool world = space == XJEditorTransformSpace::World;
 
-        bool changed = false;
+        const bool readable = details.Transform.Valid && (!world || details.Transform.World.Valid);
 
-        // helper: drag float3 with reset button  显示位置、旋转、缩放的输入框，允许用户修改这些属性，并提供重置按钮
-        auto DragVec3 = [&](const char* label, glm::vec3& value, float speed)
+        ImGui::TextUnformatted(world ? "World coordinates" : "Local coordinates");
+
+        if (world)
         {
-            /*Position  X [   ]  Y [   ]  Z [   ]
-              Rotation  X [   ]  Y [   ]  Z [   ]
-              Scale     X [   ]  Y [   ]  Z [   ]*/
-            float arr[3] = { value.x, value.y, value.z };
-            bool dragChanged = false;
-            
-            ImGui::PushID(label);//为每个属性创建唯一 ID，避免 ImGui 内部冲突
-            ImGui::TextUnformatted(label);//显示属性标签
-            ImGui::SameLine(90.0F);
+            ImGui::TextWrapped(
+                "Scale is lossy world scale. "
+                "Values must be non-negative; "
+                "local reflection signs are preserved.");
+        }
 
-            float fullWidth = ImGui::GetContentRegionAvail().x;
-            float itemWidth = (fullWidth - ImGui::GetStyle().ItemSpacing.x * 4.0f) / 3.0f;
+        if (!readable)
+        {
+            const auto& error = details.Transform.World.Error;
 
-            ImGui::TextUnformatted("X");
-            ImGui::SameLine();
-            ImGui::SetNextItemWidth(itemWidth);
-            dragChanged |= ImGui::DragFloat("##X", &arr[0], speed);
+            ImGui::TextWrapped(
+                "%s",
+                error.empty()
+                    ? "Transform data is unavailable."
+                    : error.c_str());
 
-            ImGui::SameLine();
-            ImGui::TextUnformatted("Y");
-            ImGui::SameLine();
-            ImGui::SetNextItemWidth(itemWidth);
-            dragChanged |= ImGui::DragFloat("##Y", &arr[1], speed);
+            ImGui::TreePop();
+            return;
+        }
 
-            ImGui::SameLine();
-            ImGui::TextUnformatted("Z");
-            ImGui::SameLine();
-            ImGui::SetNextItemWidth(itemWidth);
-            dragChanged |= ImGui::DragFloat("##Z", &arr[2], speed);
+        glm::dvec3 position = world ? details.Transform.World.Position : glm::dvec3{details.Transform.Position};
+        glm::dvec3 rotation = world ? details.Transform.World.Rotation : glm::dvec3{details.Transform.Rotation};
+        glm::dvec3 scale = world ? details.Transform.World.Scale : glm::dvec3{details.Transform.Scale};
 
+        auto fields = XJEditorTransformFields::None;
 
-            if (dragChanged)
-                value = glm::vec3(arr[0], arr[1], arr[2]);
+        const bool editable =
+            !mState.WorkspaceReadOnly &&
+            !mState.RuntimeInspection;
 
-            ImGui::PopID();
-            
-            return dragChanged;
+        // 实体或空间改变时，不能复用之前输入框的交互 ID。
+        const std::string entityId = std::to_string(details.Id);
+
+        ImGui::PushID(entityId.c_str());
+        ImGui::PushID(static_cast<int>(space));
+
+        ImGui::BeginDisabled(!editable);
+
+        const auto drawVector = [](const char* name, const char* id, glm::dvec3& value, float speed)
+        {
+            double values[3] = {value.x, value.y, value.z};
+
+            ImGui::TextUnformatted(name);
+            ImGui::SetNextItemWidth(-1.0f);
+
+            // 双精度输入避免 World 快照先被截断到 float。
+            const bool changed = ImGui::DragScalarN(
+                id,
+                ImGuiDataType_Double,
+                values,
+                3,
+                speed,
+                nullptr,
+                nullptr,
+                "%.6g");
+
+            if (changed)
+            {
+                value = {values[0], values[1], values[2]};
+            }
+
+            return changed;
         };
-        // 使用不同的颜色区分位置、旋转、缩放属性，增强视觉层次感
-        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.94f, 0.27f, 0.27f, 1.0f));
-        changed |= DragVec3("Position", position, 0.1f);
-        ImGui::PopStyleColor();
 
-        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.27f, 0.69f, 0.27f, 1.0f));
-        changed |= DragVec3("Rotation", rotation, 1.0f);
-        ImGui::PopStyleColor();
-
-        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.27f, 0.54f, 0.94f, 1.0f));
-        changed |= DragVec3("Scale", scale, 0.01f);
-        ImGui::PopStyleColor();
-
-        if(changed)
+        if (drawVector("Position", "##Position", position, 0.1f))
         {
+            fields = fields | XJEditorTransformFields::Position;
+        }
+
+        if (drawVector("Rotation", "##Rotation", rotation, 1.0f))
+        {
+            fields = fields | XJEditorTransformFields::Rotation;
+        }
+
+        if (drawVector("Scale", "##Scale", scale, 0.01f))
+        {
+            fields = fields | XJEditorTransformFields::Scale;
+        }
+
+        ImGui::EndDisabled();
+
+        ImGui::PopID();
+        ImGui::PopID();
+
+        if (editable && fields != XJEditorTransformFields::None)
+        {
+            XJEditorUpdateTransformRequest request;
+
+            request.EntityId = details.Id;
+            request.Space = space;
+            request.Fields = fields;
+            request.Position = position;
+            request.Rotation = rotation;
+            request.Scale = scale;
+
+            mState.SceneRequests.UpdateTransform = request;
             mState.SceneRequests.RequestUpdateTransform = true;
-            mState.SceneRequests.UpdateTransform.EntityId = details.Id;
-            mState.SceneRequests.UpdateTransform.Position = position;
-            mState.SceneRequests.UpdateTransform.Rotation = rotation;
-            mState.SceneRequests.UpdateTransform.Scale = scale;//如果用户修改了 Transform 属性，更新实体的模型矩阵
+        }
+
+        const auto& feedback = mState.TransformEditFeedback;
+
+        if (feedback.EntityId == details.Id &&
+            feedback.Space == space &&
+            !feedback.Error.empty())
+        {
+            ImGui::TextColored(
+                ImVec4(1.0f, 0.45f, 0.35f, 1.0f),
+                "Transform edit rejected");
+
+            ImGui::TextWrapped(
+                "%s",
+                feedback.Error.c_str());
         }
 
         ImGui::TreePop();
@@ -578,13 +632,17 @@ namespace XJ
         if (!ImGui::BeginPopup("ComponentOptions"))
             return;
 
-        if (ImGui::MenuItem("Copy Component"))
+        const bool isTransform = componentType == XJEditorComponentType::Transform;
+        const char* copyLabel = isTransform ? "Copy Local TRS" : "Copy Component";
+        const char* pasteLabel = isTransform ? "Paste Local TRS" : "Paste Component";
+
+        if (ImGui::MenuItem(copyLabel))
             CopyComponent(details, componentType);
 
         ImGui::Separator();
 
         bool canPaste = CanPasteComponent(componentType);
-        if (ImGui::MenuItem("Paste Component", nullptr, false, canPaste))
+        if (ImGui::MenuItem(pasteLabel, nullptr, false, canPaste))
             PasteComponent(details, componentType);
 
         ImGui::Separator();
@@ -616,7 +674,7 @@ namespace XJ
                 std::snprintf(
                     buffer,
                     sizeof(buffer),
-                    "Transform\nPosition: %.3f %.3f %.3f\nRotation: %.3f %.3f %.3f\nScale: %.3f %.3f %.3f",
+                    "Transform (Local)\nPosition: %.3f %.3f %.3f\nRotation: %.3f %.3f %.3f\nScale: %.3f %.3f %.3f",
                     details.Transform.Position.x,
                     details.Transform.Position.y,
                     details.Transform.Position.z,
@@ -765,14 +823,23 @@ namespace XJ
         {
             case XJEditorComponentType::Transform:
             {
-                if (!details.Transform.Valid)
+                if (!details.Transform.Valid || mState.WorkspaceReadOnly || mState.RuntimeInspection)
+                {
                     return;
+                }
 
+                XJEditorUpdateTransformRequest request;
+
+                request.EntityId = details.Id;
+                request.Space = XJEditorTransformSpace::Local;
+                request.Fields = XJEditorTransformFields::All;
+                request.Position = glm::dvec3{mState.ComponentClipboard.Position};
+                request.Rotation = glm::dvec3{mState.ComponentClipboard.Rotation};
+                request.Scale = glm::dvec3{mState.ComponentClipboard.Scale};
+
+                mState.SceneRequests.UpdateTransform = request;
                 mState.SceneRequests.RequestUpdateTransform = true;
-                mState.SceneRequests.UpdateTransform.EntityId = details.Id;
-                mState.SceneRequests.UpdateTransform.Position = mState.ComponentClipboard.Position;
-                mState.SceneRequests.UpdateTransform.Rotation = mState.ComponentClipboard.Rotation;
-                mState.SceneRequests.UpdateTransform.Scale = mState.ComponentClipboard.Scale;
+
                 break;
             }
 
@@ -936,11 +1003,18 @@ namespace XJ
 
 
         ImGui::PushID(parameter.Name.c_str());
-
+        //隐藏输入框右侧的重复标签，传入的是 ##Position 等 ID
         auto DrawParameterPrefix = [&]()
         {
             // Draw the material row as: Name [R] [control].
-            ImGui::TextUnformatted(label);
+            const char* displayName =
+                label[2] == 'P'
+                    ? "Position"
+                    : label[2] == 'R'
+                        ? "Rotation"
+                        : "Scale";
+
+            ImGui::TextUnformatted(displayName);
 
             if (parameter.IsOverride)
             {

@@ -6,6 +6,9 @@
 #include "UI/XJEditorComponentTypes.h"
 #include "UI/XJEditorMaterialTypes.h"
 
+#include "Tools/XJEditorTransformToolTypes.h"
+#include "Tools/XJEditorTransformEditTypes.h"
+
 #include <cstdint>
 #include <filesystem>
 #include <string>
@@ -48,14 +51,6 @@ namespace XJ
     {
         XJEditorEntityId EntityId = XJ_INVALID_EDITOR_ENTITY_ID;
         std::string Name;//新名字
-    };
-
-    struct XJEditorUpdateTransformRequest//更新实体变换
-    {
-        XJEditorEntityId EntityId = XJ_INVALID_EDITOR_ENTITY_ID;
-        glm::vec3 Position{0.0f};
-        glm::vec3 Rotation{0.0f};
-        glm::vec3 Scale{1.0f};
     };
 
     struct XJEditorUpdateCameraRequest//更新摄像机组件参数请求
@@ -113,23 +108,40 @@ namespace XJ
         std::string ParameterName;
     };
 
-    struct XJEditorAddScriptSlotRequest
+    struct XJEditorAddScriptSlotRequest//添加脚本请求
     {
         XJEditorEntityId EntityId = XJ_INVALID_EDITOR_ENTITY_ID;
         XJAssetHandle ScriptAsset = 0;
     };
 
-    struct XJEditorRemoveScriptSlotRequest
+    struct XJEditorRemoveScriptSlotRequest//移除脚本请求
     {
         XJEditorEntityId EntityId = XJ_INVALID_EDITOR_ENTITY_ID;
         uint64_t SlotId = 0;
     };
 
-    struct XJEditorSetScriptSlotEnabledRequest
+    struct XJEditorSetScriptSlotEnabledRequest//设置脚本状态
     {
         XJEditorEntityId EntityId = XJ_INVALID_EDITOR_ENTITY_ID;
         uint64_t SlotId = 0;
         bool Enabled = true;
+    };
+
+    struct XJEditorUpdateTransformRequest//更新实体变换
+    {
+        XJEditorEntityId EntityId = XJ_INVALID_EDITOR_ENTITY_ID;
+
+        // 使用 double 接收 World 数据。
+        // 最终是否能存为 Local float，由 Transform 检查。
+        glm::dvec3 Position{0.0};
+        glm::dvec3 Rotation{0.0};
+        glm::dvec3 Scale{1.0};
+
+        XJEditorTransformSpace Space = XJEditorTransformSpace::Local;
+
+        // 默认值保留已有“完整 Local TRS 更新”的调用语义。
+        // 新 Inspector 会显式填写实际修改的字段。
+        XJEditorTransformFields Fields = XJEditorTransformFields::All;
     };
 
     struct XJEditorSceneRequestState//编辑器场景请求状态  这些请求由 UI 层设置，由控制器在合适的时机统一处理

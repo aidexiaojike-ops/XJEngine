@@ -379,3 +379,36 @@ if(MINGW AND CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
     target_compile_options(XJTransformIntegrationTests PRIVATE -Wa,-mbig-obj)
 endif()
 add_test(NAME XJTransformIntegrationTests COMMAND $<TARGET_FILE:XJTransformIntegrationTests>)
+
+add_executable(XJTransformAcceptanceTests ECS/XJTransformAcceptanceTests.cpp)
+target_link_libraries(XJTransformAcceptanceTests PRIVATE Editor Core)
+target_compile_features(XJTransformAcceptanceTests PRIVATE cxx_std_20)
+if(MINGW AND CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+    target_compile_options(XJTransformAcceptanceTests PRIVATE -Wa,-mbig-obj)
+endif()
+add_test(NAME XJTransformAcceptanceTests COMMAND $<TARGET_FILE:XJTransformAcceptanceTests>)
+
+add_executable(XJEditorWorldGridLayoutTests
+    ${CMAKE_CURRENT_SOURCE_DIR}/Editor/XJEditorWorldGridLayoutTests.cpp
+    ${PROJECT_SOURCE_DIR}/Editor/Private/Tools/XJEditorWorldGridLayout.cpp
+)
+
+target_include_directories(XJEditorWorldGridLayoutTests
+    PRIVATE
+        ${PROJECT_SOURCE_DIR}/Editor/Public
+)
+
+target_link_libraries(XJEditorWorldGridLayoutTests
+    PRIVATE
+        Platform
+)
+
+target_compile_features(XJEditorWorldGridLayoutTests
+    PRIVATE
+        cxx_std_20
+)
+
+add_test(
+    NAME XJEditorWorldGridLayoutTests
+    COMMAND $<TARGET_FILE:XJEditorWorldGridLayoutTests>
+)

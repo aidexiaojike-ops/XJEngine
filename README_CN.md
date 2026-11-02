@@ -136,6 +136,9 @@ File -> Importer -> Asset (CPU) -> Factory -> Resource (GPU) -> Renderer
 - **编辑器 Play Mode**：`XJEditorPlayController` 管理游戏模拟生命周期（Start/Pause/Resume/Stop），克隆编辑器场景为运行时场景并接入 `XJSystemScheduler`；`XJEditorPlayState`（`Edit`/`Playing`/`Paused`）跟踪当前模式；`XJEditorWorkspaceMode`（`Edit`/`PlayReadOnly`/`PlayRuntime`）控制工作区编辑权限
 - **工作区**：`XJEditorWorkspace` 管理引擎内项目工作区（资源根目录、资产注册表、场景接线），支持 `SelectEntityFromViewportRay` 射线选择实体
 - **运行时检查**：Play/Pause 时 Hierarchy 与 Inspector 读取 RuntimeScene 快照，通过请求增删脚本组件/槽、启停槽和替换脚本；Stop 后恢复编辑器选择。
+- **Local/World 变换编辑**：Scene 工具栏经 `XJEditorTransformToolsController` 切换 Inspector 坐标空间，仅 Edit 模式允许切换，不修改场景或产生 Undo。Inspector 使用双精度世界快照与按字段请求，保留未编辑的本地分量；世界缩放为非负有损缩放，保留本地反射符号。组件复制粘贴始终使用 Local TRS，运行时检查中的 Transform 仍只读。
+- **变换反馈与历史**：Service 在临时候选对象上验证后统一提交；失败显示对应实体/空间的原因，不标记场景 dirty，也不改变 Undo/Redo 历史；无变化编辑同样不创建历史。
+- **Scene 世界网格**：仅 Scene Preview 挂载 Vulkan 线绘制通道，启用深度测试但不写深度；按相机和视口自适应选择 1/2/5 系列格距（最小 1 米），绘制 X/Z 坐标标签、刻线、格距说明和边缘淡出。相机姿态无效时跳过网格，不复用缓存视图；Game Preview 不受影响。
 - **视口显示控制**：`XJEditorViewportDisplayController`/`Service` 应用 Scene/Game 视口显示请求并发布 ViewModel。模式按渲染能力启用：当前仅实现 Final，BaseColor、LinearDepth、WorldNormal、Lighting 尚不可用。
 - **性能快照**：视口叠层显示已完成帧耗时/FPS、脚本 CPU 时间与活动实例数、Draw Call 和材质上传次数，并保留 128 个帧历史采样；采集使用快照，不依赖逐帧日志。
 - **帧渲染**：`XJEditorFrameRenderer` + `XJEditorRenderResources` 负责 ImGui/Vulkan 帧渲染与共享编辑器渲染资源；`XJEditorUIHost` 承载 UI 层
@@ -201,6 +204,8 @@ make -j$(nproc)
 宿主服务测试覆盖实体生命周期与会话隔离、本地/世界变换及失败写入原子性、输入焦点/阶段行为、日志配额和 VM 原生分发。
 
 Transform 组件与 ECS 集成测试进一步覆盖四元数/TRS 数学、父级继承、失败原子性、相机控制与只读视图查询、世界空间灯光/拾取/包围盒、Inspector 本地编辑，以及 v2/v3 到 v4 的场景迁移与往返保存。
+
+Transform 验收测试覆盖 Local/World 切换、字段隔离、反射/有损缩放、拒绝反馈与 Undo/Redo 保留；世界网格布局测试无需 GPU 渲染，验证自适应格距、标签及相机/视口边界条件。
 
 ```bash
 cmake -S . -B build -DXJ_BUILD_TESTS=ON

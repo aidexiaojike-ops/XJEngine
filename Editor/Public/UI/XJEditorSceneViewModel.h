@@ -35,13 +35,31 @@ namespace XJ
         std::vector<XJEditorEntityView> RootEntities;
     };
 
+    struct XJEditorWorldTransformView
+    {
+        bool Valid = false;
+
+        glm::dvec3 Position{0.0};
+        glm::dvec3 Rotation{0.0};
+        glm::dvec3 Scale{1.0};
+
+        std::string Error;
+    };
+
 
     struct XJEditorTransformView
     {
+        // 表示实体具有 Transform。
+        // World 读取失败不影响 Local 数据可用性。
         bool Valid = false;
+
+        // 以下三个字段始终表示 Local。
+        // 保留现有组件剪贴板和旧调用端语义。
         glm::vec3 Position{0.0f};
         glm::vec3 Rotation{0.0f};
         glm::vec3 Scale{1.0f};
+
+        XJEditorWorldTransformView World;
     };
 
     struct XJEditorCameraView//摄像机窗口

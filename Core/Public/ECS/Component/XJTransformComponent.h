@@ -8,7 +8,7 @@
 
 namespace XJ
 {
-    enum class XJTransformStatus
+    enum class XJTransformStatus//变换状态
     {
         Success,
         InvalidArgument,

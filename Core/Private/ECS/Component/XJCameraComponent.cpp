@@ -20,12 +20,18 @@ namespace XJ
 
     const glm::mat4& XJCameraComponent::XJGetViewMatrix()
     {
+        TryGetViewMatrix(viewMat);
+        return viewMat;
+    }
+
+    bool XJCameraComponent::TryGetViewMatrix(glm::mat4& outView) const
+    {
         // Free/Orbit 只影响控制器，不再在 Getter 中改变 ECS 或轨道参数。
         const auto* owner = XJGetOwner();
-        if (!owner || !owner->HasComponent<XJTransformComponent>()) return viewMat;
+        if (!owner || !owner->HasComponent<XJTransformComponent>()) return false;
         XJTransformWorldState world;
         if (owner->GetComponent<XJTransformComponent>().EvaluateWorld(world) != XJTransformStatus::Success)
-            return viewMat;
+            return false;
         const glm::dmat4 rotation = glm::mat4_cast(glm::conjugate(world.Rotation));
         const glm::dmat4 candidate = rotation *
             glm::translate(glm::dmat4{1.0}, -glm::dvec3{world.Matrix[3]});
@@ -33,9 +39,9 @@ namespace XJ
             for (int row = 0; row < 4; ++row)
                 if (!std::isfinite(candidate[column][row]) ||
                     std::abs(candidate[column][row]) > std::numeric_limits<float>::max())
-                    return viewMat;
-        viewMat = glm::mat4{candidate};
-        return viewMat;
+                    return false;
+        outView = glm::mat4{candidate};
+        return true;
     }
 
     glm::vec3 XJCameraComponent::XJGetPosition() const

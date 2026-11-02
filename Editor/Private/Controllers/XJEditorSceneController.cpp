@@ -769,13 +769,51 @@ namespace XJ
 
         if (uiState.SceneRequests.RequestUpdateTransform)
         {
-            auto request = uiState.SceneRequests.UpdateTransform;
+            //更新数据
+            const auto request = uiState.SceneRequests.UpdateTransform;
             uiState.SceneRequests.RequestUpdateTransform = false;
             uiState.SceneRequests.UpdateTransform = {};
+            uiState.TransformEditFeedback = {};
 
-            XJ::XJEditorSceneService::UpdateTransform(*mScene, request);
+            XJEditorTransformEditResult result;
 
-            NotifyAfterMutation();
+            const bool allowed =
+                !uiState.WorkspaceReadOnly &&
+                !uiState.RuntimeInspection &&
+                (!mShouldExposeEntityCallback ||
+                    mShouldExposeEntityCallback(
+                        request.EntityId));
+
+            if (!allowed)
+            {
+                result = {
+                    XJEditorTransformEditOutcome::Rejected,
+                    "Transform editing is unavailable "
+                    "for this entity or workspace mode."
+                };
+            }
+            else
+            {
+                result =
+                    XJEditorSceneService::UpdateTransform(
+                        *mScene,
+                        request);
+            }
+
+            if (result.Rejected())
+            {
+                uiState.TransformEditFeedback.EntityId = request.EntityId;
+                uiState.TransformEditFeedback.Space = request.Space;
+                uiState.TransformEditFeedback.Error = result.Error;
+                spdlog::warn(
+                    "Transform edit rejected for entity={}: {}",
+                    request.EntityId,
+                    result.Error);
+            }
+            else if (result.Changed())
+            {
+                NotifyAfterMutation();
+            }
         }
 
         if (uiState.SceneRequests.RequestUpdateCamera)
