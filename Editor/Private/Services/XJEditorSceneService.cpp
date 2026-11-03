@@ -581,6 +581,61 @@ namespace XJ
         return nullptr;
     }
 
+    XJEditorTransformGizmoViewModel XJEditorSceneService::BuildTransformGizmoView(XJScene& scene, XJEditorEntityId entityId, XJEditorTransformSpace space)
+    {
+        XJEditorTransformGizmoViewModel result;
+
+        if (entityId == XJ_INVALID_EDITOR_ENTITY_ID ||
+            (space != XJEditorTransformSpace::Local &&
+             space != XJEditorTransformSpace::World))
+        {
+            return result;
+        }
+
+        XJEntity* entity = FindEntityById(scene, entityId);
+
+        if (!entity || !entity->HasComponent<XJTransformComponent>())
+        {
+            return result;
+        }
+
+        const auto& transform = entity->GetComponent<XJTransformComponent>();
+
+        glm::dvec3 worldPosition;
+
+        if (transform.ReadWorldPosition(worldPosition) != XJTransformStatus::Success)
+        {
+            return result;
+        }
+
+        glm::dquat orientation(1.0, 0.0, 0.0, 0.0);
+
+        if (space == XJEditorTransformSpace::Local)
+        {
+            if (transform.ReadWorldRotation(orientation) !=
+                XJTransformStatus::Success)
+            {
+                return result;
+            }
+        }
+
+        const double length = glm::length(orientation);
+
+        if (!std::isfinite(length) ||
+            length < 1.0e-12)
+        {
+            return result;
+        }
+
+        result.Visible = true;
+        result.EntityId = entityId;
+        result.Space = space;
+        result.WorldPosition = worldPosition;
+        result.Orientation = orientation / length;
+
+        return result;
+    }
+
     std::vector<XJEditorEntityId> XJEditorSceneService::FindEntitiesUsingAsset(XJScene& scene, XJAssetHandle assetHandle)
     {
         std::vector<XJEditorEntityId> result;

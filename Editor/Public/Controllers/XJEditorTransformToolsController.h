@@ -8,6 +8,7 @@
 namespace XJ
 {
     struct  XJEditorUIState;
+    class XJScene;
 
     class XJEditorTransformToolsController
     {
@@ -16,6 +17,7 @@ namespace XJ
             // Workspace 完整关闭时重置。
             // 普通切换场景时保留工具偏好。
             void Reset(XJEditorUIState& state);
+            void RefreshGizmo(XJEditorUIState& state, XJScene* scene, bool canEdit);//刷新变换控件
 
         private:
             void Publish(XJEditorUIState& state, bool canChangeSpace) const;

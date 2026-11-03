@@ -1,4 +1,5 @@
 #include "Controllers/XJEditorTransformToolsController.h"
+#include "Services/XJEditorSceneService.h"
 
 #include "UI/XJEditorUIState.h"
 
@@ -16,6 +17,9 @@ namespace XJ
         view.Space = mSpace;
         view.CanChangeSpace = canChangeSpace;
         view.SettingsRevision = mSettingsRevision;
+
+        if (!canChangeSpace)
+            state.TransformGizmo = {};
     }
 
     void XJEditorTransformToolsController::ProcessRequests(XJEditorUIState& state, bool canChangeSpace)
@@ -66,7 +70,23 @@ namespace XJ
         mSettingsRevision = 0;
 
         state.TransformToolRequests.clear();
+        state.TransformGizmo = {};
 
         Publish(state, false);
+    }
+
+    void XJEditorTransformToolsController::RefreshGizmo(XJEditorUIState& state, XJScene* scene, bool canEdit)
+    {
+        state.TransformGizmo = {};
+
+        if (!scene || !canEdit || state.WorkspaceReadOnly || state.RuntimeInspection)
+        {
+            return;
+        }
+
+        state.TransformGizmo = XJEditorSceneService::BuildTransformGizmoView(
+                *scene,
+                state.Selection.SelectedEntity,
+                mSpace);
     }
 }

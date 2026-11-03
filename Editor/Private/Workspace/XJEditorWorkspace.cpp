@@ -92,6 +92,7 @@ namespace XJ
         state.SceneView = {};
         state.SelectedEntityDetails = {};
         state.TransformEditFeedback = {};
+        state.TransformGizmo = {};
 
         if (!scene && wasRuntime)
         {
@@ -162,7 +163,7 @@ namespace XJ
         mImpl->Initialized = true;
 
         return true;
-    }
+    };
 
     bool XJEditorWorkspace::AttachScene(XJScene& scene)//加载默认场景
     {
@@ -222,6 +223,7 @@ namespace XJ
         mImpl->UIState.SceneView = {};
         mImpl->UIState.SelectedEntityDetails = {};
         mImpl->UIState.TransformEditFeedback = {};
+        mImpl->UIState.TransformGizmo = {};
         mImpl->UIState.TransformToolRequests.clear();
 
         mImpl->Scene = nullptr;
@@ -230,6 +232,7 @@ namespace XJ
 
     void XJEditorWorkspace::Update()
     {
+        mImpl->UIState.TransformGizmo = {};
         //是否处于编辑模式下
         const bool canChangeTransformSpace = mImpl->Initialized && mImpl->Scene != nullptr && mImpl->Mode == XJEditorWorkspaceMode::Edit;
         mImpl->TransformToolsController.ProcessRequests(mImpl->UIState, canChangeTransformSpace);
@@ -314,6 +317,7 @@ namespace XJ
            mImpl->UIState.SceneRequests.RequestedSceneHandle = 0;
 
            mImpl->UIState.TransformEditFeedback = {};
+           mImpl->UIState.TransformGizmo = {};
 
            mImpl->SceneController.OpenSceneAsset(
                mImpl->UIState,
@@ -344,7 +348,11 @@ namespace XJ
         if (state.TransformEditFeedback.EntityId != state.Selection.SelectedEntity)
         {
             state.TransformEditFeedback = {};
+            state.TransformGizmo = {};
         }
+
+        mImpl->TransformToolsController.RefreshGizmo(state, mImpl->Scene, mImpl->Mode == XJEditorWorkspaceMode::Edit);
+
     }
 
     XJEditorUIState& XJEditorWorkspace::GetUIState()
@@ -364,6 +372,7 @@ namespace XJ
             return;
 
         mImpl->Mode = mode;
+        mImpl->UIState.TransformGizmo = {};
         mImpl->UIState.WorkspaceReadOnly = mode != XJEditorWorkspaceMode::Edit;
 
         if (mImpl->UIState.WorkspaceReadOnly)

@@ -11,6 +11,7 @@
 #include "UI/XJEditorViewportRequests.h"
 #include "UI/XJEditorTransformToolsViewModel.h"
 #include "UI/XJEditorTransformToolRequests.h"
+#include "UI/XJEditorTransformGizmoViewModel.h"
 
 #include <filesystem>
 #include <vector>
@@ -90,6 +91,7 @@ namespace XJ
         XJEditorTransformToolsViewModel TransformTools;
         std::vector<XJEditorTransformToolRequest> TransformToolRequests;
         XJEditorTransformEditFeedback TransformEditFeedback;// 变换编辑反馈
+        XJEditorTransformGizmoViewModel TransformGizmo;// 变换控件视图模型
         // ---------- 面板可见性控制 ----------
         bool ShowContentBrowser = true;
         bool ShowHierarchy = true;

@@ -412,3 +412,28 @@ add_test(
     NAME XJEditorWorldGridLayoutTests
     COMMAND $<TARGET_FILE:XJEditorWorldGridLayoutTests>
 )
+
+add_executable(XJTransformGizmoGeometryTests
+    ${CMAKE_CURRENT_SOURCE_DIR}/Editor/XJTransformGizmoGeometryTests.cpp
+    ${PROJECT_SOURCE_DIR}/Editor/Private/Tools/XJTransformGizmoGeometry.cpp
+)
+
+target_include_directories(XJTransformGizmoGeometryTests
+    PRIVATE
+        ${PROJECT_SOURCE_DIR}/Editor/Public
+)
+
+target_link_libraries(XJTransformGizmoGeometryTests
+    PRIVATE
+        Platform
+)
+
+target_compile_features(XJTransformGizmoGeometryTests
+    PRIVATE
+        cxx_std_20
+)
+
+add_test(
+    NAME XJTransformGizmoGeometryTests
+    COMMAND $<TARGET_FILE:XJTransformGizmoGeometryTests>
+)

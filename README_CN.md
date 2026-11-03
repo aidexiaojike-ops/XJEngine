@@ -6,269 +6,285 @@
 
 </div>
 
-[![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20Linux%20%7C%20macOS-brightgreen)](https://github.com/aidexiaojike-ops/XJEngine)
+[![Platform](https://img.shields.io/badge/Platform-Windows-brightgreen)](https://github.com/aidexiaojike-ops/XJEngine)
 [![C++](https://img.shields.io/badge/C++-20-blue.svg)](https://en.cppreference.com/w/cpp/20)
-[![Vulkan](https://img.shields.io/badge/Vulkan-1.2+-orange.svg)](https://www.vulkan.org/)
-[![CMake](https://img.shields.io/badge/CMake-3.10+-yellow.svg)](https://cmake.org/)
+[![Vulkan](https://img.shields.io/badge/Renderer-Vulkan-orange.svg)](https://www.vulkan.org/)
+[![CMake](https://img.shields.io/badge/CMake-3.28+-yellow.svg)](https://cmake.org/)
 
-XJEngine 是一个基于 Vulkan 和 ECS 架构的轻量级现代游戏引擎，重点关注高性能实时渲染、模块化材质系统、资产管线和内置编辑器能力。
+XJEngine 是一个基于 Vulkan 和 EnTT 的实验性 C++20 游戏引擎与编辑器，包含 Schema 驱动的材质管线、资产与场景持久化、内置脚本语言和 ImGui 编辑器。
 
-## ✨ 核心特性
+**当前构建路径面向 Windows。** SDK 配置与运行时 DLL 处理依赖 Windows Vulkan SDK 目录布局，Linux 和 macOS 尚不能直接按现有流程构建。Transform Gizmo 目前**仅用于可视化**，尚不是可拖拽的编辑工具。
 
-| 特性 | 描述 |
-|------|------|
-| **Vulkan 渲染器** | 多平台现代图形 API，GPU 驱动渲染管线 |
-| **稳健的 Swapchain 生命周期** | 结构化 acquire/present 结果、窗口尺寸变化重建、减少逐帧阻塞，并明确处理 device-lost 状态 |
-| **ECS 架构** | 基于 EnTT 的高性能实体组件系统 |
-| **事件驱动系统** | 完整的窗口、鼠标、键盘事件处理 |
-| **内置脚本系统** | `.xjs` 语言支持 Lexer、Parser、语义分析、验证字节码、受限运行时、ECS 生命周期和编辑器集成 |
-| **模块化材质系统** | 可扩展的纹理、采样器、UBO 管线 |
-| **Shader Schema 系统** | JSON 定义着色器参数，Schema 验证、绑定解析、描述符布局构建、SPIR-V 反射、材质资产序列化 |
-| **Surface 材质系统** | Schema 驱动的 Surface 管线，共享 Frame/Light UBO、材质参数块、纹理绑定与动态描述符池扩容 |
-| **场景灯光** | 方向光、点光和聚光灯支持场景持久化与逐帧 GPU 上传，并提供范围、强度、颜色和聚光锥角控制 |
-| **Lit Shader** | Schema 驱动的前向光照，支持基础颜色/Albedo 纹理、高光强度、光泽度以及方向光/点光/聚光灯计算 |
-| **运行时材质生成** | 支持程序化创建材质、随机颜色、纹理和 UV 变换 |
-| **程序化纹理** | 从像素数据直接生成纹理，无需外部文件 |
-| **摄像机系统** | 独立 Camera 模块，轨道/自由模式，编辑器摄像机管理器，ECS 摄像机系统 |
-| **资产系统** | Asset/Resource 双层架构，glTF 2.0 导入，资产注册表扫描与引导，场景实例化/切换，网格/纹理/材质加载器 |
-| **ImGui 编辑器** | MVVM 架构，支持 Docking、多视口、拖拽，内建面板（Hierarchy、Inspector、Content Browser、Console、Scene/Game Preview） |
-| **着色器编译** | 构建时自动从 GLSL 编译到 SPIR-V |
+## 目录
 
-## 📋 目录
+- [核心特性](#核心特性)
+- [快速开始](#快速开始)
+- [构建配置](#构建配置)
+- [编辑器工作流](#编辑器工作流)
+- [引擎架构](#引擎架构)
+- [项目结构](#项目结构)
+- [API 示例](#api-示例)
+- [测试](#测试)
+- [性能与诊断](#性能与诊断)
+- [当前限制](#当前限制)
+- [路线图](#路线图)
+- [开发与贡献](#开发与贡献)
+- [许可证](#许可证)
 
-- [核心特性](#-核心特性)
-- [快速开始](#-快速开始)
-- [引擎架构](#-引擎架构)
-- [构建](#-构建)
-- [项目结构](#-项目结构)
-- [使用](#-使用)
-- [开发](#-开发)
-- [已知问题](#-已知问题)
-- [路线图](#-路线图)
-- [许可证](#-许可证)
+## 核心特性
 
-## 🚀 快速开始
+| 领域 | 已实现能力 |
+|------|------------|
+| **Vulkan 渲染** | Scene/Game 离屏目标、深度缓冲、构建期 GLSL → SPIR-V、结构化 Swapchain acquire/present 与窗口尺寸变化处理 |
+| **ECS 与变换** | EnTT 实体/组件、稳定 UUID 查找、支持父子层级的 Local/World 变换、带校验的四元数/TRS 编辑 |
+| **材质与光照** | JSON Shader Schema、SPIR-V 反射、Unlit/Lit Surface 材质、方向光/点光/聚光灯、材质与管线缓存 |
+| **资产与场景** | CPU Asset / GPU Resource 分层、glTF 2.0 导入、Submesh 材质槽、AABB、`.xjmeta` 元数据、场景格式 v4 与 v2/v3 迁移 |
+| **内置脚本** | `.xjs` 词法/语法/编译管线、字节码验证、执行限制、带类型的值、宿主服务、ECS 生命周期与运行时槽同步 |
+| **编辑器面板** | Hierarchy、Inspector、Content Browser、Console、Scene/Game Preview、Docking 与独立 ImGui 窗口 |
+| **Local/World 编辑** | Scene 工具栏坐标空间切换、Inspector 数值编辑、拒绝反馈、基于快照的 Undo/Redo |
+| **Transform Gizmo 可视化** | 三轴移动箭头、旋转环和缩放方块，支持 Local/World 朝向与近似固定屏幕尺寸；尚无手柄交互 |
+| **Scene 辅助显示** | 自适应世界网格、灯光线框、AABB + 三角形拾取、以命中表面点为轨道旋转中心 |
+| **Play 模式** | 运行时场景克隆、Play/Pause/Resume/Stop、运行时检查与脚本槽修改，不直接编辑源场景 |
+| **诊断** | 基于 spdlog 的 Console、视口性能快照、帧历史与材质上传统计 |
 
-```bash
+## 快速开始
+
+### 前置要求
+
+- Windows 10/11 x64，支持 Vulkan 的 GPU 与已安装的显卡驱动。
+- 支持 C++20 的编译器。以下命令推荐使用安装了**“使用 C++ 的桌面开发”**工作负载的 Visual Studio 2022。
+- **CMake 3.28 或更新版本**。顶层文件仍声明 3.10，但仓库内的 EnTT 依赖实际要求 3.28。
+- Windows Vulkan SDK，或允许 CMake 自动下载 SDK 的网络环境。其他依赖已包含在 `ThirdParty/` 中。
+
+在准备克隆项目的目录打开 PowerShell，执行：
+
+```powershell
 git clone https://github.com/aidexiaojike-ops/XJEngine.git
 cd XJEngine
-mkdir build && cd build
-cmake .. -DCMAKE_BUILD_TYPE=Release
-cmake --build . --config Release
-cd ../bin
-./XJEngine
-```
-
-**前置要求：**
-- CMake 3.10+
-- 支持 C++20 的编译器
-- Vulkan SDK 可选手动安装；CMake 会自动按顺序解析：`VULKAN_SDK` 环境变量 -> `ThirdParty/VulkanSDK` 本地缓存 -> 自动下载 LunarG Vulkan SDK 1.3.283.0
-
-## 🏗️ 引擎架构
-
-```text
-Scene
-  -> ECS
-  -> MaterialSystem
-  -> RenderTarget
-  -> Editor/Renderer
-  -> CommandBuffer
-  -> Swapchain
-```
-
-### 资产管线
-
-```text
-File -> Importer -> Asset (CPU) -> Factory -> Resource (GPU) -> Renderer
-```
-
-- **Asset 层**：纯 CPU 数据，例如顶点、像素、材质参数、场景数据
-- **Resource 层**：GPU 资源，例如 `VkBuffer`、`VkImage`
-- **资产扫描**：`XJAssetRegistryScanner` 自动扫描 Resource 目录，按扩展名注册资产
-- **场景系统**：`.xjscene` -> `XJSceneAssetSerializer` -> `XJSceneInstantiator` -> ECS 实体；灯光序列化包含类型、颜色、强度、范围和聚光灯内外锥角
-- **场景切换**：支持多个 `.xjscene` 文件，通过 ECS 生命周期创建/销毁实体
-- **场景格式 v4**：保存本地 TRS 及相机轨道模式、目标点和半径；加载 v2/v3 时将旧 yaw/pitch 相机世界姿态迁移为新父级相对变换，无法表示的旧姿态安全失败。
-- **注册表**：`XJAssetRegistry` 用于持久化资产句柄与元数据；运行时生成的句柄使用高位命名空间，与稳定的注册表句柄隔离，避免冲突
-- **资产元数据**：`.xjmeta` 旁置文件（`XJAssetMetadata`）存储每个资产的句柄/类型/导入器信息；`XJAssetMetadataSerializer` 负责读写；`XJPersistentAssetHandleGenerator` 确保唯一句柄生成
-- **Submesh 渲染**：`XJMesh` 通过 `XJSubmesh` 索引范围共享顶点/索引缓冲，提供 `Bind`/`Draw`/`DrawSubmesh`；`XJMaterialRenderItem` 携带 `SubmeshIndex`，使每个 primitive 使用各自材质槽绘制
-- **AABB 包围盒**：`XJBoundingBox`（Expand/Merge/Transformed）在 glTF 导入时逐 primitive 计算并存入 `XJMeshPrimitive`/`XJSubmesh`；`XJMesh` 通过 `GetBounds()` 暴露整体包围盒
-- **CPU 拾取几何**：`XJMesh` 保留紧凑的 CPU 位置/索引副本，用于 AABB 粗筛后的精确射线-三角形检测
-- **glTF 导入**：`XJModelImporter` 将 primitive 合并进共享顶点/索引缓冲，保存每个 primitive 的索引范围（`XJMeshPrimitive`），校验 accessor 与绘制模式（跳过非 TRIANGLES），数据无效时回滚
-- **原子 JSON IO**：`XJJsonIO` 统一提供 JSON 读取辅助（float/vec2/vec3/vec4/uint64）与原子文件写入（临时文件 + rename），供所有资产序列化器使用
-- **引导程序**：`XJAssetBootstrap` 管理默认资产注册和场景创建
-- **运行时工具**：`XJSceneRuntimeUtil` 提供主摄像机查找等运行时辅助功能
-
-### 脚本系统
-
-- **语言管线**：`XJScriptLexer` -> `XJScriptParser` -> `XJScriptSemanticAnalyzer` -> `XJScriptCompiler`，生成带结构化诊断的不可变字节码模块
-- **脚本值类型**：`XJScriptValue` 统一 bool/int/float/string、`Vec3` 与 `EntityRef`。向量支持构造、算术、标量乘除、`x`/`y`/`z` 分量赋值，以及复合赋值和前后缀增减。
-- **验证运行时**：`XJScriptBytecodeVerifier` 在执行前验证模块；`XJScriptRuntime` 限制指令预算和调用深度，并处理类型错误、溢出、故障隔离、堆栈跟踪及重入保护，同时复用每个实例的调用帧/参数 scratch 存储
-- **ECS 生命周期**：`XJScriptSystem` 创建实体脚本实例，通过 `XJSystemScheduler` 调度 `OnCreate`、`OnUpdate`、`OnFixedUpdate`、`OnDestroy`
-- **运行时脚本槽同步**：`SynchronizeSlots()` 在安全点按组件/槽生命周期修订号同步实例，暂停时也可调用；场景销毁通知与执行作用域保证脚本 Owner 在延迟删除前有效。
-- **脚本组件**：`XJScriptComponent` 支持每个实体挂载多个可启停脚本槽、稳定槽 UUID，以及基于 `[[FieldId("...")]]` 的字段覆盖
-- **宿主服务**：`XJScriptHostNativeInvoker` 作为默认 ECS 脚本桥接，注入实体、Transform、输入和日志服务；调用携带 Owner、槽、帧和生命周期阶段上下文，服务保持到 `OnDestroy` 完成。
-- **Transform API**：读写本地位置、欧拉角和缩放；读取世界位置、欧拉角和有损缩放，通过 `TrySetWorldPosition`/`TrySetWorldEulerAngles`/`TrySetWorldScale` 判断世界空间写入是否成功。每项操作支持当前 Owner 或显式 `EntityRef`；无效、非有限数值或父变换不可逆等失败不会部分修改状态，保留 `Transform.RotateY`。
-- **实体 API**：`Scene.FindByUUID` 接收十进制或 `0x` 十六进制 UUID 字符串；`Entity.Self`、`Entity.IsValid`、`Entity.GetUUID` 提供会话隔离的实体句柄与失效引用保护。UUID 格式有效但未找到实体时返回 null。
-- **脚本输入**：`Input.GetAxis("Horizontal"/"Vertical")` 映射 WASD/方向键，并支持具名按键的保持、按下和释放查询。编辑器仅在 Playing、Game 与应用窗口聚焦且无活动 UI 控件、文本输入或弹窗时提供输入；按键边沿仅在 Update 可见，重新获得焦点首帧抑制边沿。
-- **脚本日志**：`Log.Info`/`Warn`/`Error` 通过 spdlog 记录调用上下文，并用每槽/全局配额限制日志突发，避免刷满 Console。
-- **Native 调用契约**：`XJScriptNativeCatalogue` 校验函数 ID/签名并按参数类型解析调用，编译、字节码验证与运行时共用目录；`XJScriptValueNativeInvoker` 处理 `Vec3(float, float, float)` 构造，其余 ECS 调用交给宿主。
-- **值序列化**：`XJScriptValueCodec` 编解码带类型的标量/向量字段覆盖并拒绝非有限数值。`EntityRef` 使用运行时 scope/index/generation 句柄，不允许持久化或暴露为 public 字段，非空引用也不能写入字节码常量。
-- **资产与持久化**：`.xjs` 注册为 `XJAssetType::Script`，由 `XJScriptAssetCompiler`/`Loader` 编译缓存；场景保存脚本槽 ID、启用状态、资产引用和字段覆盖
-- **编辑器集成**：Content Browser 与 Inspector 支持脚本创建、编译、分配、排序、字段配置和错误验证
-
-- **Shader Schema 系统**：JSON 定义的着色器参数，`XJShaderSchemaValidator` 验证 + `XJShaderSchemaBindingResolver` 绑定解析 + `XJShaderDescriptorLayoutBuilder` 描述符布局构建
-- **Lit 材质参数**：`Lit.schema` 提供基础颜色、Albedo 纹理、高光强度和光泽度，并复用通用 SurfaceMaterial 运行时
-- **跨阶段 Shader 反射**：Shader stage 使用位掩码，将 Vertex/Fragment 反射出的同一描述符绑定合并进统一 Vulkan 布局
-- **Surface 材质系统**：`XJSurfaceMaterialSystem` 渲染 `XJSurfaceMaterialComponent`，通过材质实例 ID 与参数/资源修订号安全同步每个 frame slot 的描述符
-- **上传状态跟踪**：`XJMaterialUploadState` 分离上传准备与参数/资源成功提交，校验槽所有者，并在描述符容量变化时重置同步戳。
-- **共享 Frame/Light 数据**：`XJFrameUbo` 提供投影/视图矩阵、分辨率、帧号/时间与摄像机位置；`XJLightUbo` 使用 std140 布局和逐帧描述符集支持 1 个方向光、最多 8 个点光和 8 个聚光灯
-- **场景灯光收集**：`XJLightSceneUtils` 从场景中的 `XJLightComponent` 与 Transform 构建每帧灯光 UBO
-- **Shader 运行时布局**：`XJMaterialShaderRuntimeLayout`/`Builder`、`XJMaterialPipelineRuntime`/`Builder`/`Cache`/`Descriptor`、`XJMaterialRuntimeUploader`、`XJSurfaceMaterialBindingUtils` — 运行时 Shader-材质绑定、可选灯光描述符集（`set=3`）、管线缓存与 GPU 上传
-- **材质序列化**：`XJMaterialAssetSerializer`、`XJShaderAssetSerializer`、`XJShaderSchemaSerializer`
-- **材质工厂缓存**：`XJMaterialFactory` 按资产/默认材质键缓存材质（弱引用），复用已加载纹理和过期材质槽，分配稳定实例 ID，并提供 `ClearExpiredMaterials`/`ClearCaches`
-- **Inspector 材质编辑**：通过 `XJEditorMaterialParameterType` 编辑 Float、Color3、Texture2D 等参数
-- **Inspector 灯光编辑**：通过场景请求/ViewModel 数据流编辑 Directional/Point/Spot 类型、开关、颜色、强度、范围和聚光灯内外锥角
-
-### 编辑器架构（MVVM）
-
-- **编辑器运行时**：`XJEditorRuntime`（pimpl 封装）统一管理编辑器生命周期——项目配置（`XJEditorProjectConfig`）、工作区、视口系统、帧渲染、输入绑定与 UI Host，由 `Src/XJEditorApplication` 驱动
-- **编辑器 Play Mode**：`XJEditorPlayController` 管理游戏模拟生命周期（Start/Pause/Resume/Stop），克隆编辑器场景为运行时场景并接入 `XJSystemScheduler`；`XJEditorPlayState`（`Edit`/`Playing`/`Paused`）跟踪当前模式；`XJEditorWorkspaceMode`（`Edit`/`PlayReadOnly`/`PlayRuntime`）控制工作区编辑权限
-- **工作区**：`XJEditorWorkspace` 管理引擎内项目工作区（资源根目录、资产注册表、场景接线），支持 `SelectEntityFromViewportRay` 射线选择实体
-- **运行时检查**：Play/Pause 时 Hierarchy 与 Inspector 读取 RuntimeScene 快照，通过请求增删脚本组件/槽、启停槽和替换脚本；Stop 后恢复编辑器选择。
-- **Local/World 变换编辑**：Scene 工具栏经 `XJEditorTransformToolsController` 切换 Inspector 坐标空间，仅 Edit 模式允许切换，不修改场景或产生 Undo。Inspector 使用双精度世界快照与按字段请求，保留未编辑的本地分量；世界缩放为非负有损缩放，保留本地反射符号。组件复制粘贴始终使用 Local TRS，运行时检查中的 Transform 仍只读。
-- **变换反馈与历史**：Service 在临时候选对象上验证后统一提交；失败显示对应实体/空间的原因，不标记场景 dirty，也不改变 Undo/Redo 历史；无变化编辑同样不创建历史。
-- **Scene 世界网格**：仅 Scene Preview 挂载 Vulkan 线绘制通道，启用深度测试但不写深度；按相机和视口自适应选择 1/2/5 系列格距（最小 1 米），绘制 X/Z 坐标标签、刻线、格距说明和边缘淡出。相机姿态无效时跳过网格，不复用缓存视图；Game Preview 不受影响。
-- **视口显示控制**：`XJEditorViewportDisplayController`/`Service` 应用 Scene/Game 视口显示请求并发布 ViewModel。模式按渲染能力启用：当前仅实现 Final，BaseColor、LinearDepth、WorldNormal、Lighting 尚不可用。
-- **性能快照**：视口叠层显示已完成帧耗时/FPS、脚本 CPU 时间与活动实例数、Draw Call 和材质上传次数，并保留 128 个帧历史采样；采集使用快照，不依赖逐帧日志。
-- **帧渲染**：`XJEditorFrameRenderer` + `XJEditorRenderResources` 负责 ImGui/Vulkan 帧渲染与共享编辑器渲染资源；`XJEditorUIHost` 承载 UI 层
-- **输入绑定**：`XJEditorInputBindings` 集中编辑器输入映射（摄像机、视口、操作）
-- **视口系统**：`XJEditorViewportSystem` 统筹 Scene/Game 预览视口、摄像机解析、受保护编辑器实体以及场景挂载/卸载
-- **实体拾取**：`XJScenePreview` 通过 `EntityPickCallback` 触发射线-AABB 相交检测，实现实体视口点击选择
-- **精确场景拾取**：`XJEditorSceneService::RaycastClosestSceneEntity` 先进行世界空间 AABB 粗筛，再使用 Mesh 的 CPU 顶点/索引副本执行射线-三角形检测
-- **选中点轨道旋转**：Scene Preview 可通过视口射线设置摄像机 orbit pivot，使轨道控制围绕命中的表面点旋转
-- **灯光 Gizmo**：`XJLightGizmoMaterialSystem` 在 Scene Preview 中以编辑器专用线框显示方向光、点光和聚光灯
-- **Controllers**：`XJEditorSceneController`（场景加载/保存/切换 + 基于快照的 Undo/Redo 历史，含场景与材质资产，最多 100 条；按修订号仅重建发生变化的 Scene/选择 ViewModel）+ `XJEditorAssetController`（资产 CRUD）+ `XJEditorCameraManager`（基于实体 ID 的视口摄像机绑定与解析）
-- **Console 日志**：`XJEditorLog` 通过自定义 spdlog sink 桥接日志；修订号快照避免重复复制，`ImGuiListClipper` 减少单行日志绘制工作并保留多行日志显示
-- **脚本保存诊断**：脚本保存完成后将成功状态、修订号和编译诊断反馈给 Content Browser，成功后才清除编辑器 dirty 状态
-- **Viewport 渲染表面**：`XJViewport` 接口（`GetViewportTextureID`/`IsViewportTextureReady`/`OnViewportResized`）由 `XJViewportRenderSurface` 实现，负责离屏 render pass、render target、调整大小时的延迟 descriptor 释放以及 ImGui 纹理显示
-- **Services**：`XJEditorSceneService` + `XJEditorAssetService`（Controller 与 ECS 之间的桥接层）
-- **ViewModels**：`XJEditorSceneViewModel`、`XJEditorSelection`、`XJEditorComponentTypes`、`XJEditorAssetRequests`（UI 面板读取快照，写入请求）、`XJEditorAssetViewModel`（资产详情视图：基本信息、着色器验证、网格包围盒展示）
-- **面板功能**：Inspector 支持 Transform/Camera/MeshRenderer 组件增删编辑，Hierarchy 支持右键菜单创建/删除/重命名
-- **数据流**：`UI Panel → Request → Controller → Service → ECS`
-
-### 主要模块
-
-- **材质系统**：`XJBaseMaterialSystem`、`XJSurfaceMaterialSystem`、`XJMaterialRenderSystemBase`、`XJSurfaceMaterialComponent`、`XJMaterialParameterBlock`/`Builder`/`Writer`
-- **摄像机系统**：`XJCameraController`（Core/Camera）、`XJCameraMath`（数学工具）、`XJCameraSystem`（ECS 适配）
-- **统一 Transform**：`XJTransformComponent` 将本地 TRS 私有化，使用归一化四元数旋转，通过角度制 XYZ 欧拉角接口（`Rx * Ry * Rz`）与带校验的原子 setter 修改，不再直接写成员。世界求值检查父链环和非有限数值，渲染、灯光、拾取、相机、Inspector 与脚本服务共用同一套语义；世界旋转独立于缩放合成，有损世界缩放取矩阵轴长。
-- **安全世界编辑**：世界位置、旋转、姿态和缩放修改返回 `XJTransformStatus`，失败不改变本地状态；世界求值使用 double，在 GPU/拾取消费边界检查 float 可表示性；`Transform.RotateY` 以四元数绕本地 Y 轴旋转。
-- **相机姿态**：统一读取世界位置/旋转，本地前方为 `-Z`、上方为 `+Y`；View Matrix getter 不再修改 ECS 或轨道参数。Free/Orbit 控制器提交带校验的世界姿态，成功后才更新对应轨道半径/旋转中心。
-- **资产系统**：`XJModelImporter`、`XJTextureImporter`、`XJAssetRegistry`、`XJAssetRegistryScanner`、`XJAssetBootstrap`、`XJSceneRuntimeUtil`、`XJMeshAssetLoader`、`XJJsonIO`
-- **ECS 基础**：`XJEntity` 通过场景生命周期 token 校验避免悬垂访问；Scene 维护 UUID -> EnTT 索引以直接查找并拒绝重复 UUID；`XJSystemScheduler` 提供事务式 Start/Stop、固定步进上限和安全点回调；`XJInput` 提供键盘/鼠标边沿查询；`XJLightComponent` 支持 Directional/Point/Spot 灯光
-- **编辑器系统**：`XJEditorSceneController`、`XJEditorCameraManager`、`XJEditorSceneService`、`XJUIContext`、`XJEditorRenderer`、`XJEditorUILayer`、编辑器面板
-- **Vulkan 平台层**：`XJSwapchainAcquireResult`/`XJSwapchainPresentResult` 区分成功、重建和设备丢失状态；`XJVulkanInstance` 自动选择最高支持到 Vulkan 1.3 的 API 版本；`XJVulkanSurface`、`XJGlfwWindow`、`XJVulkanTextureSampler` 增加句柄校验、生命周期顺序和 RAII 释放
-
-## 🛠️ 构建
-
-### Windows
-
-```bash
-git clone https://github.com/aidexiaojike-ops/XJEngine.git
-cd XJEngine
-mkdir build && cd build
-cmake .. -G "Visual Studio 17 2022" -A x64
-cmake --build . --config Release
-```
-
-首次配置如果本机没有 Vulkan SDK，CMake 会自动下载约 200MB+ 的 LunarG Vulkan SDK 1.3.283.0，耗时取决于网络。
-
-### Linux
-
-```bash
-git clone https://github.com/aidexiaojike-ops/XJEngine.git
-cd XJEngine
-mkdir build && cd build
-cmake .. -DCMAKE_BUILD_TYPE=Release
-make -j$(nproc)
-```
-
-### 测试
-
-第一方 CTest 当前覆盖脚本 Lexer、Parser、语义分析、编译器、字节码验证器、运行时、ECS 原生桥接、资产编译/加载、组件行为、场景序列化、编辑器资产操作和脚本系统生命周期。
-
-渲染测试还覆盖材质上传状态、视口显示请求、能力与统计；脚本生命周期测试包含运行时槽同步与实体销毁处理。
-
-脚本值集成与 Native 契约测试覆盖向量表达式、原生参数/返回值验证、目录兼容性、无效字节码及值序列化。
-
-宿主服务测试覆盖实体生命周期与会话隔离、本地/世界变换及失败写入原子性、输入焦点/阶段行为、日志配额和 VM 原生分发。
-
-Transform 组件与 ECS 集成测试进一步覆盖四元数/TRS 数学、父级继承、失败原子性、相机控制与只读视图查询、世界空间灯光/拾取/包围盒、Inspector 本地编辑，以及 v2/v3 到 v4 的场景迁移与往返保存。
-
-Transform 验收测试覆盖 Local/World 切换、字段隔离、反射/有损缩放、拒绝反馈与 Undo/Redo 保留；世界网格布局测试无需 GPU 渲染，验证自适应格距、标签及相机/视口边界条件。
-
-```bash
-cmake -S . -B build -DXJ_BUILD_TESTS=ON
+cmake -S . -B build -G "Visual Studio 17 2022" -A x64
 cmake --build build --config Release
-ctest --test-dir build -C Release --output-on-failure
+.\bin\XJEngine.exe
 ```
 
-## 📁 项目结构
+如果 `build/` 已使用其他生成器，请沿用该生成器或另选构建目录，不要复用不兼容的 CMake 缓存。Visual Studio 属于多配置生成器，应通过 `--config Release` 选择配置，而非 `CMAKE_BUILD_TYPE`。
+
+首次配置可能下载较大的 Vulkan SDK 安装包，耗时数分钟。SDK 不能替代 GPU 厂商的显卡驱动。
+
+## 构建配置
+
+### Vulkan SDK 解析
+
+[`cmake/SetupVulkanSDK.cmake`](cmake/SetupVulkanSDK.cmake) 按以下顺序查找：
+
+1. `VULKAN_SDK` 环境变量指向的有效 SDK。
+2. `ThirdParty/VulkanSDK` 本地缓存，可通过 `XJ_VULKAN_SDK_LOCAL_DIR` 覆盖。
+3. 下载并在本地安装 Windows LunarG Vulkan SDK **1.3.283.0**。
+
+解析后的 SDK 必须包含 `Include/vulkan/vulkan.h`、`Lib/vulkan-1.lib`、`Bin/glslc.exe` 和 `Dll/vulkan-1.dll`。离线构建前应先安装完整 SDK，并设置 `VULKAN_SDK` 或本地缓存路径。
+
+| 配置项 | 用途 | 默认值 |
+|--------|------|--------|
+| `XJ_BUILD_TESTS` | 构建并注册第一方 CTest 测试 | `OFF` |
+| `XJ_VULKAN_SDK_LOCAL_DIR` | 本地 Windows SDK 缓存 | `ThirdParty/VulkanSDK` |
+| `XJ_VULKAN_SDK_URL` | SDK 安装包/归档下载地址 | Windows SDK 1.3.283.0 安装包 |
+| `XJ_VULKAN_DOWNLOAD_TIMEOUT` | 下载超时，单位为秒 | `1800` |
+
+例如，增加下载超时：
+
+```powershell
+cmake -S . -B build -DXJ_VULKAN_DOWNLOAD_TIMEOUT=3600
+```
+
+`XJ_BUILD_EXAMPLES`、`XJ_ENABLE_VALIDATION` 和 `XJ_USE_IMGUI` **不是**当前项目提供的构建选项。
+
+### 输出与项目路径
+
+| 路径 | 用途 |
+|------|------|
+| `bin/XJEngine.exe` | 编辑器可执行文件；Debug 与 Release 共用 `bin/` |
+| `Resource/Shader/*.spv` | Shader 构建产物，与源 GLSL 和 Shader 资产同目录 |
+| `Resource/` | 开发阶段编辑器与运行时直接读取的源资产 |
+| `Resource/Config/AssetRegistry.json` | 项目资产注册表 |
+| `Resource/Scenes/Default.xjscene` | 默认场景 |
+| `Resource/Config/EditorUI.json` | 编辑器 UI 初始配置模板 |
+| `bin/Saved/Config/EditorUI.json` | 用户编辑器 UI 状态 |
+| `bin/Saved/Config/imgui.ini` | 用户 ImGui 布局 |
+
+资产**不会复制到 `bin/Resource`**。仅复制可执行文件不能得到独立游戏发行包，Export/Package 尚未实现。
+
+编辑器项目根目录的优先级为：`--project` > `XJ_PROJECT_ROOT` 环境变量 > CMake 记录的源码根目录。参数应指向**包含 `Resource/` 的目录**，而非 `Resource/` 本身：
+
+```powershell
+.\bin\XJEngine.exe --project "E:\Projects\MyXJProject"
+```
+
+Windows 下用户 UI 状态跟随可执行文件目录，不依赖启动工作目录。移动源项目后，应重新构建或显式指定新的项目根目录。
+
+## 编辑器工作流
+
+### 场景与资产编辑
+
+1. 在 **Hierarchy** 中选择实体，或在 **Scene Preview** 中点击场景几何体。拾取先进行世界空间 AABB 粗筛，再执行 CPU 射线-三角形检测。
+2. 在 **Inspector** 中编辑组件值、材质参数、相机、灯光和脚本槽。Hierarchy 支持实体创建、删除与重命名。
+3. 在 **Content Browser** 中管理资产，将 Mesh 资产拖入 Scene Preview 可创建实体。外部文件拖放由独立的编辑器导入控制器处理。
+4. 场景保存为 `.xjscene`。场景和材质编辑使用基于快照的 Undo/Redo，最多保留 100 条历史。
+
+### Local/World 变换编辑
+
+- 点击 Scene 工具栏的 **Local/World** 按钮切换 Inspector 坐标空间。仅 Edit 模式允许切换，不修改场景数据，也不产生 Undo。
+- Transform 快照使用双精度，按字段提交请求，保留未编辑的本地分量。
+- 世界旋转使用归一化四元数独立于缩放合成。世界缩放是非负的**有损缩放**（世界矩阵轴长），不是带符号的本地缩放；世界缩放编辑保留本地反射符号。
+- Service 先在临时候选对象上验证，再应用编辑。拒绝时显示对应实体/空间的原因，不修改场景、dirty 标记或 Undo/Redo 历史；无变化编辑同样不创建历史。
+- 组件复制粘贴始终使用 **Local TRS**。Play/Pause 运行时检查中的 Transform 仍只读。
+
+### Transform Gizmo 可视化
+
+在可编辑场景中选中具有有效 Transform 的实体后，**Scene Preview** 显示统一的九部件 Gizmo：
+
+- 三个移动箭头、三个旋转环和三个缩放方块，按 X/Y/Z 轴着色。
+- 原点跟随实体的**世界位置**。**Local** 使用实体的纯世界旋转；**World** 对齐全局 XYZ 轴。物体缩放不会拉伸 Gizmo 几何。
+- 根据投影与视口尺寸计算统一的世界尺度，目标为近似 **110 像素的屏幕半径**，而非固定世界尺寸。
+- 使用无光照纯色、双面三角形，不启用深度测试或深度写入，因此不会被场景几何体遮挡。
+- Play/Pause、只读/运行时检查、无效选择或缺少 Transform 时隐藏；帧/投影输入无效时跳过绘制。Game Preview 不挂载该通道。
+
+**目前仅用于可视化。** 尚无手柄命中检测、悬停选择、拖拽编辑或 Move/Rotate/Scale 操作切换。视口点击仍执行实体拾取，请通过 Inspector 数值编辑变换。
+
+### 世界网格与视口显示
+
+- Scene Preview 绘制自适应 **1/2/5 系列格距**的世界网格，最小 **1 米**，包含 X/Z 坐标标签、刻线、格距说明和边缘淡出。
+- 网格启用深度测试但不写深度。布局随相机和视口变化；相机姿态无效时跳过网格，不复用缓存视图。
+- 世界网格、灯光线框和 Transform Gizmo 均为 Scene 专用辅助显示，Game Preview 不包含这些编辑器通道。
+- 当前仅实现 **Final** 视图模式，BaseColor、LinearDepth、WorldNormal 和 Lighting 仍按能力禁用。
+
+### Play 模式与脚本
+
+- Play 将编辑场景克隆为运行时场景；Pause/Resume 控制模拟，Stop 恢复编辑器选择。
+- 运行时 Hierarchy/Inspector 读取运行场景快照。可通过运行时请求增删脚本组件/槽、启停与替换脚本；调度器在安全点同步，暂停期间也可处理。
+- 脚本输入要求处于 **Playing**，Game 与应用窗口聚焦，且无活动 UI 控件、文本输入或弹窗。按下/释放边沿仅在 Update 可见，重新获得焦点首帧抑制边沿。
+- 保存 `.xjs` 后，Content Browser 接收保存结果与编译诊断。磁盘保存成功仍可能存在编译错误，Play 预检会拒绝无效脚本；脚本编辑器仅在收到保存成功响应后清除 dirty 状态。
+
+## 引擎架构
+
+```text
+Application -> Scene / ECS -> Camera and Material Systems
+            -> Off-screen Render Targets -> Editor Frame Renderer -> Swapchain
+
+UI View -> Request -> Controller / Service -> ECS or render state
+        <- ViewModel snapshots <-----------+
+
+File -> Scanner / Importer -> Asset (CPU) -> Factory -> Render Resource (GPU)
+```
+
+### ECS、变换与相机
+
+- `XJEntity` 校验场景生命周期 token；Scene 维护 UUID → EnTT 查找索引并拒绝重复 UUID，引擎/编辑器实体使用保留 UUID 区间。
+- `XJTransformComponent` 将本地 TRS 私有化，归一化四元数旋转，提供角度制 XYZ 欧拉角接口（`Rx * Ry * Rz`）。带校验的 setter 返回 `XJTransformStatus`，失败写入保持原子性。
+- 世界求值检查父链环和非有限数值；以双精度计算后，GPU 与拾取消费端进一步检查 float 可表示性。
+- 相机使用世界位置/旋转，本地前方为 `-Z`、上方为 `+Y`。View Matrix 读取不修改 ECS 或轨道参数，Free/Orbit 控制器提交带校验的世界姿态修改。
+- 场景格式 **v4** 保存本地 TRS 与相机轨道模式/目标/半径。加载 v2/v3 时将旧 yaw/pitch 相机姿态迁移为父级相对变换，无法表示的姿态会被拒绝。
+- `XJSystemScheduler` 提供事务式 Start/Stop、带逐帧上限的固定步进和延迟运行时修改安全点；`XJInput` 提供键盘/鼠标保持、按下、释放快照与轴向查询。
+
+### 渲染与材质
+
+- Vulkan 平台层区分 acquire/present 成功、Swapchain 重建与设备丢失状态。Instance 自动选择最高到 Vulkan 1.3 的 API 版本并传给 ImGui；Sampler 使用 RAII 所有权管理。
+- `XJBaseMaterialSystem` 使用动态 Uniform Buffer；`XJSurfaceMaterialSystem` 通过缓存的管线运行时绘制 Schema 驱动的 `XJSurfaceMaterialComponent`。
+- JSON `.schema` / `.xjshader` 资产定义参数与绑定；验证、跨阶段 SPIR-V 反射和描述符布局构建将资产连接到运行时参数块与纹理绑定。
+- `Unlit.schema` 与 `Lit.schema` 共用 Surface 运行时。Lit 支持基础颜色/Albedo 纹理、高光强度、光泽度与方向光/点光/聚光灯前向光照，尚不是完整 PBR 渲染器。
+- 共享 `XJFrameUbo`、`XJLightUbo` 提供相机/帧数据及 **1 个方向光、最多 8 个点光和 8 个聚光灯**。灯光持久化类型、启用状态、颜色、强度、范围和锥角。
+- 材质实例 ID 与参数/资源修订号控制逐 frame slot 上传同步；描述符池按需扩容，工厂缓存使用弱引用并复用过期材质槽。
+
+### 资产与编辑器所有权
+
+- Asset 保存 CPU 数据，Factory 创建 GPU 网格、纹理与材质；`.xjmeta` 旁置文件保留资产句柄/类型/导入器信息，注册表隔离持久化句柄与运行时生成句柄。
+- glTF 2.0 导入将三角形 primitive 合并进共享缓冲，保留逐 primitive 索引范围、材质槽和包围盒，跳过不支持的非三角形模式；Mesh 保留 CPU 顶点位置/索引用于拾取。
+- `XJJsonIO` 提供共享 JSON 读取与原子写入；场景序列化器和实例化器负责 `.xjscene` 资产与 ECS 层级之间的转换。
+- `Src/main.cpp` 创建 `XJEditorApplication`；`XJEditorRuntime` 管理工作区、Play Controller、视口系统、帧渲染、输入绑定与 UI Host。
+- View 读取 ViewModel 并提交请求，Controller/Service 应用修改；`XJEditorTransformToolsController` 发布空间设置与 `XJEditorTransformGizmoViewModel`，Gizmo 渲染系统只消费显示快照。
+- `XJViewportRenderSurface` 管理离屏渲染目标与 resize 时的延迟描述符释放；`XJEditorLog` 将 spdlog 桥接为按修订号更新的 Console 快照，并裁剪单行日志绘制范围。
+
+### 内置脚本
+
+- 管线：Lexer → Parser → 语义分析 → 编译器 → 字节码验证器 → Runtime。执行受指令预算、调用深度、类型/溢出检查、故障隔离、堆栈跟踪和重入保护约束。
+- `XJScriptValue` 支持 bool/int/float/string、`Vec3` 与 `EntityRef`。向量支持算术、标量乘除、分量写入、复合赋值和前后缀增减。
+- `XJScriptSystem` 调用 `OnCreate`、`OnUpdate`、`OnFixedUpdate` 和 `OnDestroy`；每实体可挂载多个可启停脚本槽，使用稳定 UUID 与 `[[FieldId("...")]]` 字段覆盖。
+- `XJScriptHostNativeInvoker` 注入实体、Transform、输入与日志服务，携带 Owner/槽/帧/阶段上下文，服务保持到 `OnDestroy` 完成。
+- Transform API 读写本地位置/欧拉角/缩放并读取世界值；`TrySetWorldPosition`、`TrySetWorldEulerAngles`、`TrySetWorldScale` 报告写入失败且不部分修改状态。支持当前 Owner 或显式 `EntityRef`，`Transform.RotateY` 绕本地 Y 轴旋转。
+- `Scene.FindByUUID` 接收十进制或 `0x` 十六进制字符串；`Entity.Self`、`Entity.IsValid`、`Entity.GetUUID` 使用会话隔离句柄并保护失效/跨会话引用，格式有效但未找到实体的 UUID 返回 null。
+- 编译、验证与分发共用 Native 签名目录；带类型的值序列化拒绝非有限数值。`EntityRef` 不允许持久化、暴露为 public 字段或保存为非空字节码常量。
+- 脚本资产支持编译/缓存；场景保留槽 ID、启用状态、资产引用和字段覆盖。`Log.Info`/`Warn`/`Error` 通过 spdlog 输出，受每槽/全局配额限制。
+
+## 项目结构
 
 ```text
 XJEngine/
-├── Core/                    # 引擎核心：ECS、渲染、资产、摄像机
-│   ├── Public/ECS/          # 实体组件系统（含 ScriptComponent / ScriptSystem）
-│   ├── Public/Camera/       # 摄像机模块（独立于 ECS）
-│   ├── Public/Geometry/     # 几何工具（AABB 包围盒、射线相交检测）
-│   ├── Public/Input/        # 输入系统（键盘/鼠标/轴向轮询）
-│   ├── Public/Script/       # Lexer/Parser/语义分析/编译器/字节码/运行时
-│   │   ├── Value/          # 统一标量、向量和实体引用值
-│   │   ├── Native/         # 原生函数签名目录
-│   │   ├── Host/           # 实体、Transform、输入和日志服务
-│   │   └── Serialization/  # 带类型脚本值 JSON 编解码
-│   ├── Public/Asset/        # Asset 层（CPU）
-│   │   ├── Importer/        # 模型/纹理/材质导入器
-│   │   ├── Loader/          # 资产加载器
-│   │   ├── Serialization/   # 场景/材质/Shader 序列化（XJJsonIO 原子写入）
-│   │   ├── Instantiation/   # 场景实例化器
-│   │   ├── Metadata/        # 资产元数据（.xjmeta、句柄生成器）
-│   │   └── Register/        # 资产引导注册/扫描
-│   ├── Public/Render/       # 渲染接口
-│   │   ├── XJFrameUbo.h     # 共享逐帧摄像机/渲染数据
-│   │   ├── XJLightUbo.h     # std140 方向光/点光/聚光灯数据
-│   │   ├── XJLightSceneUtils.h # 场景灯光收集与 UBO 打包
-│   │   ├── System/          # 渲染系统（材质系统 + RenderSystemBase）
-│   │   ├── Material/        # 材质参数与管线运行时（Block/Layout/Builder/Writer/PipelineRuntime）
-│   │   └── Shader/          # 着色器资产（Schema/Parameter/Asset/Validator/BindingResolver/Reflection）
-│   └── Public/Render/Resource/ # GPU 资源
-├── Platform/                # Vulkan、GLFW 封装
-├── ThirdParty/              # 第三方库（glfw、imgui、glm、spdlog、entt、json、tinygltf 等）
-├── Editor/                  # ImGui 编辑器（MVVM 架构）
-│   ├── Public/Controllers/  # Camera/Scene 控制器
-│   └── Public/Services/     # 编辑器服务层
-├── Src/                     # 应用入口
-├── cmake/                    # CMake 模块
-├── Resource/                # Shader、Mesh、Material、Script、Scenes、Config
-├── Tests/                   # CTest 脚本语言、运行时、ECS 与编辑器测试
-└── bin/                     # 运行时输出
+├── Core/                    # ECS、相机、输入、几何、资产、脚本与渲染
+│   ├── Public/              # 公共接口
+│   └── Private/             # 实现
+├── Editor/                  # ImGui 编辑器与 MVVM 应用服务
+│   ├── Public/Controllers/  # 场景、资产、相机、变换与显示控制器
+│   ├── Public/Services/     # 场景/资产/显示服务
+│   ├── Public/Tools/        # 变换类型、网格布局与 Gizmo 几何
+│   ├── Public/UI/           # ViewModel、请求、面板与视口
+│   └── Private/             # Controller、Service、UI 与编辑器渲染系统
+├── Platform/                # Vulkan、GLFW、事件与平台封装
+├── Src/                     # main.cpp 与 XJEditorApplication
+├── Resource/                # 开发阶段直接读取的源资产
+│   ├── Shader/              # GLSL、生成的 SPIR-V、.schema 与 .xjshader
+│   ├── Mesh/                # 模型资产
+│   ├── Texture/             # 纹理资产
+│   ├── Material/            # .xjmat 材质
+│   ├── Script/              # .xjs 示例与元数据
+│   ├── Scenes/              # .xjscene 场景
+│   └── Config/              # 资产注册表与初始 UI 模板
+├── Tests/                   # 第一方 CTest 目标
+├── ThirdParty/              # 内置依赖与可选本地 Vulkan SDK 缓存
+├── cmake/                   # SDK 配置、Shader 编译与依赖配置
+├── bin/                     # 生成的可执行文件、运行时 DLL 与 Saved/ 用户状态
+└── build/                   # 生成的构建目录
 ```
 
-## 🎮 使用
+## API 示例
 
-### Surface 材质示例
+以下为集成代码片段，不是独立程序。需要有效场景与已初始化的渲染上下文，并保证 GPU 资源生命周期不超出渲染宿主。应用入口与编辑器生命周期见 [`Src/main.cpp`](Src/main.cpp) 和 [`Src/XJEditorApplication.cpp`](Src/XJEditorApplication.cpp)。
+
+### 创建实体并编辑 Transform
 
 ```cpp
-auto surfaceMat = XJ::XJMaterialFactory::GetInstance()->CreateMaterial<XJ::XJSurfaceMaterial>();
-surfaceMat->SetBaseColor(glm::vec4(1.0f, 0.0f, 0.0f, 1.0f));
+auto* entity = scene.CreateEntityWithTransform("Cube");
+auto& transform = entity->GetComponent<XJ::XJTransformComponent>();
 
-auto& surfaceComp = entity->AddComponent<XJ::XJSurfaceMaterialComponent>();
-surfaceComp.AddMesh(mesh, surfaceMat);
+const auto status = transform.SetLocalTRSEuler(
+    glm::dvec3(0.0), glm::dvec3(0.0, 45.0, 0.0), glm::dvec3(1.0));
+if (status != XJ::XJTransformStatus::Success)
+    spdlog::error("Cube transform could not be applied");
 ```
+
+### 创建已初始化 Schema 的 Surface 材质
+
+假设 `entity` 尚无 Surface 材质组件，`mesh`、`defaultTexture` 与 `defaultSampler` 为有效渲染资源，项目资源根目录与 Shader 资产已就绪。
+
+```cpp
+auto material = XJ::XJMaterialFactory::GetInstance()->CreateDefaultMaterial(
+    defaultTexture, defaultSampler);
+
+if (material && material->SetParameterValue(
+        "BaseColor", glm::vec4(1.0f, 0.0f, 0.0f, 1.0f)))
+{
+    auto& component = entity->AddComponent<XJ::XJSurfaceMaterialComponent>();
+    for (uint32_t submesh = 0; submesh < mesh->GetSubmeshCount(); ++submesh)
+        component.AddMesh(mesh, material, submesh);
+}
+else
+{
+    spdlog::error("Surface material runtime parameters are unavailable");
+}
+```
+
+`CreateDefaultMaterial` 会构建 Unlit Shader 布局与回退纹理绑定；已有 `.xjmat` 资产及其 Shader 应使用 `CreateFromAsset`。单独调用 `CreateMaterial<T>()` 只分配材质，**不会**初始化基于 Schema 的参数布局。
 
 ### 脚本示例
 
-`Resource/Script/` 提供 `PlayerMove.xjs`（键盘移动）、`MoveTarget.xjs`（UUID 查找与跨实体移动）、`WorldPosition.xjs`/`WorldScale.xjs`（检查世界空间写入结果），以及旋转和生命周期示例。
+以下是 **`.xjs` 语法**，不是 C++ 编译单元：
 
 ```cpp
 class Rotate : ScriptBehaviour
@@ -284,85 +300,71 @@ class Rotate : ScriptBehaviour
 };
 ```
 
-### 编辑器 UI 集成
+[`Resource/Script/`](Resource/Script/) 还提供 `PlayerMove.xjs`（键盘移动）、`MoveTarget.xjs`（UUID 查找与跨实体移动）、`WorldPosition.xjs` / `WorldScale.xjs`（检查世界空间写入结果）和 `Lifecycle.xjs`。
 
-```cpp
-XJ::XJEditorRendererInitInfo kUIRendererInfo = {};
-kUIRendererInfo.apiVersion = kRenderContext->XJGetInstance()->XJGetApiVersion();
+## 测试
 
-mUIContext = std::make_unique<XJ::XJUIContext>();
-mEditorRenderer = std::make_unique<XJ::XJEditorRenderer>();
-mUIContext->Init(static_cast<GLFWwindow*>(XJGetWindow()->XJGetImplWindowPointer()));
-mEditorRenderer->Init(kUIRendererInfo);
+在仓库根目录启用测试、构建并运行 CTest：
+
+```powershell
+cmake -S . -B build -DXJ_BUILD_TESTS=ON
+cmake --build build --config Release
+ctest --test-dir build -C Release --output-on-failure
 ```
 
-## 🔧 开发
+覆盖范围包括：
 
-### 主要依赖
+- 脚本语言、编译器、字节码验证器/运行时、Native 契约、带类型的值、资产编译/加载、序列化与编辑器脚本操作。
+- ECS 脚本生命周期、运行时槽同步、延迟销毁、实体会话隔离、宿主 Transform、输入焦点/阶段规则与日志配额。
+- 四元数/TRS 数学、父级继承、失败写入原子性、相机控制/只读查询、世界空间灯光/拾取/包围盒与场景 v2/v3 → v4 迁移。
+- Local/World 验收行为、字段隔离、反射/有损缩放、拒绝反馈与 Undo/Redo 保留。
+- 材质上传状态和视口请求、能力与统计。
+- 无需 GPU 的世界网格布局、Transform Gizmo 几何与帧计算。`XJTransformGizmoGeometryTests` 验证九个唯一手柄、有限且非退化的三角形列表、几何边界、透视尺寸调整与无效视口高度。
 
-- GLFW
-- EnTT
-- GLM
-- spdlog
-- stb_image
-- tinyobjloader
-- tinygltf
-- Dear ImGui
-- nlohmann/json
-- SPIRV-Reflect
-- Vulkan SDK（自动解析：环境变量 → 本地缓存 → 自动下载 1.3.283.0）
+这些测试不能替代手动 Vulkan 验证或视口视觉检查。
 
-### Vulkan SDK 自动解析
+## 性能与诊断
 
-CMake 会按以下顺序解析 Vulkan SDK：
+- 视口叠层显示已完成帧耗时/FPS、脚本 CPU 时间与活动实例数、Draw Call 和材质上传，保留 **128 个帧历史采样**；这些快照不是 GPU 计时或性能保证。
+- 已有优化包括 UUID 索引、按修订号刷新 ViewModel/Console、材质/纹理/管线复用、逐 frame slot 上传跟踪与可复用的脚本执行 scratch 存储。
+- 诊断使用 **spdlog** 与编辑器 Console，常规统计采集不依赖逐帧 info/debug 日志。
+- 启动或资源失败时先检查 SDK 解析、显卡驱动、项目根目录与生成的 `.spv`；脚本无输入时先检查 Game/应用焦点和 Play 状态。
 
-1. `VULKAN_SDK` 环境变量
-2. `ThirdParty/VulkanSDK` 本地缓存
-3. 自动下载 LunarG Vulkan SDK `1.3.283.0`
+## 当前限制
 
-首次配置可能下载 200MB+ 安装包。可通过以下参数覆盖 URL 或超时：
+- Transform Gizmo 尚不支持拾取、拖动、吸附或操作切换。
+- 仅实现 Final 视口渲染，诊断渲染模式尚不可用。
+- Windows SDK/DLL 构建流程仍需针对 Linux/macOS 适配。
+- Lit 为基础前向光照；完整 PBR、阴影、后处理和骨骼动画尚未实现。
+- Export/Package 尚未实现，开发运行依赖项目源 `Resource/` 目录。
+- 资源所有权与较大场景行为仍需持续验证，不承诺固定实体数量、加载并发能力或帧率。
 
-```bash
-cmake .. -DXJ_VULKAN_SDK_URL=<url> -DXJ_VULKAN_DOWNLOAD_TIMEOUT=3600
-```
+## 路线图
 
-### 开发方向
+以下为状态概览，不是发布时间表：
 
-- 新组件：放在 `Core/Public/ECS/Component/`
-- 新材质系统：继承 `XJMaterialSystem`
-- 新资产导入器：放在 `Core/Public/Asset/Importer/`
-- 新场景格式：扩展 `XJSceneAssetSerializer`
+- [x] 编辑器面板、资产操作、场景持久化与 Undo/Redo
+- [x] 带验证的脚本管线、宿主服务与运行时槽同步
+- [x] 统一四元数变换、场景 v4 迁移与 Local/World 数值编辑
+- [x] 自适应世界网格与 Transform Gizmo 可视化
+- [ ] Gizmo 手柄拾取、拖拽操作与编辑约束
+- [ ] 更多视口渲染模式
+- [ ] PBR、阴影与后处理
+- [ ] 动画与更广泛的核心/渲染集成测试
+- [ ] 独立资产打包与非 Windows 构建支持
+- [ ] 持续审查所有权、性能分析与 API 文档
 
-## 🐛 已知问题
+## 开发与贡献
 
-1. 高层资源所有权路径仍需继续审查
-2. macOS / MoltenVK 覆盖测试仍然有限
-3. 编辑器面板体系还在持续补全中
+- ECS 组件放在 `Core/Public/ECS/Component/`，实现在 `Core/Private/ECS/Component/`。
+- 渲染系统继承 [`XJMaterialSystem`](Core/Public/Render/System/XJMaterialSystem.h)，实现 `OnInit` / `OnRender` / `OnDestroy`，由渲染目标或视口宿主注册。
+- 新编辑器 View 仅读取 ViewModel、提交请求；通过 Controller/Service 修改 ECS/渲染状态，并保留已有渲染宿主生命周期接口。
+- GLSL 与 Shader 资产放在 `Resource/Shader/`；新增 Shader 文件后重新配置 CMake，刷新构建期 Shader 列表。
+- 遵循周边命名与 include guard 风格。诊断日志统一使用 `spdlog::`；需要异常传播时先记录，再抛出标准异常。
+- 提交聚焦的 Pull Request，补充相关测试并同步中英文文档；通过 [GitHub Issues](https://github.com/aidexiaojike-ops/XJEngine/issues) 提供复现步骤、构建配置与日志。
 
-## 🗺️ 路线图
+依赖包括 GLFW、EnTT、GLM、spdlog、stb_image、tinyobjloader、tinygltf、Dear ImGui、nlohmann/json、SPIRV-Reflect 和 Vulkan SDK。感谢这些项目的作者与维护者，内置项目见 `ThirdParty/`。
 
-### 短期
+## 许可证
 
-- [ ] 完善编辑器面板（Hierarchy / Inspector / Stats）
-- [x] ~~完善 Vulkan Sampler 所有权与 RenderContext 销毁顺序~~
-- [ ] 审查剩余高层资源所有权路径
-- [x] ~~增加脚本语言、运行时、ECS 集成、序列化和编辑器资产的第一方测试~~
-- [ ] 增加核心系统单元测试
-- [ ] 补充 API 文档
-
-### 中期
-
-- [ ] PBR 材质系统
-- [ ] 阴影映射
-- [ ] 后处理效果
-- [ ] 场景编辑能力增强
-
-## 📝 许可证
-
-本项目基于 MIT License 开源，详见 [LICENSE](LICENSE)。
-
-## 🤝 贡献
-
-欢迎提交 Issue 和 Pull Request。
-
-如需英文文档，请访问 [README.md](README.md)。
+仓库目前没有项目级 `LICENSE` 文件。复用或再分发前请向维护者确认授权，不应依据旧版 README 假定已获得 MIT 授权。第三方依赖各自保留其许可证。

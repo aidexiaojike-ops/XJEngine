@@ -6,607 +6,285 @@
 
 </div>
 
-[![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20Linux%20%7C%20macOS-brightgreen)](https://github.com/aidexiaojike-ops/XJEngine)
+[![Platform](https://img.shields.io/badge/Platform-Windows-brightgreen)](https://github.com/aidexiaojike-ops/XJEngine)
 [![C++](https://img.shields.io/badge/C++-20-blue.svg)](https://en.cppreference.com/w/cpp/20)
-[![Vulkan](https://img.shields.io/badge/Vulkan-1.2+-orange.svg)](https://www.vulkan.org/)
-[![CMake](https://img.shields.io/badge/CMake-3.10+-yellow.svg)](https://cmake.org/)
+[![Vulkan](https://img.shields.io/badge/Renderer-Vulkan-orange.svg)](https://www.vulkan.org/)
+[![CMake](https://img.shields.io/badge/CMake-3.28+-yellow.svg)](https://cmake.org/)
 
-XJEngine is a lightweight modern game engine built with Vulkan and ECS architecture.
+XJEngine is an experimental C++20 game engine and editor built on Vulkan and EnTT. It includes a schema-driven material pipeline, asset and scene persistence, a built-in scripting language, and an ImGui editor.
 
-## ✨ Key Features
+**Current build path: Windows.** The SDK setup and runtime DLL handling expect a Windows Vulkan SDK layout; Linux and macOS are not ready-to-build targets. Transform Gizmos are currently **visualization only**, not draggable editing tools.
 
-| Feature | Description |
-|---------|-------------|
-| **Vulkan Renderer** | Modern graphics API with multi-platform support, GPU-driven rendering pipeline |
-| **Robust Swapchain Lifecycle** | Structured acquire/present results, resize-aware recreation, minimized per-frame blocking, and clearer device-lost handling |
-| **ECS Architecture** | High-performance Entity Component System using EnTT library |
-| **Event Driven System** | Complete input handling for window, mouse, keyboard events |
-| **Built-in Scripting** | `.xjs` language pipeline with lexer, parser, semantic analysis, verified bytecode, sandboxed runtime, ECS lifecycle, and editor integration |
-| **Modular Material System** | Extensible material pipeline with textures, samplers and uniform buffers |
-| **Shader Schema System** | JSON-defined shader parameters, schema validation, binding resolution, descriptor layout builder, SPIR-V reflection, material asset serialization |
-| **Surface Material System** | Schema-driven surface pipeline with shared Frame/Light UBOs, material parameter blocks, texture bindings, and dynamic descriptor pool expansion |
-| **Scene Lighting** | Directional, point, and spot lights with scene persistence, per-frame GPU upload, range, intensity, color, and spot cone controls |
-| **Lit Shader** | Schema-driven forward lighting with base color/albedo texture, specular strength, shininess, and directional/point/spot light evaluation |
-| **Runtime Material Generation** | Programmatic material creation with random colors, textures, and UV transforms at runtime |
-| **Procedural Textures** | Generate textures from pixel data (single color or multi-pixel arrays) without external files |
-| **Dynamic Instancing** | Support for large-scale entity rendering with dynamic uniform buffers |
-| **Camera Controller / 摄像机控制** | Shared camera module with orbit/free modes, math utilities (`XJCameraMath`), editor camera manager, ECS camera system |
-| **Asset System** | Two-layer Asset/Resource architecture, glTF 2.0 importer, asset registry scanner, bootstrap, scene instantiator, mesh/texture/material loaders |
-| **ImGui Editor UI** | In-engine editor with ImGui, docking, multi-viewport, drag-drop, panels (Hierarchy, Inspector, Content Browser, Console, Scene/Game Preview) |
-| **Multisampling Anti-aliasing** | MSAA support for improved visual quality |
-| **Depth Testing** | Complete depth buffer management |
-| **Shader Compilation** | Automatic GLSL to SPIR-V compilation at build time |
-| **Resource Management** | Automatic resource copying to runtime directory |
-## 📋 Table of Contents
-- [Features](#-key-features)
-- [Architecture](#-engine-architecture)
-- [Quick Start](#-quick-start)
-- [Building](#-building)
-- [Project Structure](#-project-structure)
-- [Usage](#-usage)
-- [Development](#-development)
-- [Performance](#-performance)
-- [Known Issues](#-known-issues)
-- [Roadmap](#-roadmap)
-- [Contributing](#-contributing)
-- [License](#-license)
+## Contents
 
-## 🚀 Quick Start
+- [Features](#features)
+- [Quick Start](#quick-start)
+- [Build Configuration](#build-configuration)
+- [Editor Workflow](#editor-workflow)
+- [Architecture](#architecture)
+- [Project Structure](#project-structure)
+- [API Examples](#api-examples)
+- [Tests](#tests)
+- [Performance and Diagnostics](#performance-and-diagnostics)
+- [Current Limitations](#current-limitations)
+- [Roadmap](#roadmap)
+- [Development and Contributions](#development-and-contributions)
+- [License](#license)
 
-Get XJEngine running in under 5 minutes:
+## Features
 
-```bash
-# Clone the repository
+| Area | Implemented capabilities |
+|------|--------------------------|
+| **Vulkan rendering** | Off-screen Scene/Game targets, depth buffers, GLSL-to-SPIR-V build steps, structured swapchain acquire/present and resize handling |
+| **ECS and transforms** | EnTT entities/components, stable UUID lookup, hierarchy-aware local/world transforms, checked quaternion/TRS edits |
+| **Materials and lighting** | JSON shader schemas, SPIR-V reflection, Unlit/Lit surface materials, directional/point/spot lights, material and pipeline caches |
+| **Assets and scenes** | CPU Asset / GPU Resource separation, glTF 2.0 import, submesh material slots, AABBs, `.xjmeta` metadata, scene format v4 with v2/v3 migration |
+| **Built-in scripting** | `.xjs` lexer/parser/compiler, bytecode verification, execution limits, typed values, host services, ECS lifecycle and live slot synchronization |
+| **Editor panels** | Hierarchy, Inspector, Content Browser, Console, Scene/Game Preview, docking and detached ImGui windows |
+| **Local/World editing** | Scene toolbar space switch, Inspector numeric editing, rejection feedback, snapshot-based Undo/Redo |
+| **Transform Gizmo visualization** | Move arrows, rotation rings and scale boxes on all three axes; Local/World orientation and approximately constant screen size; no handle interaction yet |
+| **Scene helpers** | Adaptive world grid, light wireframes, AABB + triangle picking, picked-surface orbit pivot |
+| **Play mode** | Runtime scene cloning, Play/Pause/Resume/Stop, runtime inspection and script-slot mutations without editing the source scene |
+| **Diagnostics** | spdlog-backed Console, viewport performance snapshots, frame history and material upload statistics |
+
+## Quick Start
+
+### Prerequisites
+
+- Windows 10/11 x64 and a Vulkan-capable GPU with an installed graphics driver.
+- A C++20 compiler. Visual Studio 2022 with **Desktop development with C++** is the recommended setup for the commands below.
+- **CMake 3.28 or newer**. The top-level file still declares 3.10, but the bundled EnTT dependency requires 3.28.
+- A Windows Vulkan SDK, or network access for CMake's automatic SDK download. Other dependencies are included under `ThirdParty/`.
+
+Run these commands in PowerShell from the directory where you want to clone the project:
+
+```powershell
 git clone https://github.com/aidexiaojike-ops/XJEngine.git
 cd XJEngine
-
-# Create build directory
-mkdir build && cd build
-
-# Configure and build
-cmake .. -DCMAKE_BUILD_TYPE=Release
-cmake --build . --config Release
-
-# Run the engine
-cd ../bin
-./XJEngine
-```
-
-**Prerequisites:**
-- CMake 3.10+ and C++20 compatible compiler
-- Vulkan SDK is resolved automatically by CMake: `VULKAN_SDK` environment variable -> `ThirdParty/VulkanSDK` cache -> auto-download LunarG Vulkan SDK 1.3.283.0
-
-## 🏗️ Engine Architecture
-
-```
-+-------------------+
-|    Application    |
-+-------------------+
-          |
-          v
-+-------------------+
-|       Scene       |
-+-------------------+
-          |
-          v
-+-------------------+
-|        ECS        |
-| Entity Component  |
-| System            |
-+-------------------+
-          |
-          v
-+-------------------+
-|     Renderer      |
-+-------------------+
-          |
-          v
-+-------------------+
-|      Vulkan       |
-+-------------------+
-```
-
-### Rendering Pipeline
-```
-Scene
- ↓
-CameraSystem
- ↓
-MaterialSystem
- ↓
-RenderTarget
- ↓
-Editor/Renderer (ImGui UI overlay)
- ↓
-CommandBuffer
- ↓
-Swapchain
-```
-
-### 🏛️ Technical Architecture Details
-
-#### **Vulkan Rendering Pipeline**
-- **Swapchain Management**: Automatic recreation on window resize
-- **Acquire/Present Flow**: `XJSwapchainAcquireResult` and `XJSwapchainPresentResult` separate success, recreation, and device-lost states
-- **Frame Buffer Management**: Multi-buffer support with depth and color attachments
-- **Command Buffer Pooling**: Efficient command buffer allocation and reuse
-- **Synchronization**: Semaphores and fences for proper GPU synchronization
-- **Render Pass Design**: Configurable attachments and subpasses for flexible rendering
-- **Vulkan API Selection**: Instance creation selects the best supported API version up to Vulkan 1.3 and passes it to the ImGui Vulkan backend
-- **Surface and Window Validation**: GLFW window creation, Vulkan surface lifetime, and minimized-window checks now fail clearly on invalid handles
-- **Sampler Lifetime**: `XJSampler` delegates Vulkan sampler ownership to `XJVulkanTextureSampler` for RAII cleanup and validity checks
-
-#### **ECS Implementation**
-- **Entity Management**: Lightweight entity handles with automatic lifetime tracking and scene lifetime-token validation (`XJEntity::GetSceneChecked`) to guard against dangling scene access; scenes maintain a UUID-to-EnTT index for direct stable-ID lookup and duplicate rejection
-- **Reserved UUID Range**: Engine/editor-owned UUIDs live in a reserved range (`XJReservedUUID`), and user UUID generation skips it to avoid collisions
-- **Component Storage**: Dense array storage for optimal cache performance
-- **Unified Transform**: `XJTransformComponent` owns private local TRS with normalized quaternion rotation, degree-based XYZ Euler accessors (`Rx * Ry * Rz`), and checked atomic setters instead of writable fields. World evaluation walks the parent chain with cycle/finite-value checks; rendering, lighting, picking, cameras, Inspector, and script services share these semantics. World rotation composes quaternions independently of scale; lossy world scale measures matrix-axis lengths.
-- **Checked World Edits**: World position, rotation, pose, and scale setters return `XJTransformStatus` and leave local state unchanged on failure. Double-precision world evaluation is checked for float representability at GPU/picking boundaries; `Transform.RotateY` applies a local-axis quaternion rotation.
-- **Camera Pose**: Cameras use world position/rotation with local forward `-Z` and up `+Y`. View-matrix reads do not mutate ECS state or orbit settings; Free/Orbit controllers apply checked world-pose edits, updating orbit radius/pivot only after successful changes.
-- **Scene Format v4**: Scene files persist local TRS plus camera orbit mode, target, and radius. Loading v2/v3 migrates legacy yaw/pitch camera poses into the new parent-relative transform convention; unrepresentable legacy poses fail safely.
-- **Light Component**: `XJLightComponent` supports Directional/Point/Spot lights with enable toggle, color, intensity, range, and validated spot inner/outer cone angles
-- **System Scheduling**: Flexible system registration and execution order
-- **System Scheduler**: `XJSystemScheduler` provides transactional Start/Stop lifecycle handling, configurable fixed-step updates, a per-frame fixed-step cap, and a safe-point callback for deferred runtime mutations
-- **Input Singleton**: `XJInput` polls GLFW every frame via `Update()`, exposing a read-only `XJInputState` snapshot with keyboard/mouse held/pressed/released queries, mouse position/delta/scroll, and WASD axis synthesis (`GetAxis(Horizontal|Vertical)`)
-- **XJMaterialSystem Base Class**: Dedicated base class for material systems with helper methods for device, scene, and camera matrix access
-- **Query System**: Efficient entity queries based on component composition
-
-#### **Script System**
-- **Language Pipeline**: `XJScriptLexer` -> `XJScriptParser` -> `XJScriptSemanticAnalyzer` -> `XJScriptCompiler` produces immutable bytecode modules with structured diagnostics
-- **Typed Script Values**: `XJScriptValue` centralizes bool/int/float/string, `Vec3`, and `EntityRef` values. Vectors support construction, arithmetic, scalar multiplication/division, and writable `x`/`y`/`z` components, including compound assignment and prefix/postfix updates.
-- **Verified Runtime**: `XJScriptBytecodeVerifier` validates modules before execution; `XJScriptRuntime` enforces instruction budgets, call-depth limits, type/overflow checks, fault isolation, stack traces, and re-entrancy protection while reusing per-instance frame/argument scratch storage
-- **ECS Lifecycle**: `XJScriptSystem` creates per-entity script instances and dispatches `OnCreate`, `OnUpdate`, `OnFixedUpdate`, and `OnDestroy` through `XJSystemScheduler`
-- **Live Script Slots**: `SynchronizeSlots()` reconciles component/slot lifecycle revisions at safe points, including while paused. Scene destruction notifications and execution scopes keep script owners valid until deferred deletion can run.
-- **Script Components**: `XJScriptComponent` supports multiple enabled/disabled script slots per entity, stable slot UUIDs, and per-field overrides keyed by `[[FieldId("...")]]`
-- **Host Services**: `XJScriptHostNativeInvoker` is the default ECS script bridge, backed by injectable entity, transform, input, and logging services. Calls carry owner, slot, frame, and lifecycle-phase context; services remain available through `OnDestroy`.
-- **Transform API**: Read/write local position, Euler angles, and scale; read world position, Euler angles, and lossy scale, or use `TrySetWorldPosition`/`TrySetWorldEulerAngles`/`TrySetWorldScale` to check whether a world-space write succeeds. Each operation accepts either the current owner or an explicit `EntityRef`; invalid/non-finite or non-invertible-parent writes are rejected without partial changes. `Transform.RotateY` remains supported.
-- **Entity API**: `Scene.FindByUUID` accepts decimal or `0x` hexadecimal UUID strings; `Entity.Self`, `Entity.IsValid`, and `Entity.GetUUID` expose session-scoped handles with stale/cross-session reference protection. A valid UUID with no matching entity returns null.
-- **Script Input**: `Input.GetAxis("Horizontal"/"Vertical")` maps WASD/arrow keys; held/pressed/released queries use named keys. In the editor, input requires focused Game and application windows, Playing state, and no active UI control, text entry, or popup. Edges are Update-only and suppressed on focus acquisition.
-- **Script Logging**: `Log.Info`/`Warn`/`Error` use spdlog with call context and bounded per-slot/global quotas, preventing script log bursts from flooding the Console.
-- **Native Contracts**: `XJScriptNativeCatalogue` validates function IDs/signatures and resolves calls by argument types; compilation, bytecode verification, and runtime invocation share the catalogue. `XJScriptValueNativeInvoker` handles `Vec3(float, float, float)` construction and delegates ECS calls to the host.
-- **Value Serialization**: `XJScriptValueCodec` encodes typed scalar/vector field overrides and rejects non-finite numbers. `EntityRef` uses runtime scope/index/generation handles, cannot be persisted or exposed as a public field, and non-null references cannot appear in bytecode constants.
-- **Assets and Persistence**: `.xjs` files are registered as `XJAssetType::Script`, compiled/cached by `XJScriptAssetCompiler`/`Loader`, and serialized in scenes with slot IDs, enabled state, references, and field overrides
-- **Editor Integration**: Content Browser and Inspector flows support creating, compiling, assigning, reordering, configuring, and validating script assets/components
-
-#### **Material System**
-- **XJMaterialSystem Base Class**: Provides helper methods (`XJGetDevice`, `XJGetProjMat`, `XJGetViewMat`, `XJGetScene`, `XJGetApp`) for material systems
-- **Material Parameter System**: `XJMaterialParameterBlock`/`Layout`/`Builder`/`Writer` — build from shader schema, write to GPU buffers
-- **Base Material System**: Dynamic uniform buffer instancing with global/per-instance UBOs
-- **Material Render System**: `XJMaterialRenderSystemBase` — base class for material-driven render systems, `XJMaterialRenderItem` — render item abstraction
-- **Surface Material System**: `XJSurfaceMaterialSystem` renders `XJSurfaceMaterialComponent` items through schema-driven pipeline runtimes, using material instance IDs plus parameter/resource revisions to synchronize each frame-slot descriptor safely
-- **Upload State Tracking**: `XJMaterialUploadState` separates upload preparation from successful parameter/resource commits, validates slot ownership, and resets stamps when descriptor capacity changes.
-- **Shared Frame/Light Data**: `XJFrameUbo` provides projection, view, resolution, frame/time, and camera position; `XJLightUbo` provides one directional light plus up to eight point and eight spot lights using std140-compatible layouts and per-frame descriptor sets
-- **Scene Light Collection**: `XJLightSceneUtils` gathers enabled `XJLightComponent` instances and transforms into the per-frame light UBO
-- **DescriptorSetWriter**: Utility class providing static helpers for descriptor buffer/image info creation and descriptor set writes
-- **Dynamic Descriptor Pool**: Automatic expansion of material descriptor sets on demand (up to 2048)
-- **Texture Management**: Per-material texture views with sampler state, UV transform support
-- **Push Constants**: `ModelPC` struct for per-draw model and normal matrix updates
-- **Shader Pipeline**: SPIR-V shader compilation and pipeline state management
-- **Shader Schema System**: JSON-defined parameters (`Unlit.schema`, `Lit.schema`), schema validation via `XJShaderSchemaValidator`, binding resolution via `XJShaderSchemaBindingResolver`, descriptor layout via `XJShaderDescriptorLayoutBuilder`
-- **Lit Material Parameters**: `Lit.schema` exposes base color, albedo texture, specular strength, and shininess while reusing the shared SurfaceMaterial runtime
-- **Cross-Stage Reflection**: Shader stage flags are bitmasks, allowing descriptor bindings reflected from vertex and fragment stages to be merged into one Vulkan layout
-- **Shader Runtime Layout**: `XJMaterialShaderRuntimeLayout`/`Builder`, `XJMaterialPipelineRuntime`/`Builder`/`Cache`/`Descriptor`, `XJMaterialRuntimeUploader`, `XJSurfaceMaterialBindingUtils` — runtime shader-material binding, optional light descriptor set (`set=3`), pipeline caching, and GPU upload
-- **Material Serializers**: `XJMaterialAssetSerializer`, `XJShaderAssetSerializer`, `XJShaderSchemaSerializer`
-- **Material Factory Cache**: `XJMaterialFactory` caches materials by asset/default key (weak refs), reuses loaded textures and expired material slots, assigns stable instance IDs, and provides `ClearExpiredMaterials`/`ClearCaches` for scene lifetime management
-- **Inspector Material Editing**: Parameter editing with `XJEditorMaterialParameterType` (Float, Color3, Texture2D, etc.)
-- **Inspector Light Editing**: Directional/Point/Spot type, enabled state, color, intensity, range, and spot inner/outer cone angles are editable through the scene request/ViewModel flow
-
-#### **Asset System**
-- **Two-Layer Architecture**: Assets (CPU-side pure data) separate from Render Resources (GPU-side Vulkan objects)
-- **Asset Registry**: Handle-based asset database (`XJAssetRegistry`) with JSON persistence; runtime-generated handles use a high-bit namespace separate from stable registry handles
-- **Asset Metadata**: `.xjmeta` sidecar files (`XJAssetMetadata`) store per-asset handle/type/importer info; `XJAssetMetadataSerializer` reads/writes them; `XJPersistentAssetHandleGenerator` ensures unique handle generation
-- **Asset Registry Scanner**: `XJAssetRegistryScanner` auto-scans Resource directories by extension to register assets
-- **Atomic JSON IO**: `XJJsonIO` centralizes JSON read helpers (float/vec2/vec3/vec4/uint64) and atomic file writes (temp file + rename) across all asset serializers
-- **Scene Assets**: Disk-side scene data (`XJSceneAsset`) with entities, transforms, meshes, cameras, and lights; light serialization includes type, color, intensity, range, and spot inner/outer cone angles
-- **Scene Switching**: Create/destroy entities via ECS lifecycle, support for multiple `.xjscene` files
-- **Scene Instantiator**: `XJSceneInstantiator` converts scene assets into live ECS entities with hierarchy
-- **Scene Serializer**: `XJSceneAssetSerializer` reads/writes `.xjscene` files via nlohmann/json
-- **glTF 2.0 Importer**: `XJModelImporter` parses `.glb`/`.gltf` via tinygltf, merging primitives into a shared vertex/index buffer with per-primitive index ranges (`XJMeshPrimitive`) and validating accessors/modes (skipping non-TRIANGLES) with rollback on invalid data
-- **Submesh Rendering**: `XJMesh` exposes `XJSubmesh` index ranges shared across vertex/index buffers with `Bind`/`Draw`/`DrawSubmesh`; `XJMaterialRenderItem` carries a `SubmeshIndex` so each primitive is drawn with its own material slot
-- **AABB Bounding Box**: `XJBoundingBox` (expand/merge/transformed) computed during glTF import per-primitive and stored in `XJMeshPrimitive`/`XJSubmesh`; `XJMesh` exposes the overall bounds via `GetBounds()`
-- **CPU Picking Geometry**: `XJMesh` retains compact CPU position/index copies for precise editor ray-triangle tests after AABB broad-phase filtering
-- **Factories**: `XJMeshFactory`, `XJTextureFactory`, `XJMaterialFactory` convert Assets into GPU Render Resources
-- **Data Flow**: `File → Scanner/Importer → Asset → Factory → Render Resource → Renderer`
-
-#### **Event System**
-- **Event Types**: Window, keyboard, mouse, and custom events
-- **Event Dispatcher**: Efficient event routing and handling
-- **Observer Pattern**: Flexible callback registration for event processing
-- **Thread Safety**: Safe event handling in multi-threaded scenarios
-
-#### **Editor UI System**
-- **Editor Runtime**: `XJEditorRuntime` (pimpl) owns the full editor lifecycle — project config (`XJEditorProjectConfig`), workspace, viewport system, frame renderer, input bindings, and UI host — driven by `XJEditorApplication` in `Src/`
-- **Editor Play Mode**: `XJEditorPlayController` manages game simulation lifecycle (Start/Pause/Resume/Stop), clones the editor scene into a runtime scene, and wires `XJSystemScheduler` with registered system factories; `XJEditorPlayState` (`Edit`/`Playing`/`Paused`) tracks the current mode; `XJEditorWorkspaceMode` (`Edit`/`PlayReadOnly`/`PlayRuntime`) controls workspace editing permissions
-- **Editor Workspace**: `XJEditorWorkspace` manages the in-engine project workspace (resource root, asset registry, scene wiring)
-- **Runtime Inspection**: During Play/Pause, Hierarchy and Inspector read RuntimeScene snapshots and accept requests to add/remove script components or slots, toggle slots, and replace scripts. Stopping restores the editor selection.
-- **Local/World Transform Editing**: The Scene toolbar switches the Inspector coordinate space through `XJEditorTransformToolsController`; switching is Edit-only and changes neither scene data nor Undo history. Inspector uses double-precision world snapshots and field-specific requests, preserving untouched local components. World scale is non-negative lossy scale with local reflection signs preserved; component copy/paste always uses Local TRS. Runtime inspection remains read-only for Transform edits.
-- **Transform Feedback & History**: Scene services validate edits on a temporary candidate before committing. Rejected edits show an entity/space-specific reason without marking the scene dirty or changing Undo/Redo history; unchanged edits also create no history.
-- **Scene World Grid**: A Scene-only Vulkan line pass draws a depth-tested, non-depth-writing world grid with adaptive 1/2/5 spacing (minimum 1 meter), X/Z coordinate labels, ticks, spacing text, and edge fading. Layout is derived from the camera and viewport; invalid camera poses skip grid rendering rather than reuse a cached view. Game Preview is unaffected.
-- **Viewport Display Controls**: `XJEditorViewportDisplayController`/`Service` apply display requests and publish ViewModels for Scene/Game previews. Render modes are capability-gated: currently only Final is implemented; BaseColor, LinearDepth, WorldNormal, and Lighting remain unavailable.
-- **Performance Snapshots**: Viewport overlays expose completed-frame time/FPS, script CPU time and active instances, draw calls, and material upload counts, with a 128-sample frame history. Collection uses snapshots rather than per-frame logging.
-- **Frame Renderer**: `XJEditorFrameRenderer` + `XJEditorRenderResources` own ImGui/Vulkan frame rendering and shared editor render resources; `XJEditorUIHost` hosts the UI layer
-- **Input Bindings**: `XJEditorInputBindings` centralizes editor input mapping (camera, viewport, actions)
-- **Viewport System**: `XJEditorViewportSystem` orchestrates Scene/Game preview viewports, camera resolution, protected editor entities, and scene attach/detach
-- **Precise Scene Picking**: `XJEditorSceneService::RaycastClosestSceneEntity` uses world-space AABB broad phase followed by CPU triangle intersection against mesh position/index copies
-- **Selection Orbit Pivot**: Scene Preview can set the camera orbit pivot from a viewport ray, so orbit controls rotate around the picked surface point
-- **Light Gizmos**: `XJLightGizmoMaterialSystem` draws editor-only line meshes for directional, point, and spot lights in Scene Preview
-- **Lifecycle Hooks**: `OnUIBegin`/`OnUIEnd`/`OnUIRender`/`OnUIDestroy` virtual methods in XJApplication base class
-- **MVVM Architecture**: Controllers (camera, scene, drop, asset), Services, ViewModels decouple UI from ECS
-- **Asset ViewModel**: `XJEditorAssetViewModel` exposes asset details (handle, type, name, path), shader validation view (`XJEditorShaderValidationView`), and mesh bounds view (`XJEditorMeshBoundsView` with per-submesh AABB) for the Inspector panel
-- **XJEditorSceneController**: Scene load/save/open, dirty tracking, entity mutation requests, and snapshot-based Undo/Redo history (scene + material assets, up to 100 entries); revision tracking rebuilds Scene/selection ViewModels only when relevant state changes
-- **XJEditorAssetController**: Asset create/rename/delete/import lifecycle management
-- **XJEditorAssetRequests**: MVVM request structs (CreateAsset, RenameAsset, DeleteAsset, ImportExternalFiles)
-- **Console Logging**: `XJEditorLog` bridges spdlog into the editor Console panel via a custom sink; revision-based snapshots avoid unchanged copies and `ImGuiListClipper` limits rendering work for single-line logs while preserving multiline entries
-- **Script Save Diagnostics**: Script saves report success, revision, and compiler diagnostics back to the Content Browser editor before clearing its dirty state
-- **XJEditorSceneAssetDropController**: Content Browser asset drag to Scene Preview with ray-cast entity placement
-- **XJEditorExternalDropController**: OS file drag-drop into editor window (e.g., drag .glb from Explorer)
-- **XJEditorCameraManager**: Viewport camera binding and editor camera lifecycle (entity-ID based, resolving through the scene to avoid dangling pointers)
-- **XJUIContext**: ImGui context management with GLFW backend, docking, and multi-viewport support
-- **XJEditorRenderer**: Vulkan-accelerated ImGui draw data rendering with descriptor pool management
-- **Multi-Viewport**: Support for floating/detached editor windows via ImGui platform windows
-- **XJEditorUILayer**: Orchestrates editor panels with drag-drop support
-- **Viewport System**: `XJViewport` interface (`GetViewportTextureID`/`IsViewportTextureReady`/`OnViewportResized`) backed by `XJViewportRenderSurface`, which owns the off-screen render pass, render target, deferred descriptor-set release on resize, and ImGui texture display
-- **Scene/Game Preview**: `XJScenePreview` and `XJGamePreview` panels for separate scene and game camera views, with an entity pick callback (`SetEntityPickCallback`) that fires ray-AABB intersection from the viewport
-- **Workspace**: `XJEditorWorkspace` manages the in-engine project workspace, including `SelectEntityFromViewportRay` for ray-based entity selection in the viewport
-- **UI Config**: `XJEditorUIConfig` reads/writes `EditorUI.json` for per-panel visibility and layout persistence
-
-## 🛠️ System Requirements
-
-### Development Environment
-- **CMake** 3.10 or higher
-- **C++20** compatible compiler (MSVC, GCC, Clang)
-- **Vulkan SDK**: optional manual install. CMake auto-resolves `VULKAN_SDK`, `ThirdParty/VulkanSDK`, or downloads LunarG Vulkan SDK 1.3.283.0.
-
-### Supported Platforms
-- **Windows** (10/11) with Visual Studio 2019/2022
-- **Linux** (Ubuntu 20.04+, Fedora, etc.) with GCC/Clang
-- **macOS** (10.15+) with Xcode/Clang (Vulkan via MoltenVK)
-
-### Dependencies
-- **GLFW**: Window and input management
-- **EnTT**: High-performance ECS library
-- **GLM**: Mathematics library for graphics
-- **spdlog**: Fast logging library
-- **stb_image**: Image loading library
-- **tinyobjloader**: OBJ model file loader
-- **tinygltf**: glTF 2.0 model file loader (header-only)
-- **Dear ImGui**: Editor UI framework with Vulkan backend
-- **nlohmann/json**: JSON serialization for assets and scenes
-- **SPIRV-Reflect**: SPIR-V shader introspection and reflection
-- **Vulkan SDK**: Auto-resolved via `cmake/SetupVulkanSDK.cmake` (env var → local cache → auto-download 1.3.283.0)
-
-## 🚀 Building
-
-### Windows
-```bash
-# Clone repository
-git clone https://github.com/aidexiaojike-ops/XJEngine.git
-cd XJEngine
-
-# Create build directory
-mkdir build && cd build
-
-# Configure CMake
-# Vulkan SDK is resolved automatically. First configure may download 200MB+.
-cmake .. -G "Visual Studio 17 2022" -A x64
-
-# Build using CMake
-cmake --build . --config Release
-```
-
-### Linux
-```bash
-# Install dependencies (Ubuntu/Debian example)
-sudo apt install build-essential cmake libglfw3-dev libvulkan-dev
-
-# Clone and build
-git clone https://github.com/aidexiaojike-ops/XJEngine.git
-cd XJEngine
-mkdir build && cd build
-cmake .. -DCMAKE_BUILD_TYPE=Release
-make -j$(nproc)
-```
-
-### macOS
-```bash
-# Install dependencies using Homebrew
-brew install cmake glfw vulkan-headers
-
-# Clone and build
-git clone https://github.com/aidexiaojike-ops/XJEngine.git
-cd XJEngine
-mkdir build && cd build
-cmake .. -DCMAKE_BUILD_TYPE=Release
-make -j$(sysctl -n hw.ncpu)
-```
-
-### Build Options
-| Option | Description | Default |
-|--------|-------------|---------|
-| `-DXJ_BUILD_TESTS=ON` | Build unit tests | `OFF` |
-| `-DXJ_BUILD_EXAMPLES=ON` | Build example applications | `OFF` |
-| `-DXJ_ENABLE_VALIDATION=ON` | Enable Vulkan validation layers | `OFF` |
-| `-DXJ_USE_IMGUI=ON` | Enable Dear ImGui integration | `ON` |
-
-### Tests
-
-The first-party CTest suite currently covers the complete scripting path: lexer, parser, semantic analysis, compiler, bytecode verifier, runtime, native ECS bridge, asset compiler/loader, component behavior, scene serialization, editor asset operations, and script system lifecycle.
-
-Render tests additionally cover material upload state and viewport display requests, capabilities, and statistics; script lifecycle tests include live slot synchronization and destruction handling.
-
-Script value integration and native contract tests cover vector expressions, native argument/return validation, catalogue compatibility, invalid bytecode, and value serialization.
-
-Host service tests cover entity lifetime/session isolation, local/world transforms and failed-write atomicity, input focus/phase behavior, logging quotas, and native dispatch through the VM.
-
-Transform component and ECS integration tests additionally cover quaternion/TRS math, parent inheritance, atomic failure behavior, camera controls and read-only view queries, world-space lighting/picking/bounds, Inspector local edits, and v2/v3-to-v4 scene migration and round trips.
-
-Transform acceptance tests cover Local/World switching, field isolation, reflected/lossy scale, rejection feedback, and Undo/Redo preservation. World grid layout tests validate adaptive spacing, labels, and camera/viewport edge cases without requiring GPU rendering.
-
-```bash
-cmake -S . -B build -DXJ_BUILD_TESTS=ON
+cmake -S . -B build -G "Visual Studio 17 2022" -A x64
 cmake --build build --config Release
-ctest --test-dir build -C Release --output-on-failure
+.\bin\XJEngine.exe
 ```
 
-### Vulkan SDK Resolution
+If `build/` already uses another generator, keep that generator or choose a different build directory instead of reusing an incompatible CMake cache. For Visual Studio's multi-configuration generator, select Release with `--config Release`, not `CMAKE_BUILD_TYPE`.
 
-CMake resolves Vulkan SDK in this order:
+The first configure may download a large Vulkan SDK installer and take several minutes. The SDK does not replace the GPU vendor's graphics driver.
 
-1. `VULKAN_SDK` environment variable
-2. `ThirdParty/VulkanSDK` local cache
-3. Auto-download LunarG Vulkan SDK `1.3.283.0`
+## Build Configuration
 
-The first configure may download a 200MB+ installer. You can override the URL or timeout:
+### Vulkan SDK resolution
 
-```bash
-cmake .. -DXJ_VULKAN_SDK_URL=<url> -DXJ_VULKAN_DOWNLOAD_TIMEOUT=3600
+[`cmake/SetupVulkanSDK.cmake`](cmake/SetupVulkanSDK.cmake) searches in this order:
+
+1. A valid SDK at the `VULKAN_SDK` environment variable.
+2. The local cache at `ThirdParty/VulkanSDK` (overridable with `XJ_VULKAN_SDK_LOCAL_DIR`).
+3. Download and local installation of the Windows LunarG Vulkan SDK **1.3.283.0**.
+
+The resolved SDK must contain `Include/vulkan/vulkan.h`, `Lib/vulkan-1.lib`, `Bin/glslc.exe`, and `Dll/vulkan-1.dll`. For offline builds, install a complete SDK first and set `VULKAN_SDK` or the local-cache path.
+
+| Setting | Purpose | Default |
+|---------|---------|---------|
+| `XJ_BUILD_TESTS` | Build and register first-party CTest tests | `OFF` |
+| `XJ_VULKAN_SDK_LOCAL_DIR` | Local Windows SDK cache | `ThirdParty/VulkanSDK` |
+| `XJ_VULKAN_SDK_URL` | SDK installer/archive download URL | Windows SDK 1.3.283.0 installer |
+| `XJ_VULKAN_DOWNLOAD_TIMEOUT` | Download timeout in seconds | `1800` |
+
+For example, increase the download timeout with:
+
+```powershell
+cmake -S . -B build -DXJ_VULKAN_DOWNLOAD_TIMEOUT=3600
 ```
 
-## 📁 Project Structure
+`XJ_BUILD_EXAMPLES`, `XJ_ENABLE_VALIDATION`, and `XJ_USE_IMGUI` are **not** current project build options.
 
+### Output and project paths
+
+| Path | Purpose |
+|------|---------|
+| `bin/XJEngine.exe` | Editor executable; Debug and Release share `bin/` |
+| `Resource/Shader/*.spv` | Shader build output alongside source GLSL and shader assets |
+| `Resource/` | Source assets read directly by the editor and runtime during development |
+| `Resource/Config/AssetRegistry.json` | Project asset registry |
+| `Resource/Scenes/Default.xjscene` | Default scene |
+| `Resource/Config/EditorUI.json` | Initial editor UI configuration template |
+| `bin/Saved/Config/EditorUI.json` | Per-user editor UI state |
+| `bin/Saved/Config/imgui.ini` | Per-user ImGui layout |
+
+Assets are **not copied to `bin/Resource`**. Copying only the executable is not a standalone game distribution; Export/Package is not implemented yet.
+
+The editor resolves its project root in this order: `--project` > `XJ_PROJECT_ROOT` environment variable > source root recorded by CMake. Pass the directory **containing `Resource/`**, not `Resource/` itself:
+
+```powershell
+.\bin\XJEngine.exe --project "E:\Projects\MyXJProject"
 ```
+
+On Windows, user UI state follows the executable directory rather than the launch working directory. Moving the source project requires rebuilding or specifying the new project root.
+
+## Editor Workflow
+
+### Scene and asset editing
+
+1. Select entities in **Hierarchy** or click scene geometry in **Scene Preview**. Picking uses world-space AABB filtering followed by CPU ray-triangle tests.
+2. Use **Inspector** for component values, material parameters, cameras, lights and script slots. Hierarchy supports entity creation, deletion and renaming.
+3. Use **Content Browser** for asset operations and drag Mesh assets into Scene Preview to create entities. External file drops are handled separately by the editor's import controller.
+4. Save scenes as `.xjscene`. Scene and material edits participate in snapshot-based Undo/Redo, with up to 100 history entries.
+
+### Local/World Transform editing
+
+- Click the **Local/World** button in the Scene toolbar to change the Inspector coordinate space. Switching is available only in Edit mode and changes neither scene data nor Undo history.
+- Transform snapshots use double precision. Field-specific requests preserve untouched local components.
+- World rotation is composed from normalized quaternions independently of scale. World scale is non-negative **lossy scale** (world matrix axis lengths), not signed local scale; world-scale edits preserve local reflection signs.
+- Services validate a temporary candidate before applying an edit. Rejected edits show an entity/space-specific reason and leave the scene, dirty flag and Undo/Redo history unchanged. No-op edits also create no history entry.
+- Component copy/paste always uses **Local TRS**. Transform editing remains read-only during Play/Pause runtime inspection.
+
+### Transform Gizmo visualization
+
+Selecting an entity with a valid Transform in an editable scene displays a unified nine-part Gizmo in **Scene Preview**:
+
+- Three move arrows, three rotation rings and three scale boxes, colored by X/Y/Z axis.
+- The origin follows the entity's **world position**. **Local** uses its pure world rotation; **World** aligns with global XYZ axes. Object scale does not distort the Gizmo geometry.
+- Projection and viewport dimensions determine a uniform world scale, targeting an approximately **110-pixel screen radius** rather than a fixed world-space size.
+- Solid, unlit, double-sided triangles render without depth testing or depth writes, so scene geometry does not occlude the Gizmo.
+- It is hidden during Play/Pause, read-only/runtime inspection, invalid selection or missing Transform. Invalid frame/projection inputs skip drawing. It is not added to Game Preview.
+
+**This is visualization only.** There is no handle hit-testing, hover selection, drag editing, or Move/Rotate/Scale operation switch yet. Viewport clicks still perform entity picking; use Inspector values to edit transforms.
+
+### World grid and viewport display
+
+- Scene Preview draws a world grid with adaptive **1/2/5-series spacing**, at least **1 meter**, X/Z coordinate labels, ticks, spacing text and edge fading.
+- The grid uses depth testing but does not write depth. Layout follows the camera and viewport; invalid camera poses skip the grid rather than reuse a cached view.
+- Grid, light wireframes and Transform Gizmos are Scene-only helpers; Game Preview renders without these editor passes.
+- Only the **Final** render-view mode is implemented. BaseColor, LinearDepth, WorldNormal and Lighting controls remain capability-disabled.
+
+### Play mode and scripts
+
+- Play clones the editing scene into a runtime scene; Pause/Resume control simulation and Stop restores the editor selection.
+- Runtime Hierarchy/Inspector read runtime snapshots. Script components/slots can be added or removed, enabled/disabled and replaced through runtime requests; synchronization occurs at scheduler safe points, including while paused.
+- Script input requires **Playing**, focused Game and application windows, and no active UI control, text input or popup. Press/release edges are Update-only and suppressed on focus acquisition.
+- Saving `.xjs` source reports the save result and compiler diagnostics to Content Browser. A successful disk save can still contain compile errors; Play preflight rejects invalid scripts. The script editor clears its dirty state only after a successful save response.
+
+## Architecture
+
+```text
+Application -> Scene / ECS -> Camera and Material Systems
+            -> Off-screen Render Targets -> Editor Frame Renderer -> Swapchain
+
+UI View -> Request -> Controller / Service -> ECS or render state
+        <- ViewModel snapshots <-----------+
+
+File -> Scanner / Importer -> Asset (CPU) -> Factory -> Render Resource (GPU)
+```
+
+### ECS, transforms and cameras
+
+- `XJEntity` validates scene lifetime tokens; scenes maintain UUID-to-EnTT lookup and reject duplicate UUIDs. Engine/editor entities use a reserved UUID range.
+- `XJTransformComponent` keeps local TRS private, normalizes quaternion rotation and exposes degree-based XYZ Euler accessors (`Rx * Ry * Rz`). Checked setters return `XJTransformStatus`; failed writes are atomic.
+- World evaluation checks parent chains for cycles and non-finite values. GPU and picking consumers check float representability after double-precision evaluation.
+- Cameras use world position/rotation, local forward `-Z` and up `+Y`. View-matrix reads do not mutate ECS or orbit settings; Free/Orbit controllers submit checked world-pose changes.
+- Scene format **v4** stores local TRS and camera orbit mode/target/radius. Loading v2/v3 migrates legacy yaw/pitch camera poses to parent-relative transforms and rejects unrepresentable poses.
+- `XJSystemScheduler` provides transactional Start/Stop, fixed-step updates with a per-frame cap, and safe-point callbacks for deferred runtime mutations. `XJInput` exposes keyboard/mouse held/pressed/released snapshots and axis queries.
+
+### Rendering and materials
+
+- The Vulkan platform layer separates acquire/present success, swapchain recreation and device-lost states. Instance API selection supports up to Vulkan 1.3 and is passed to ImGui; samplers use RAII ownership.
+- `XJBaseMaterialSystem` uses dynamic uniform buffers. `XJSurfaceMaterialSystem` renders schema-driven `XJSurfaceMaterialComponent` items through cached pipeline runtimes.
+- JSON `.schema` / `.xjshader` assets define parameters and bindings. Validation, cross-stage SPIR-V reflection and descriptor-layout builders connect assets to runtime parameter blocks and texture bindings.
+- `Unlit.schema` and `Lit.schema` share the surface runtime. Lit supports base color/albedo texture, specular strength and shininess with forward directional/point/spot lighting; this is not a full PBR renderer.
+- Shared `XJFrameUbo` and `XJLightUbo` carry camera/frame data and **one directional, up to eight point and eight spot lights**. Lights persist type, enabled state, color, intensity, range and cone angles.
+- Material instance IDs and parameter/resource revisions synchronize per-frame-slot uploads. Descriptor pools expand on demand; factory caches use weak references and reuse expired material slots.
+
+### Assets and editor ownership
+
+- Assets are CPU-side data; factories create GPU meshes, textures and materials. `.xjmeta` sidecars preserve asset handles/type/importer data, and the registry separates persistent from runtime-generated handles.
+- glTF 2.0 import merges triangle primitives into shared buffers with per-primitive index ranges, material slots and bounds; unsupported non-triangle modes are skipped. Meshes retain CPU position/index copies for picking.
+- `XJJsonIO` provides shared JSON readers and atomic writes. Scene serializers and instantiators convert between `.xjscene` assets and live ECS hierarchies.
+- `Src/main.cpp` creates `XJEditorApplication`; `XJEditorRuntime` owns workspace, play controller, viewport system, frame renderer, input bindings and UI host.
+- Views read ViewModels and submit requests. Controllers/Services apply mutations. `XJEditorTransformToolsController` publishes space settings and `XJEditorTransformGizmoViewModel`; the Gizmo render system consumes this display snapshot.
+- `XJViewportRenderSurface` owns off-screen render targets and defers descriptor release on resize. `XJEditorLog` bridges spdlog into revision-based Console snapshots with clipped single-line rendering.
+
+### Built-in scripting
+
+- Pipeline: lexer -> parser -> semantic analyzer -> compiler -> bytecode verifier -> runtime. Execution uses instruction budgets, call-depth limits, type/overflow checks, fault isolation, stack traces and re-entrancy protection.
+- `XJScriptValue` supports bool/int/float/string, `Vec3` and `EntityRef`. Vectors support arithmetic, scalar multiplication/division, writable components, compound assignment and prefix/postfix updates.
+- `XJScriptSystem` dispatches `OnCreate`, `OnUpdate`, `OnFixedUpdate` and `OnDestroy`. Entities can hold multiple enabled/disabled slots with stable UUIDs and `[[FieldId("...")]]` field overrides.
+- `XJScriptHostNativeInvoker` injects entity, transform, input and logging services with owner/slot/frame/phase context; services remain available through `OnDestroy`.
+- Transform APIs read/write local position/Euler angles/scale and read world values; `TrySetWorldPosition`, `TrySetWorldEulerAngles` and `TrySetWorldScale` report rejected writes without partial changes. Calls support the owner or an explicit `EntityRef`; `Transform.RotateY` rotates about local Y.
+- `Scene.FindByUUID` accepts decimal or `0x` hexadecimal strings. `Entity.Self`, `Entity.IsValid` and `Entity.GetUUID` use session-scoped handles with stale/cross-session protection; a valid UUID with no match returns null.
+- The native signature catalogue is shared by compilation, verification and dispatch. Typed value serialization rejects non-finite numbers; `EntityRef` cannot be persisted, exposed as a public field or stored as a non-null bytecode constant.
+- Script assets are compiled/cached and scene files retain slot IDs, enabled state, references and field overrides. `Log.Info`/`Warn`/`Error` use spdlog with per-slot/global quotas.
+
+## Project Structure
+
+```text
 XJEngine/
-├── Core/                    # 引擎核心模块
-│   ├── Public/             # 公共头文件
-│   │   ├── ECS/            # 实体组件系统
-│   │   │   ├── XJEntity.h          # 实体类
-│   │   │   ├── XJComponent.h       # 组件基类
-│   │   │   ├── XJSystem.h          # 系统基类
-│   │   │   ├── XJReservedUUID.h    # 引擎/编辑器保留 UUID 区间
-│   │   │   ├── System/             # 系统调度
-│   │   │   │   └── XJSystemScheduler.h  # 系统调度器（Start/Stop + 固定步进）
-│   │   │   ├── Component/          # 具体组件
-│   │   │   │   ├── XJCameraComponent.h
-│   │   │   │   ├── XJTransformComponent.h
-│   │   │   │   ├── XJLightComponent.h       # 灯光组件（Directional/Point/Spot）
-│   │   │   │   ├── XJScriptComponent.h      # 多槽脚本组件与字段覆盖
-│   │   │   │   └── Material/       # 材质组件
-│   │   │   │       ├── XJBaseMaterialComponent.h
-│   │   │   │       └── XJSurfaceMaterialComponent.h
-│   │   │   └── System/             # 具体系统
-│   │   │       ├── XJCameraSystem.h
-│   │   │       └── XJScriptSystem.h
-│   │   ├── Camera/          # 摄像机模块（独立于 ECS）
-│   │   │   ├── XJCameraController.h
-│   │   │   └── XJCameraMath.h
-│   │   ├── Geometry/        # 几何工具
-│   │   │   ├── XJBoundingBox.h      # AABB 包围盒（Expand/Merge/Transformed）
-│   │   │   └── XJRayIntersection.h  # 射线-AABB 相交检测
-│   │   ├── Input/           # 输入系统
-│   │   │   └── XJInput.h            # 输入单例（键盘/鼠标/轴向轮询）
-│   │   ├── Script/          # 内置脚本语言
-│   │   │   ├── Language/            # Lexer / Parser / AST / SemanticAnalyzer
-│   │   │   ├── Compiler/            # AST + semantic result -> bytecode
-│   │   │   ├── Bytecode/            # Module model + verifier
-│   │   │   ├── Value/               # Shared typed scalar/vector/entity values
-│   │   │   ├── Native/              # Native signature catalogue
-│   │   │   ├── Host/                # Entity, transform, input, and logging services
-│   │   │   ├── Serialization/       # Typed script value JSON codec
-│   │   │   └── Runtime/             # VM, execution limits, native ECS bridge
-│   │   └── Render/         # 渲染相关
-│   │       ├── XJSampler.h
-│   │       ├── XJRenderTarget.h
-│   │       ├── XJRenderer.h
-│   │       ├── XJFrameUbo.h        # Shared per-frame camera/render data
-│   │       ├── XJLightUbo.h        # std140 directional/point/spot light data
-│   │       ├── XJLightSceneUtils.h # Scene light collection and UBO packing
-│   │       ├── System/      # 渲染系统（材质系统）
-│   │       │   ├── XJMaterialSystem.h
-│   │       │   ├── XJBaseMaterialSystem.h
-│   │       │   ├── XJSurfaceMaterialSystem.h
-│   │       │   └── XJMaterialRenderSystemBase.h
-│   │       ├── Material/    # 材质参数与管线运行时
-│   │       │   ├── XJMaterialParameterBlock.h / Layout / Builder / Writer
-│   │       │   ├── XJMaterialPipelineRuntime.h / Builder / Cache / Descriptor
-│   │       │   ├── XJMaterialShaderRuntimeLayout.h / Builder
-│   │       │   ├── XJMaterialRenderItem.h / RuntimeUploader
-│   │       │   └── XJSurfaceMaterialBindingUtils / RenderItemBuilder
-│   │       ├── Resource/    # GPU 渲染资源
-│   │       │   ├── XJMesh.h / XJMeshFactory.h
-│   │       │   ├── XJTexture.h / XJTextureFactory.h
-│   │       │   └── XJMaterial.h / XJMaterialFactory.h
-│   │       └── Shader/      # 着色器资产与验证
-│   │           ├── XJShaderSchema.h / XJShaderParameter.h / XJShaderAsset.h
-│   │           ├── XJShaderSchemaValidator.h / BindingResolver
-│   │           ├── XJShaderDescriptorLayoutBuilder.h
-│   │           └── XJShaderReflection.h / Reflector / ReflectionUtils
-│   │   └── Asset/           # 资产管理（CPU 侧）
-│   │       ├── XJAsset.h
-│   │       ├── XJAssetRef.h
-│   │       ├── XJAssetRegistry.h
-│   │       ├── Metadata/      # 资产元数据（.xjmeta 文件、句柄生成器）
-│   │       ├── XJMeshAsset.h
-│   │       ├── XJTextureAsset.h
-│   │       ├── XJMaterialAsset.h
-│   │       ├── XJSceneAsset.h
-│   │       ├── XJScriptAsset.h
-│   │       ├── XJSceneRuntimeUtil.h
-│   │       ├── Importer/    # 格式导入器
-│   │       │   ├── XJModelImporter.h
-│   │       │   ├── XJTextureImporter.h
-│   │       │   ├── XJMaterialImporter.h
-│   │       │   └── XJScriptAssetCompiler.h
-│   │       ├── Loader/      # 资产加载器
-│   │       │   ├── XJMeshAssetLoader.h
-│   │       │   └── XJScriptAssetLoader.h
-│   │       ├── Serialization/ # 场景/材质/Shader 序列化
-│   │       │   ├── XJJsonIO.h                 # JSON 读写工具与原子写入
-│   │       │   ├── XJSceneAssetSerializer.h
-│   │       │   ├── XJMaterialAssetSerializer.h
-│   │       │   └── XJShaderAssetSerializer.h / XJShaderSchemaSerializer.h
-│   │       ├── Instantiation/ # 场景实例化
-│   │       │   └── XJSceneInstantiator.h
-│   │       └── Register/    # 资产引导注册/扫描
-│   │           ├── XJAssetBootstrap.h
-│   │           └── XJAssetRegistryScanner.h
-│   └── Private/            # 私有实现
-│
-├── Editor/                   # 编辑器模块（ImGui UI, MVVM）
-│   ├── Public/               # 公共接口
-│   │   ├── UI/               # UI 上下文、渲染器、编辑器层、面板
-│   │   ├── Controllers/      # 编辑器控制器（Camera、Scene）
-│   │   └── Services/         # 编辑器服务层
-│
-├── Platform/               # 平台相关代码（Vulkan/GLFW 封装）
-│   ├── Public/             # 平台公共接口
-│   │   ├── Graphic/        # 图形 API 封装
-│   │   ├── Edit/           # 编辑器和工具
-│   │   └── Event/          # 事件系统
-│   └── Private/            # 平台具体实现
-│
-├── ThirdParty/              # 第三方库
-│   ├── glfw/               # 窗口管理
-│   ├── imgui/              # 编辑器 UI
-│   ├── glm/                # 数学库
-│   ├── spdlog/             # 日志
-│   ├── stb/                # 图像加载
-│   ├── entt/               # ECS
-│   ├── json/               # JSON 序列化
-│   ├── tinygltf/           # glTF 加载
-│   ├── tinyobjloader/      # OBJ 加载
-│   └── SPIRV-Reflect/      # Shader 反射
-│
-├── Src/                    # 应用程序源代码
-│   └── main.cpp            # 主程序入口
-│
-├── cmake/                    # CMake 模块（VulkanSDK、SPIR-V、ThirdParty 配置）
-│
-├── Resource/               # 资源文件
-│   ├── Shader/             # GLSL 着色器 + Shader Schema + Shader 资产 (.schema, .xjshader)
-│   ├── Texture/            # 纹理图像
-│   ├── Mesh/               # 网格数据 (.glb)
-│   ├── Material/           # 材质资产 (.xjmat)
-│   ├── Script/             # 脚本源码与元数据 (.xjs, .xjmeta)
-│   ├── Config/             # 配置文件 (AssetRegistry.json, EditorUI.json)
-│   └── Scenes/             # 场景文件 (.xjscene)
-│
-├── Tests/                  # CTest 脚本语言、运行时、ECS 与编辑器测试
-│
-├── bin/                    # 运行时输出目录（构建后生成）
-│   ├── Resource/           # 复制的资源文件
-│   └── log/                # 运行时日志输出
-│
-└── build/                  # 构建目录（临时）
+├── Core/                    # ECS, camera, input, geometry, assets, scripting, rendering
+│   ├── Public/              # Public interfaces
+│   └── Private/             # Implementations
+├── Editor/                  # ImGui editor and MVVM application services
+│   ├── Public/Controllers/  # Scene, asset, camera, transform and display controllers
+│   ├── Public/Services/     # Scene/asset/display services
+│   ├── Public/Tools/        # Transform types, grid layout and Gizmo geometry
+│   ├── Public/UI/           # ViewModels, requests, panels and viewports
+│   └── Private/             # Controllers, services, UI and editor render systems
+├── Platform/                # Vulkan, GLFW, events and platform wrappers
+├── Src/                     # main.cpp and XJEditorApplication
+├── Resource/                # Source assets, read directly during development
+│   ├── Shader/              # GLSL, generated SPIR-V, .schema and .xjshader
+│   ├── Mesh/                # Model assets
+│   ├── Texture/             # Texture assets
+│   ├── Material/            # .xjmat materials
+│   ├── Script/              # .xjs examples and metadata
+│   ├── Scenes/              # .xjscene scenes
+│   └── Config/              # Asset registry and initial UI template
+├── Tests/                   # First-party CTest targets
+├── ThirdParty/              # Bundled dependencies; optional local Vulkan SDK cache
+├── cmake/                   # SDK setup, shader compilation and dependency configuration
+├── bin/                     # Generated executable, runtime DLLs and Saved/ user state
+└── build/                   # Generated build tree
 ```
 
-## ⚡ Performance
+## API Examples
 
-XJEngine is designed for high-performance real-time rendering with the following optimizations:
+These are integration snippets, not standalone programs. Use a valid scene and initialized render context; keep GPU resources within the render host's lifetime. For the application entry and editor lifecycle, see [`Src/main.cpp`](Src/main.cpp) and [`Src/XJEditorApplication.cpp`](Src/XJEditorApplication.cpp).
 
-### **Rendering Performance**
-- **GPU-Driven Pipeline**: Minimal CPU overhead with efficient command buffer management
-- **Instance Rendering**: Support for thousands of entities with dynamic uniform buffers
-- **Efficient Memory Usage**: Proper buffer alignment and memory pooling
-- **Multi-threaded Resource Loading**: Asynchronous texture and mesh loading
+### Create an entity and edit its Transform
 
-### **ECS Performance**
-- **Cache-Friendly Layout**: Components stored in contiguous arrays for optimal cache performance
-- **Fast Entity Queries**: O(1) entity lookups and efficient component iteration
-- **Minimal Overhead**: Lightweight entity handles and efficient component storage
-
-### **Vulkan Optimizations**
-- **Pipeline State Caching**: Reusable pipeline states to reduce driver overhead
-- **Descriptor Set Management**: Efficient descriptor allocation and binding
-- **Memory Coalescing**: Optimal buffer and image memory allocation
-- **Synchronization Minimization**: Careful use of barriers and synchronization primitives
-
-## 🎮 Usage
-
-### Basic Example
-Check the `XJEngineApp` class in `Src/main.cpp` to learn how to:
-1. Configure application settings (window size, title)
-2. Initialize render context and render target
-3. Create scene entities and components
-4. Set up event handlers
-5. Implement update and render loops
-
-### Creating Entities
 ```cpp
-XJ::XJEntity* entity = scene->CreateEntityWithTransform("Cube");
+auto* entity = scene.CreateEntityWithTransform("Cube");
 auto& transform = entity->GetComponent<XJ::XJTransformComponent>();
-auto& material = entity->AddComponent<XJ::XJBaseMaterialComponent>();
 
 const auto status = transform.SetLocalTRSEuler(
-    glm::dvec3(0.0), glm::dvec3(0.0), glm::dvec3(1.0));
+    glm::dvec3(0.0), glm::dvec3(0.0, 45.0, 0.0), glm::dvec3(1.0));
 if (status != XJ::XJTransformStatus::Success)
     spdlog::error("Cube transform could not be applied");
 ```
 
-### Using Surface Materials
+### Create a schema-initialized Surface material
+
+Assume `entity` has no Surface material component, and `mesh`, `defaultTexture` and `defaultSampler` are valid render resources. The project resource root and shader assets must already be available.
+
 ```cpp
-// Create a surface material with custom parameters
-auto surfaceMat = XJ::XJMaterialFactory::GetInstance()->CreateMaterial<XJ::XJSurfaceMaterial>();
-surfaceMat->SetBaseColor(glm::vec4(1.0f, 0.0f, 0.0f, 1.0f));
+auto material = XJ::XJMaterialFactory::GetInstance()->CreateDefaultMaterial(
+    defaultTexture, defaultSampler);
 
-// Set texture
-surfaceMat->SetTextureView(XJ::SURFACE_MAT_BASE_COLOR, texture, sampler);
-surfaceMat->UpdateTextureViewEnable(XJ::SURFACE_MAT_BASE_COLOR, true);
-
-// Add to entity
-auto& surfaceComp = entity->AddComponent<XJ::XJSurfaceMaterialComponent>();
-surfaceComp.AddMesh(mesh, surfaceMat);
-```
-
-### Using Procedural Textures
-```cpp
-// Create solid color textures from pixel data
-XJ::RGBAColor kWhitePixel{255, 255, 255, 255};
-XJ::RGBAColor kBlackPixel{0, 0, 0, 255};
-auto whiteTex = std::make_shared<XJ::XJTexture>(1, 1, &kWhitePixel);
-auto blackTex = std::make_shared<XJ::XJTexture>(1, 1, &kBlackPixel);
-
-// Create multi-pixel texture
-XJ::RGBAColor kMultiPixel[4] = {
-    {255, 0, 0, 255}, {0, 255, 0, 255},
-    {0, 0, 255, 255}, {255, 255, 0, 255}
-};
-auto multiTex = std::make_shared<XJ::XJTexture>(2, 2, kMultiPixel);
-
-// Create texture from file
-auto fileTex = std::make_shared<XJ::XJTexture>(XJ_RES_TEXTURE_DIR "image.jpeg");
-
-// Create sampler
-auto sampler = std::make_shared<XJ::XJSampler>(VK_FILTER_NEAREST, VK_SAMPLER_ADDRESS_MODE_REPEAT);
-```
-
-### Using Multiple Material Instances
-```cpp
-// Create different material instances for varied rendering
-auto kMaterialA = XJ::XJMaterialFactory::GetInstance()->CreateMaterial<XJ::XJBaseMaterial>();
-auto kMaterialB = XJ::XJMaterialFactory::GetInstance()->CreateMaterial<XJ::XJBaseMaterial>();
-
-// Assign different materials to entities
-for (auto& entity : entities) {
-    auto& matComp = entity->AddComponent<XJ::XJBaseMaterialComponent>();
-    matComp.AddMesh(mMesh, index == 0 ? kMaterialA : kMaterialB);
-    index = (index + 1) % 2;
+if (material && material->SetParameterValue(
+        "BaseColor", glm::vec4(1.0f, 0.0f, 0.0f, 1.0f)))
+{
+    auto& component = entity->AddComponent<XJ::XJSurfaceMaterialComponent>();
+    for (uint32_t submesh = 0; submesh < mesh->GetSubmeshCount(); ++submesh)
+        component.AddMesh(mesh, material, submesh);
+}
+else
+{
+    spdlog::error("Surface material runtime parameters are unavailable");
 }
 ```
 
-### Script Example
+`CreateDefaultMaterial` builds the Unlit shader layout and fallback texture bindings. Use `CreateFromAsset` for an existing `.xjmat` asset and its shader. Bare `CreateMaterial<T>()` only allocates a material; it does **not** initialize a schema-backed parameter layout.
 
-`Resource/Script/` includes `PlayerMove.xjs` (keyboard movement), `MoveTarget.xjs` (UUID lookup and cross-entity movement), and `WorldPosition.xjs`/`WorldScale.xjs` (checked world-space writes), alongside rotation and lifecycle examples.
+### Script example
+
+This is **`.xjs` syntax**, not a C++ translation unit:
 
 ```cpp
 class Rotate : ScriptBehaviour
@@ -622,166 +300,71 @@ class Rotate : ScriptBehaviour
 };
 ```
 
-### Event Handling
-```cpp
-mObserver->OnEvent<XJ::XJFrameBufferResizeEvent>([this](const XJ::XJFrameBufferResizeEvent& event) {
-    spdlog::info("Window resized: {}x{}", event.mWidth, event.mHeight);
-    mRenderTarget->SetExtent({event.mWidth, event.mHeight});
-});
+[`Resource/Script/`](Resource/Script/) also includes `PlayerMove.xjs` (keyboard movement), `MoveTarget.xjs` (UUID lookup and cross-entity movement), `WorldPosition.xjs` / `WorldScale.xjs` (checked world writes), and `Lifecycle.xjs`.
+
+## Tests
+
+From the repository root, enable tests, build, then run CTest:
+
+```powershell
+cmake -S . -B build -DXJ_BUILD_TESTS=ON
+cmake --build build --config Release
+ctest --test-dir build -C Release --output-on-failure
 ```
 
-### Advanced Example: Camera Controller
-```cpp
-// Create a camera entity
-XJ::XJEntity* camera = scene->CreateEntityWithTransform("MainCamera");
-camera->AddComponent<XJ::XJCameraComponent>();
-auto& cameraComp = camera->GetComponent<XJ::XJCameraComponent>();
-cameraComp.XJSetCameraMode(XJ::CameraMode::Orbit);
-cameraComp.XJSetRadius(5.0f);
-cameraComp.XJSetTarget(glm::vec3(0.0f, 0.0f, 0.0f));
+Coverage includes:
 
-// Orbit settings do not move the camera in the view-matrix getter.
-const auto poseStatus = camera->GetComponent<XJ::XJTransformComponent>()
-    .TrySetWorldPose(glm::dvec3(0.0, 0.0, 5.0), glm::dquat(1.0, 0.0, 0.0, 0.0));
-if (poseStatus != XJ::XJTransformStatus::Success)
-    spdlog::error("Camera pose could not be applied");
+- Script language, compiler, bytecode verifier/runtime, native contracts, typed values, asset compilation/loading, serialization and editor script operations.
+- ECS script lifecycle, live slot synchronization, deferred destruction, entity session isolation, host transforms, input focus/phase rules and log quotas.
+- Quaternion/TRS math, parent inheritance, failed-write atomicity, camera controls/read-only queries, world lighting/picking/bounds and scene v2/v3-to-v4 migration.
+- Local/World acceptance behavior, field isolation, reflected/lossy scale, rejection feedback and Undo/Redo preservation.
+- Material upload state and viewport requests, capabilities and statistics.
+- CPU-only world-grid layout and Transform Gizmo geometry/frame calculations. `XJTransformGizmoGeometryTests` checks nine unique handles, finite/non-degenerate triangle lists, geometry bounds, perspective scaling and invalid viewport height.
 
-// Set camera as active camera in render target
-mRenderTarget->XJSetCamera(camera);
-```
+These tests do not replace manual Vulkan validation or visual viewport checks.
 
-### Editor UI Integration
-```cpp
-// Initialize UI (after render context setup)
-XJ::XJEditorRendererInitInfo kUIRendererInfo = {};
-kUIRendererInfo.instance       = kRenderContext->XJGetInstance()->XJGetInstance();
-kUIRendererInfo.apiVersion     = kRenderContext->XJGetInstance()->XJGetApiVersion();
-kUIRendererInfo.physicalDevice = kPhysicalDevices->XJGetPhysicalDevice();
-kUIRendererInfo.device         = kDevice->XJGetDevice();
-kUIRendererInfo.renderPass     = mRenderPass->XJGetRenderPass();
-kUIRendererInfo.commandPool    = kDevice->XJGetDefaultCmdPool()->XJGetCommandPool();
-kUIRendererInfo.queueFamily    = kPhysicalDevices->XJGetGraphicQueueFamilyInfo().queueFamilyIndex;
-kUIRendererInfo.queue          = kDevice->XJGetFirstGraphicQueue()->XJGetQueue();
-kUIRendererInfo.imageCount     = static_cast<uint32_t>(kSwapchain->XJGetSwapchainImages().size());
+## Performance and Diagnostics
 
-mUIContext = std::make_unique<XJ::XJUIContext>();
-mEditorRenderer = std::make_unique<XJ::XJEditorRenderer>();
-mUIContext->Init(static_cast<GLFWwindow*>(XJGetWindow()->XJGetImplWindowPointer()));
-mEditorRenderer->Init(kUIRendererInfo);
+- Viewport overlays show completed-frame time/FPS, script CPU time and active instances, draw calls and material uploads, with a **128-sample frame history**. These snapshots are not GPU timing measurements or a performance guarantee.
+- Existing optimizations include UUID indexing, revision-based ViewModel/Console refresh, material/texture/pipeline reuse, per-frame-slot upload tracking and reusable script execution scratch storage.
+- Diagnostics use **spdlog** and the editor Console. Normal statistics collection does not rely on per-frame info/debug logging.
+- For startup/resource failures, check SDK resolution, GPU drivers, project-root selection and generated `.spv` files. For script input, check Game/application focus and Play state first.
 
-// In update loop
-mUIContext->BeginFrame();
-// ... ImGui calls here (panels, widgets, etc.) ...
-mUIContext->EndFrame();
+## Current Limitations
 
-// In render loop (after material systems)
-mEditorRenderer->RenderDrawData(kCommandBuffer, mUIContext->XJGetDrawData());
+- Transform Gizmos do not support picking, dragging, snapping or operation switching yet.
+- Only Final viewport rendering is implemented; diagnostic render modes remain unavailable.
+- The Windows SDK/DLL build setup still needs platform-specific adaptation for Linux/macOS.
+- Lit is basic forward lighting; full PBR, shadows, post-processing and skeletal animation are not implemented.
+- Export/Package is not implemented; development runs depend on the project's source `Resource/` directory.
+- Resource ownership and larger-scene behavior still need continued validation. No fixed entity-count, loading-concurrency or frame-rate guarantees are made.
 
-// Shutdown
-mEditorRenderer->Shutdown();
-mUIContext->Shutdown();
-```
+## Roadmap
 
-## 🔧 Development
+Status, not a release schedule:
 
-### Adding New Components
-1. Create component header file in `Core/Public/ECS/Component/`
-2. Inherit from `XJComponent` base class
-3. Implement component logic in `Core/Private/ECS/Component/` (if needed)
-4. Add component to entities using `AddComponent<T>()`
+- [x] Editor panels, asset operations, scene persistence and Undo/Redo
+- [x] Verified scripting pipeline, host services and runtime slot synchronization
+- [x] Unified quaternion transforms, scene v4 migration and Local/World numeric editing
+- [x] Adaptive world grid and Transform Gizmo visualization
+- [ ] Gizmo handle picking, drag operations and editing constraints
+- [ ] Additional viewport render modes
+- [ ] PBR, shadows and post-processing
+- [ ] Animation and broader core/render integration tests
+- [ ] Standalone asset packaging and non-Windows build support
+- [ ] Continued ownership review, profiling and API documentation
 
-### Creating New Material Systems
-1. Inherit from `XJMaterialSystem` base class in `Core/Public/ECS/System/XJMaterialSystem.h`
-2. Implement `OnInit`, `OnRender`, and `OnDestroy` methods
-3. Define descriptor set layouts, pipeline layout, and pipeline in `OnInit`
-4. Use helper methods `XJGetDevice()`, `XJGetProjMat()`, `XJGetViewMat()` for camera data
-5. Register system in render target using `AddMaterialSystem<T>()`
+## Development and Contributions
 
-### Shader Development
-- Shader files are located in `Resource/Shader/`
-- Automatic compilation from GLSL to SPIR-V at build time
-- Use `XJ_RES_SHADER_DIR` macro to reference shader paths
+- Add ECS components under `Core/Public/ECS/Component/` and implementations under `Core/Private/ECS/Component/`.
+- Derive render systems from [`XJMaterialSystem`](Core/Public/Render/System/XJMaterialSystem.h); implement `OnInit` / `OnRender` / `OnDestroy` and register them with the render target or viewport host.
+- Keep new editor Views limited to ViewModel reads and request submission. Apply ECS/render mutations through Controllers/Services; preserve existing render-host lifecycle interfaces.
+- Put GLSL and shader assets in `Resource/Shader/`. Reconfigure CMake after adding shader files so the build-time shader list is refreshed.
+- Follow surrounding naming/include-guard conventions. Log diagnostics with `spdlog::`; when propagation is required, log and then throw a standard exception.
+- Submit focused pull requests with relevant tests and matching English/Chinese documentation. Report reproduction steps, build configuration and logs through [GitHub Issues](https://github.com/aidexiaojike-ops/XJEngine/issues).
 
-### Code Style Guidelines
-- **Naming**: PascalCase for classes, camelCase for methods and variables
-- **Headers**: Include guards with `#ifndef XJ_..._H` pattern
-- **Documentation**: Document public APIs with clear comments
-- **Error Handling**: Use spdlog for logging and proper Vulkan error checking
+Dependencies include GLFW, EnTT, GLM, spdlog, stb_image, tinyobjloader, tinygltf, Dear ImGui, nlohmann/json, SPIRV-Reflect and the Vulkan SDK. Thanks to their authors and maintainers; see `ThirdParty/` for the bundled projects.
 
-### Building Custom Applications
-1. Create a new application class inheriting from `XJ::XJApplication`
-2. Override virtual methods: `OnInit`, `OnSceneInit`, `OnUpdate`, `OnRender`, `OnDestroy`
-3. Link against XJEngine libraries (Platform and Core)
-4. Use CMake to integrate with the engine build system
+## License
 
-## 🐛 Known Issues
-
-1. **Memory Management**: Some higher-level resource ownership paths still need review
-2. **Platform Support**: Limited testing on macOS with MoltenVK
-3. **Editor Panels**: Editor panel implementations (Viewport, Hierarchy, Inspector, Stats) are pending
-
-## 🗺️ Roadmap
-
-### Short-term (Next 3 months)
-- [x] ~~Fix Vulkan validation layer errors~~
-- [x] ~~Improve Vulkan sampler ownership and render context shutdown order~~
-- [ ] Review remaining higher-level resource ownership paths
-- [ ] Implement editor panels (Viewport, Hierarchy, Inspector, Stats)
-- [x] ~~Add first-party tests for the script language, runtime, ECS integration, serialization, and editor assets~~
-- [ ] Add unit tests for core systems
-- [ ] Enhance documentation with API references
-- [ ] Optimize rendering performance for large scenes
-
-### Medium-term (3-6 months)
-- [ ] Add PBR material system
-- [ ] Implement shadow mapping
-- [ ] Add post-processing effects (bloom, FXAA, etc.)
-- [ ] Support for skeletal animation
-- [ ] Scene serialization/deserialization
-
-### Long-term (6+ months)
-- [ ] Editor tools and scene editor
-- [ ] Physics integration
-- [ ] Networking support
-- [ ] VR/AR support
-- [ ] Mobile platform support (Android/iOS)
-
-## 📝 License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
-## 🤝 Contributing
-
-We welcome contributions! Please see our [Contributing Guidelines](CONTRIBUTING.md) for details.
-
-### How to Contribute
-1. **Report Bugs**: Open an issue with detailed bug reports
-2. **Request Features**: Suggest new features or improvements
-3. **Submit Code**: Fork the repository and submit pull requests
-4. **Improve Documentation**: Help improve documentation and examples
-
-### Code Review Guidelines
-- Ensure code follows the project's style guidelines
-- Add tests for new functionality
-- Update documentation for API changes
-- Keep pull requests focused and manageable
-
-## 📧 Contact
-
-- **GitHub Issues**: [https://github.com/aidexiaojike-ops/XJEngine/issues](https://github.com/aidexiaojike-ops/XJEngine/issues)
-- **Project Discussions**: Use GitHub Discussions for questions and ideas
-
-## 🙏 Acknowledgments
-
-- **Vulkan**: Khronos Group for the Vulkan API
-- **EnTT**: skypjack for the amazing ECS library
-- **GLFW**: The GLFW team for window and input management
-- **GLM**: g-truc for the mathematics library
-- **spdlog**: gabime for the fast logging library
-- **stb**: Sean Barrett for the single-file libraries
-
----
-
-**XJEngine** - Built for high-performance real-time rendering 🚀
-
-**XJEngine** - 为高性能实时渲染而生 🚀
+The repository currently contains no project-level `LICENSE` file. Confirm licensing with the maintainer before reuse or redistribution; do not assume an MIT grant from earlier README text. Third-party dependencies retain their own licenses.

@@ -10,6 +10,7 @@
 #include "Render/System/XJWorldGridMaterialSystem.h"
 #include "Render/System/XJSurfaceMaterialSystem.h"
 #include "Render/System/XJLightGizmoMaterialSystem.h"
+#include "Render/System/XJTransformGizmoMaterialSystem.h"
 #include "UI/Viewports/XJGamePreview.h"
 #include "UI/Viewports/XJScenePreview.h"
 
@@ -83,12 +84,13 @@ namespace XJ
             Shutdown();
             return false;
         }
-
+        //工具UI渲染
         mImpl->ScenePreview->BindUIState(info.UIState);
         mImpl->ScenePreview->AddMaterialSystem<XJBaseMaterialSystem>();
         mImpl->ScenePreview->AddMaterialSystem<XJSurfaceMaterialSystem>();
         mImpl->ScenePreview->AddMaterialSystem<XJWorldGridMaterialSystem>();
         mImpl->ScenePreview->AddMaterialSystem<XJLightGizmoMaterialSystem>();
+        mImpl->ScenePreview->AddMaterialSystem<XJTransformGizmoMaterialSystem>(info.UIState);
 
         mImpl->GamePreview =
             std::make_unique<XJGamePreview>();
