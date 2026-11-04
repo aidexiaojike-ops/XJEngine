@@ -6,6 +6,7 @@
 
 </div>
 
+[![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/Platform-Windows-brightgreen)](https://github.com/aidexiaojike-ops/XJEngine)
 [![C++](https://img.shields.io/badge/C++-20-blue.svg)](https://en.cppreference.com/w/cpp/20)
 [![Vulkan](https://img.shields.io/badge/Renderer-Vulkan-orange.svg)](https://www.vulkan.org/)
@@ -367,4 +368,10 @@ ctest --test-dir build -C Release --output-on-failure
 
 ## 许可证
 
-仓库目前没有项目级 `LICENSE` 文件。复用或再分发前请向维护者确认授权，不应依据旧版 README 假定已获得 MIT 授权。第三方依赖各自保留其许可证。
+XJEngine 基于 [MIT 许可证](LICENSE) 开源。任何人均可使用、修改和再分发，包括商业用途，但须按许可证要求保留版权与许可声明。
+
+许可文本：[English（英文原文）](LICENSE) | [简体中文（参考译文）](LICENSE_CN.md)。中文译文仅供参考，如有解释差异，以英文原文为准。
+
+**合法使用提醒（不构成额外许可条件）：** 使用本项目须遵守适用法律。MIT 许可证不使违法犯罪行为合法化，也不免除相应法律责任。使用者应对自身使用行为负责。
+
+第三方依赖各自保留其许可证，项目的 MIT 许可证不替代其授权条款。

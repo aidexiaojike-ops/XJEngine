@@ -6,6 +6,7 @@
 
 </div>
 
+[![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/Platform-Windows-brightgreen)](https://github.com/aidexiaojike-ops/XJEngine)
 [![C++](https://img.shields.io/badge/C++-20-blue.svg)](https://en.cppreference.com/w/cpp/20)
 [![Vulkan](https://img.shields.io/badge/Renderer-Vulkan-orange.svg)](https://www.vulkan.org/)
@@ -367,4 +368,10 @@ Dependencies include GLFW, EnTT, GLM, spdlog, stb_image, tinyobjloader, tinygltf
 
 ## License
 
-The repository currently contains no project-level `LICENSE` file. Confirm licensing with the maintainer before reuse or redistribution; do not assume an MIT grant from earlier README text. Third-party dependencies retain their own licenses.
+XJEngine is open source under the [MIT License](LICENSE). Anyone may use, modify and redistribute it, including for commercial purposes, subject to retaining the copyright and permission notices as required by the license.
+
+License texts: [English (authoritative)](LICENSE) | [简体中文（参考译文）](LICENSE_CN.md). The Chinese translation is provided for convenience; the English original prevails if interpretations differ.
+
+**Legal compliance reminder (not an additional license condition):** Use must comply with applicable laws. The MIT License does not authorize unlawful conduct or exempt users from legal liability. Users are responsible for their own use.
+
+Third-party dependencies retain their own licenses; the project's MIT License does not replace their terms.
