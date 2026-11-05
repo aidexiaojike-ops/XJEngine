@@ -5,6 +5,8 @@
 #include "ECS/Component/XJCameraComponent.h"
 #include "ECS/Component/XJTransformComponent.h"
 #include <glm/gtc/matrix_inverse.hpp> 
+#include "Tools/XJTransformGizmoInteractionMath.h"
+#include "UI/XJEditorUIState.h"
 
 #include "UI/XJEditorAssetDragPayload.h"
 #include "UI/XJEditorDragPayload.h"
@@ -13,6 +15,130 @@
 
 namespace XJ
 {
+
+    bool XJScenePreview::IsGizmoCapturingInput() const
+    {
+        return
+            mGizmoMouseCaptured ||
+            mBlockSceneSelection ||
+            (mUIState &&
+             mUIState->GizmoInteraction.Dragging);
+    }
+
+    void XJScenePreview::SubmitGizmoPointer(const ImVec2& imageMin, const ImVec2& imageSize)
+    {
+        if (!mUIState)
+            return;
+
+        auto& state = *mUIState;
+        auto& input = state.GizmoPointer;
+
+        input = {};
+        input.Pending = true;
+
+        const auto& io = ImGui::GetIO();
+
+        const bool popupOpen =
+            ImGui::IsPopupOpen(
+                nullptr,
+                ImGuiPopupFlags_AnyPopupId |
+                ImGuiPopupFlags_AnyPopupLevel);
+
+        input.Cancel =
+            io.AppFocusLost ||
+            ImGui::IsKeyPressed(ImGuiKey_Escape, false) ||
+            !ImGui::IsMousePosValid() ||
+            popupOpen ||
+            !state.GizmoRendered.Valid ||
+            state.WorkspaceReadOnly ||
+            state.RuntimeInspection;
+
+        input.Frame = state.GizmoRendered;
+
+        input.Inside = mHovered;
+
+        input.Pressed =
+            mHovered &&
+            !io.KeyAlt &&
+            !ImGui::IsMouseDown(ImGuiMouseButton_Right) &&
+            !ImGui::IsMouseDown(ImGuiMouseButton_Middle) &&
+            ImGui::IsMouseClicked(ImGuiMouseButton_Left);
+
+        input.Down = ImGui::IsMouseDown(ImGuiMouseButton_Left);
+        input.Released = ImGui::IsMouseReleased(ImGuiMouseButton_Left);
+
+        input.ImageMin = {
+            double(imageMin.x),
+            double(imageMin.y)
+        };
+
+        input.ImageSize = {
+            double(imageSize.x),
+            double(imageSize.y)
+        };
+
+        const ImVec2 mouse = ImGui::GetMousePos();
+
+        input.UV = {
+            (double(mouse.x) - double(imageMin.x)) /
+                double(imageSize.x),
+
+            (double(mouse.y) - double(imageMin.y)) /
+                double(imageSize.y)
+        };
+
+        if (input.Cancel)
+        {
+            mBlockSceneSelection =
+                mGizmoMouseCaptured ||
+                state.GizmoInteraction.Dragging;
+
+            mGizmoMouseCaptured = false;
+            return;
+        }
+
+        XJTransformGizmoHandle hit =
+            XJTransformGizmoHandle::None;
+
+        const bool frameMatches =
+            input.Frame.Epoch == state.GizmoEpoch &&
+            input.Frame.EntityId ==
+                state.Selection.SelectedEntity &&
+            input.Frame.Space ==
+                state.TransformTools.Space &&
+            input.Frame.SettingsRevision ==
+                state.TransformTools.SettingsRevision;
+
+        if (input.Pressed && frameMatches)
+        {
+            hit = PickTransformGizmo(
+                input.Frame,
+                input.UV,
+                input.ImageSize);
+        }
+
+        const bool hitOnPress =
+            input.Pressed &&
+            hit != XJTransformGizmoHandle::None;
+
+        if (hitOnPress &&
+            GetGizmoOperation(hit) ==
+                XJTransformGizmoOperation::Move)
+        {
+            // 立即占用本帧输入。
+            // 不等待稍后 Workspace 处理请求。
+            mGizmoMouseCaptured = true;
+        }
+
+        mBlockSceneSelection =
+            hitOnPress ||
+            mGizmoMouseCaptured ||
+            state.GizmoInteraction.Dragging;
+
+        if (!input.Down)
+            mGizmoMouseCaptured = false;
+    }
+
     bool XJScenePreview::Init(XJRenderContext* renderContext)
     {
         return mSurface.Init(renderContext, mSettings.mWidth, mSettings.mHeight, true);
@@ -20,6 +146,8 @@ namespace XJ
 
     void XJScenePreview::Shutdown()//清空绑定
     {
+        mGizmoMouseCaptured = false;
+        mBlockSceneSelection = false;
         mAssetDropCallback = {};
         mEntityPickCallback = {};
         mSurface.Shutdown();
@@ -129,9 +257,29 @@ namespace XJ
     {
         mHovered = false;
         mFocused = false;
+
+        mBlockSceneSelection = false;
+
+        if (mUIState)
+        {
+            // 如果本帧没有成功显示图像，就提交取消。
+            mUIState->GizmoPointer = {};
+            mUIState->GizmoPointer.Pending = true;
+            mUIState->GizmoPointer.Cancel = true;
+        }
+
+        if (!ImGui::IsMouseDown(ImGuiMouseButton_Left) ||
+            ImGui::GetIO().AppFocusLost)
+        {
+            mGizmoMouseCaptured = false;
+        }
+
         // 处理拖放事件
-        if(!mOpen)
+        if (!mOpen)
+        {
+            mGizmoMouseCaptured = false;
             return;
+        }
 
         ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));//去掉窗口内边距，让渲染图像填满整个窗口
 
@@ -143,6 +291,13 @@ namespace XJ
             {
                 XJTransformToolWidgets::DrawSpaceButton(*mUIState);
                 ImGui::Separator();
+            }
+
+            if (mUIState && !mUIState->GizmoInteraction.Error.empty())
+            {
+                ImGui::TextWrapped(
+                    "%s",
+                    mUIState->GizmoInteraction.Error.c_str());
             }
 
 
@@ -158,10 +313,13 @@ namespace XJ
 
                     ImGui::Image(GetViewportTextureID(), avail);
                     mHovered = ImGui::IsItemHovered();
+                    SubmitGizmoPointer(imageMin, avail);
 
                     if (mHovered &&
+                        !mBlockSceneSelection &&
+                        !ImGui::GetIO().KeyAlt &&
                         ImGui::IsMouseClicked(ImGuiMouseButton_Left) &&
-                        mEntityPickCallback)
+                        mEntityPickCallback)//原场景选择条件
                     {
                         glm::vec3 rayOrigin;
                         glm::vec3 rayDirection;
@@ -181,7 +339,8 @@ namespace XJ
                         }
                     }
                     
-                    if (ImGui::BeginDragDropTarget())
+                    if (!IsGizmoCapturingInput() &&
+                        ImGui::BeginDragDropTarget())//资源拖放
                     {
                         if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload(XJ_ASSET_PAYLOAD_NAME))
                         {
@@ -225,6 +384,8 @@ namespace XJ
 
         ImGui::End();
         ImGui::PopStyleVar();
+        if (mUIState && mUIState->GizmoPointer.Cancel)
+            mGizmoMouseCaptured = false;
       
     }
 

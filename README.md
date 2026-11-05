@@ -14,7 +14,7 @@
 
 XJEngine is an experimental C++20 game engine and editor built on Vulkan and EnTT. It includes a schema-driven material pipeline, asset and scene persistence, a built-in scripting language, and an ImGui editor.
 
-**Current build path: Windows.** The SDK setup and runtime DLL handling expect a Windows Vulkan SDK layout; Linux and macOS are not ready-to-build targets. Transform Gizmos are currently **visualization only**, not draggable editing tools.
+**Current build path: Windows.** The SDK setup and runtime DLL handling expect a Windows Vulkan SDK layout; Linux and macOS are not ready-to-build targets. Transform Gizmos support **handle picking, hover highlighting and single-axis move dragging**; rotation and scale dragging are not implemented yet.
 
 ## Contents
 
@@ -43,7 +43,7 @@ XJEngine is an experimental C++20 game engine and editor built on Vulkan and EnT
 | **Built-in scripting** | `.xjs` lexer/parser/compiler, bytecode verification, execution limits, typed values, host services, ECS lifecycle and live slot synchronization |
 | **Editor panels** | Hierarchy, Inspector, Content Browser, Console, Scene/Game Preview, docking and detached ImGui windows |
 | **Local/World editing** | Scene toolbar space switch, Inspector numeric editing, rejection feedback, snapshot-based Undo/Redo |
-| **Transform Gizmo visualization** | Move arrows, rotation rings and scale boxes on all three axes; Local/World orientation and approximately constant screen size; no handle interaction yet |
+| **Transform Gizmo interaction** | Nine-part Local/World Gizmo with approximately constant screen size, handle picking, hover/active highlights and single-axis move dragging with commit/cancel; rotation and scale handles are not editable yet |
 | **Scene helpers** | Adaptive world grid, light wireframes, AABB + triangle picking, picked-surface orbit pivot |
 | **Play mode** | Runtime scene cloning, Play/Pause/Resume/Stop, runtime inspection and script-slot mutations without editing the source scene |
 | **Diagnostics** | spdlog-backed Console, viewport performance snapshots, frame history and material upload statistics |
@@ -132,13 +132,13 @@ On Windows, user UI state follows the executable directory rather than the launc
 
 ### Local/World Transform editing
 
-- Click the **Local/World** button in the Scene toolbar to change the Inspector coordinate space. Switching is available only in Edit mode and changes neither scene data nor Undo history.
+- Click the **Local/World** button in the Scene toolbar to change the Inspector coordinate space and Gizmo orientation. Switching is available only in Edit mode, is disabled during Gizmo dragging, and changes neither scene data nor Undo history.
 - Transform snapshots use double precision. Field-specific requests preserve untouched local components.
 - World rotation is composed from normalized quaternions independently of scale. World scale is non-negative **lossy scale** (world matrix axis lengths), not signed local scale; world-scale edits preserve local reflection signs.
 - Services validate a temporary candidate before applying an edit. Rejected edits show an entity/space-specific reason and leave the scene, dirty flag and Undo/Redo history unchanged. No-op edits also create no history entry.
 - Component copy/paste always uses **Local TRS**. Transform editing remains read-only during Play/Pause runtime inspection.
 
-### Transform Gizmo visualization
+### Transform Gizmo interaction
 
 Selecting an entity with a valid Transform in an editable scene displays a unified nine-part Gizmo in **Scene Preview**:
 
@@ -148,7 +148,16 @@ Selecting an entity with a valid Transform in an editable scene displays a unifi
 - Solid, unlit, double-sided triangles render without depth testing or depth writes, so scene geometry does not occlude the Gizmo.
 - It is hidden during Play/Pause, read-only/runtime inspection, invalid selection or missing Transform. Invalid frame/projection inputs skip drawing. It is not added to Game Preview.
 
-**This is visualization only.** There is no handle hit-testing, hover selection, drag editing, or Move/Rotate/Scale operation switch yet. Viewport clicks still perform entity picking; use Inspector values to edit transforms.
+To move the selected entity:
+
+1. Choose **Local** or **World**, then hover a handle: the hovered part turns **yellow**.
+2. Hold the **left mouse button** on a move arrow and drag along its axis. The active handle turns **orange**. Start without Alt or the right/middle mouse buttons held, which are reserved for camera gestures.
+3. Release to commit. The whole drag creates **one Undo entry** and marks the scene dirty only if the final local position actually changed. Intermediate previews refresh the UI without adding history or dirtying the scene; a no-op creates no history entry.
+4. Press **Escape** to cancel and restore the original local position without adding history or changing the dirty flag. Application focus loss, popups, invalid pointer/image/button state, selection/settings mismatches, or camera/image-region changes also cancel. Scene switching/detachment and entering Play cancel the interaction before proceeding.
+
+- Dragging freezes the starting camera/projection, axis and drag plane, and calculates each target from the starting position rather than accumulating deltas. An axis nearly facing the camera cannot start a drag; change the viewing angle as prompted. A temporarily invalid ray-plane intersection keeps the last valid position.
+- Gizmo input capture blocks scene selection, camera controls and viewport asset drops. Ordinary scene/asset/space-change requests during a captured gesture are discarded, not queued for release; saving cannot persist an in-progress preview.
+- Rotation rings and scale boxes can be picked and highlighted, and consume clicks instead of selecting geometry behind them, but **do not edit rotation or scale**. Use Inspector values for these edits. Snapping, plane/free movement and a Move/Rotate/Scale operation switch are not implemented.
 
 ### World grid and viewport display
 
@@ -200,7 +209,8 @@ File -> Scanner / Importer -> Asset (CPU) -> Factory -> Render Resource (GPU)
 - glTF 2.0 import merges triangle primitives into shared buffers with per-primitive index ranges, material slots and bounds; unsupported non-triangle modes are skipped. Meshes retain CPU position/index copies for picking.
 - `XJJsonIO` provides shared JSON readers and atomic writes. Scene serializers and instantiators convert between `.xjscene` assets and live ECS hierarchies.
 - `Src/main.cpp` creates `XJEditorApplication`; `XJEditorRuntime` owns workspace, play controller, viewport system, frame renderer, input bindings and UI host.
-- Views read ViewModels and submit requests. Controllers/Services apply mutations. `XJEditorTransformToolsController` publishes space settings and `XJEditorTransformGizmoViewModel`; the Gizmo render system consumes this display snapshot.
+- Views read ViewModels and submit requests/input snapshots. Controllers/Services apply mutations. `XJEditorTransformToolsController` publishes space settings and `XJEditorTransformGizmoViewModel`; the Gizmo render system consumes this display snapshot and publishes the actual `XJGizmoRenderedFrame` for interaction.
+- `XJGizmoInteractionController` validates the rendered frame's epoch, entity, space and settings revision before using it. CPU picking tests double-sided triangles in reverse draw order, preferring exact hits with nearby pixel samples for thin handles. Single-axis targets go through the scene controller/service's checked World Position preview transaction, with one commit or rollback per drag.
 - `XJViewportRenderSurface` owns off-screen render targets and defers descriptor release on resize. `XJEditorLog` bridges spdlog into revision-based Console snapshots with clipped single-line rendering.
 
 ### Built-in scripting
@@ -224,7 +234,7 @@ XJEngine/
 ├── Editor/                  # ImGui editor and MVVM application services
 │   ├── Public/Controllers/  # Scene, asset, camera, transform and display controllers
 │   ├── Public/Services/     # Scene/asset/display services
-│   ├── Public/Tools/        # Transform types, grid layout and Gizmo geometry
+│   ├── Public/Tools/        # Transform types, grid layout, Gizmo geometry and interaction math
 │   ├── Public/UI/           # ViewModels, requests, panels and viewports
 │   └── Private/             # Controllers, services, UI and editor render systems
 ├── Platform/                # Vulkan, GLFW, events and platform wrappers
@@ -320,9 +330,10 @@ Coverage includes:
 - Quaternion/TRS math, parent inheritance, failed-write atomicity, camera controls/read-only queries, world lighting/picking/bounds and scene v2/v3-to-v4 migration.
 - Local/World acceptance behavior, field isolation, reflected/lossy scale, rejection feedback and Undo/Redo preservation.
 - Material upload state and viewport requests, capabilities and statistics.
-- CPU-only world-grid layout and Transform Gizmo geometry/frame calculations. `XJTransformGizmoGeometryTests` checks nine unique handles, finite/non-degenerate triangle lists, geometry bounds, perspective scaling and invalid viewport height.
+- CPU-only world-grid layout and Transform Gizmo geometry/frame calculations: nine unique handles, finite/non-degenerate triangle lists, geometry bounds, perspective scaling and invalid viewport height.
+- `XJTransformGizmoGeometryTests` also checks X-axis handle picking, invalid-frame rejection and single-axis move math: X-axis motion, non-accumulating repeated calculations, view-aligned axis rejection and rotated Local X following its world direction.
 
-These tests do not replace manual Vulkan validation or visual viewport checks.
+These tests do not replace manual Vulkan validation or visual viewport checks. Gizmo preview transactions, input capture and cancellation/lifecycle flows still need manual integration checks; the new interaction tests cover picking and movement math, not those end-to-end behaviors.
 
 ## Performance and Diagnostics
 
@@ -333,7 +344,7 @@ These tests do not replace manual Vulkan validation or visual viewport checks.
 
 ## Current Limitations
 
-- Transform Gizmos do not support picking, dragging, snapping or operation switching yet.
+- Transform Gizmo dragging is limited to single-axis movement. Rotation/scale handles support picking and highlighting only; rotation/scale dragging, plane/free movement, snapping and operation switching are not implemented. Nearly view-aligned move axes require a different viewing angle.
 - Only Final viewport rendering is implemented; diagnostic render modes remain unavailable.
 - The Windows SDK/DLL build setup still needs platform-specific adaptation for Linux/macOS.
 - Lit is basic forward lighting; full PBR, shadows, post-processing and skeletal animation are not implemented.
@@ -348,7 +359,8 @@ Status, not a release schedule:
 - [x] Verified scripting pipeline, host services and runtime slot synchronization
 - [x] Unified quaternion transforms, scene v4 migration and Local/World numeric editing
 - [x] Adaptive world grid and Transform Gizmo visualization
-- [ ] Gizmo handle picking, drag operations and editing constraints
+- [x] Gizmo handle picking/highlights and Local/World single-axis move dragging with commit/cancel
+- [ ] Gizmo rotation/scale dragging, plane/free movement, snapping and operation switching
 - [ ] Additional viewport render modes
 - [ ] PBR, shadows and post-processing
 - [ ] Animation and broader core/render integration tests

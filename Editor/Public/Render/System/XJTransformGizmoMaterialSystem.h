@@ -19,7 +19,7 @@ namespace XJ
         : public XJMaterialSystem
     {
         public:
-            explicit XJTransformGizmoMaterialSystem(const XJEditorUIState* state);
+            explicit XJTransformGizmoMaterialSystem(XJEditorUIState* state);
 
             void OnInit(XJVulkanRenderPass* renderPass) override;
 
@@ -36,7 +36,7 @@ namespace XJ
 
             // 非拥有指针。
             // 与现有 ScenePreview 的 UIState 绑定遵循相同生命周期。
-            const XJEditorUIState* mState = nullptr;
+            XJEditorUIState* mState = nullptr;
             std::vector<Part> mParts; 
             std::shared_ptr<XJVulkanPipelineLayout> mPipelineLayout;
             std::shared_ptr<XJVulkanPipeline> mPipeline;

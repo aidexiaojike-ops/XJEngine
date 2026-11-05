@@ -13,13 +13,171 @@
 #include <algorithm>
 #include <spdlog/spdlog.h>
 #include <utility>
+#include <cmath>
 
 namespace XJ
 {
+
+    bool XJEditorSceneController::BeginMovePreview(XJEditorUIState& state, XJEditorEntityId entityId, const glm::dvec3& expectedWorldPosition)
+    {
+        if (!mScene ||
+            mMovePreviewActive ||
+            state.WorkspaceReadOnly ||
+            state.RuntimeInspection ||
+            state.Selection.SelectedEntity != entityId ||
+            (mShouldExposeEntityCallback &&
+             !mShouldExposeEntityCallback(entityId)))
+        {
+            return false;
+        }
+
+        glm::vec3 localPosition;
+        glm::dvec3 worldPosition;
+
+        if (!XJEditorSceneService::ReadMovePosition(
+                *mScene,
+                entityId,
+                localPosition,
+                worldPosition))
+        {
+            return false;
+        }
+
+        // 防止使用与当前场景不一致的旧绘制快照开始拖动。
+        const double difference = glm::length(worldPosition - expectedWorldPosition);
+
+        if (!std::isfinite(difference) ||
+            difference > 1.0e-4)
+        {
+            return false;
+        }
+
+        auto before = CaptureHistorySnapshot(state);
+
+        if (!before.Scene)
+            return false;
+
+        mMovePreviewEntity = entityId;
+        mMoveOriginalLocalPosition = localPosition;
+        mMoveBefore = std::move(before);
+        mMovePreviewActive = true;
+
+        return true;
+    }
+
+    bool XJEditorSceneController::PreviewMovePosition(XJEditorUIState& state, const glm::dvec3& worldPosition)
+    {
+        if (!mScene || !mMovePreviewActive)
+            return false;
+
+        XJEditorUpdateTransformRequest request;
+        request.EntityId = mMovePreviewEntity;
+
+        request.Space = XJEditorTransformSpace::World;
+        request.Fields = XJEditorTransformFields::Position;
+
+        request.Position = worldPosition;
+
+        const auto result =
+            XJEditorSceneService::UpdateTransform(
+                *mScene,
+                request);
+
+        if (result.Rejected())
+        {
+            state.GizmoInteraction.Error = result.Error;
+            return false;
+        }
+
+        if (result.Changed())
+        {
+            // 实时刷新 UI，但暂不提交 Dirty、Undo 和完整修改通知。
+            InvalidateViewModels();
+        }
+
+        return true;
+    }
+
+    bool XJEditorSceneController::EndMovePreview( XJEditorUIState& state, bool commit)
+    {
+        if (!mMovePreviewActive)
+            return false;
+
+        if (!commit)
+        {
+            CancelMovePreview();
+            return true;
+        }
+
+        glm::vec3 currentLocal;
+        glm::dvec3 currentWorld;
+
+        if (!mScene ||
+            !XJEditorSceneService::ReadMovePosition(
+                *mScene,
+                mMovePreviewEntity,
+                currentLocal,
+                currentWorld))
+        {
+            CancelMovePreview();
+            return false;
+        }
+
+        const bool changed =
+            !glm::all(
+                glm::equal(
+                    currentLocal,
+                    mMoveOriginalLocalPosition));
+
+        auto before = std::move(mMoveBefore);
+
+        mMovePreviewActive = false;
+        mMovePreviewEntity = XJ_INVALID_EDITOR_ENTITY_ID;
+        mMoveBefore = {};
+
+        if (!changed)
+        {
+            InvalidateViewModels();
+            return true;
+        }
+
+        PushUndoSnapshot(std::move(before));
+        NotifyAfterMutation();
+
+        return true;
+    }
+
+    void XJEditorSceneController::CancelMovePreview()//取消移动预览
+    {
+        if (!mMovePreviewActive)
+            return;
+
+        if (mScene &&
+            !XJEditorSceneService::RestoreMovePosition(
+                *mScene,
+                mMovePreviewEntity,
+                mMoveOriginalLocalPosition))
+        {
+            spdlog::warn(
+                "Could not restore Gizmo move preview "
+                "for entity={}.",
+                mMovePreviewEntity);
+        }
+
+        mMovePreviewActive = false;
+        mMovePreviewEntity = XJ_INVALID_EDITOR_ENTITY_ID;
+        mMoveBefore = {};
+
+        InvalidateViewModels();
+    }
     void XJEditorSceneController::SetScene(XJScene* scene)
     {
         if (mScene != scene)
+        {
             ++mSceneRevision;
+            CancelMovePreview();
+        }
+        
         mScene = scene;
     }
 
@@ -127,6 +285,8 @@ namespace XJ
     }
     bool XJEditorSceneController::OpenSceneAsset(XJEditorUIState& uiState, const std::filesystem::path& scenePath, XJAssetHandle sceneHandle)
     {
+        CancelMovePreview();
+
         if (!mScene || !mAssetRegistry)
             return false;
         //读取场景
@@ -202,6 +362,9 @@ namespace XJ
 
     bool XJEditorSceneController::SaveCurrentScene()
     {
+        if (mMovePreviewActive)
+            return false;
+
         if (!mScene)
             return false;
 
@@ -246,6 +409,13 @@ namespace XJ
             mPublishedSelectedAsset = uiState.Selection.SelectedAsset;
             return;
         }
+
+        if (mMovePreviewActive)
+        {
+            ResetSceneRequestState(uiState);
+            return;
+        }
+
     
         if (sceneChanged)
         {
@@ -389,6 +559,8 @@ namespace XJ
 
     bool XJEditorSceneController::Undo(XJEditorUIState& uiState)
     {
+        CancelMovePreview();
+
         if (!CanUndo())
             return false;
 
@@ -417,6 +589,8 @@ namespace XJ
 
     bool XJEditorSceneController::Redo(XJEditorUIState& uiState)
     {
+        CancelMovePreview();
+
         if (!CanRedo())
             return false;
 
@@ -444,6 +618,7 @@ namespace XJ
 
     void XJEditorSceneController::ClearHistory()
     {
+        CancelMovePreview();
         mUndoStack.clear();
         mRedoStack.clear();
     }
@@ -452,6 +627,9 @@ namespace XJ
         XJEditorUIState& uiState,
         const std::function<bool()>& action)
     {
+        if (mMovePreviewActive)
+            return false;
+
         if (!mScene || !action)
             return false;
 

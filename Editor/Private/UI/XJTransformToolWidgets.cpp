@@ -13,7 +13,7 @@ namespace XJ
 
         ImGui::PushID("TransformTools");
 
-        ImGui::BeginDisabled(!view.CanChangeSpace);
+        ImGui::BeginDisabled(!view.CanChangeSpace || state.GizmoInteraction.Dragging);
 
         const char* label = isLocal
             ? "Local##TransformSpace"
@@ -34,6 +34,13 @@ namespace XJ
         if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
         {
             ImGui::BeginTooltip();
+
+            if (state.GizmoInteraction.Dragging)
+            {
+                ImGui::TextUnformatted(
+                    "Release or cancel the Gizmo drag "
+                    "before changing coordinate space.");
+            }
 
             if (!view.CanChangeSpace)
             {

@@ -14,7 +14,7 @@
 
 XJEngine 是一个基于 Vulkan 和 EnTT 的实验性 C++20 游戏引擎与编辑器，包含 Schema 驱动的材质管线、资产与场景持久化、内置脚本语言和 ImGui 编辑器。
 
-**当前构建路径面向 Windows。** SDK 配置与运行时 DLL 处理依赖 Windows Vulkan SDK 目录布局，Linux 和 macOS 尚不能直接按现有流程构建。Transform Gizmo 目前**仅用于可视化**，尚不是可拖拽的编辑工具。
+**当前构建路径面向 Windows。** SDK 配置与运行时 DLL 处理依赖 Windows Vulkan SDK 目录布局，Linux 和 macOS 尚不能直接按现有流程构建。Transform Gizmo 已支持**手柄拾取、悬停高亮和单轴移动拖拽**，旋转与缩放拖拽尚未实现。
 
 ## 目录
 
@@ -43,7 +43,7 @@ XJEngine 是一个基于 Vulkan 和 EnTT 的实验性 C++20 游戏引擎与编�
 | **内置脚本** | `.xjs` 词法/语法/编译管线、字节码验证、执行限制、带类型的值、宿主服务、ECS 生命周期与运行时槽同步 |
 | **编辑器面板** | Hierarchy、Inspector、Content Browser、Console、Scene/Game Preview、Docking 与独立 ImGui 窗口 |
 | **Local/World 编辑** | Scene 工具栏坐标空间切换、Inspector 数值编辑、拒绝反馈、基于快照的 Undo/Redo |
-| **Transform Gizmo 可视化** | 三轴移动箭头、旋转环和缩放方块，支持 Local/World 朝向与近似固定屏幕尺寸；尚无手柄交互 |
+| **Transform Gizmo 交互** | 九部件 Local/World Gizmo、近似固定屏幕尺寸、手柄拾取、悬停/活动高亮，以及可提交/取消的单轴移动拖拽；旋转与缩放手柄暂不可编辑 |
 | **Scene 辅助显示** | 自适应世界网格、灯光线框、AABB + 三角形拾取、以命中表面点为轨道旋转中心 |
 | **Play 模式** | 运行时场景克隆、Play/Pause/Resume/Stop、运行时检查与脚本槽修改，不直接编辑源场景 |
 | **诊断** | 基于 spdlog 的 Console、视口性能快照、帧历史与材质上传统计 |
@@ -132,13 +132,13 @@ Windows 下用户 UI 状态跟随可执行文件目录，不依赖启动工作�
 
 ### Local/World 变换编辑
 
-- 点击 Scene 工具栏的 **Local/World** 按钮切换 Inspector 坐标空间。仅 Edit 模式允许切换，不修改场景数据，也不产生 Undo。
+- 点击 Scene 工具栏的 **Local/World** 按钮切换 Inspector 坐标空间与 Gizmo 朝向。仅 Edit 模式允许切换，Gizmo 拖动期间禁用；切换不修改场景数据，也不产生 Undo。
 - Transform 快照使用双精度，按字段提交请求，保留未编辑的本地分量。
 - 世界旋转使用归一化四元数独立于缩放合成。世界缩放是非负的**有损缩放**（世界矩阵轴长），不是带符号的本地缩放；世界缩放编辑保留本地反射符号。
 - Service 先在临时候选对象上验证，再应用编辑。拒绝时显示对应实体/空间的原因，不修改场景、dirty 标记或 Undo/Redo 历史；无变化编辑同样不创建历史。
 - 组件复制粘贴始终使用 **Local TRS**。Play/Pause 运行时检查中的 Transform 仍只读。
 
-### Transform Gizmo 可视化
+### Transform Gizmo 交互
 
 在可编辑场景中选中具有有效 Transform 的实体后，**Scene Preview** 显示统一的九部件 Gizmo：
 
@@ -148,7 +148,16 @@ Windows 下用户 UI 状态跟随可执行文件目录，不依赖启动工作�
 - 使用无光照纯色、双面三角形，不启用深度测试或深度写入，因此不会被场景几何体遮挡。
 - Play/Pause、只读/运行时检查、无效选择或缺少 Transform 时隐藏；帧/投影输入无效时跳过绘制。Game Preview 不挂载该通道。
 
-**目前仅用于可视化。** 尚无手柄命中检测、悬停选择、拖拽编辑或 Move/Rotate/Scale 操作切换。视口点击仍执行实体拾取，请通过 Inspector 数值编辑变换。
+移动选中实体的操作：
+
+1. 选择 **Local** 或 **World**，将鼠标悬停在手柄上，对应部件变为**黄色**。
+2. 在移动箭头上按住**鼠标左键**，沿对应轴拖动，活动手柄变为**橙色**。开始时不要按住 Alt 或鼠标右键/中键，以免与相机手势冲突。
+3. 松开左键提交。整次拖动仅在最终本地位置确实变化时产生**一条 Undo** 并标记场景 dirty；中间预览只刷新 UI，不写入历史或修改 dirty，无变化操作也不创建历史。
+4. 按 **Escape** 取消，恢复原本地位置，不新增历史或改变 dirty 标记。应用失焦、弹窗、指针/图像/按钮状态无效、选择/设置失配、相机或图像区域变化也会取消；切换/卸载场景和进入 Play 前同样先取消交互。
+
+- 拖动冻结开始时的相机/投影、移动轴和拖动平面，每次从初始位置计算目标，不累积位移误差。移动轴几乎正对相机时拒绝启动，请按提示调整视角；临时射线-平面求交失败时保持最后有效位置。
+- Gizmo 占用输入时阻止场景选择、相机控制和视口资产拖放；占用手势期间产生的普通场景/资产/空间切换请求直接丢弃，不积压到松开后执行，保存也不会持久化未提交的预览。
+- 旋转环与缩放方块可以拾取和高亮，点击会被消费，不会穿透选择后方几何体，但**不会修改旋转或缩放**，这些编辑仍需使用 Inspector 数值。吸附、平面/自由移动和 Move/Rotate/Scale 操作切换尚未实现。
 
 ### 世界网格与视口显示
 
@@ -200,7 +209,8 @@ File -> Scanner / Importer -> Asset (CPU) -> Factory -> Render Resource (GPU)
 - glTF 2.0 导入将三角形 primitive 合并进共享缓冲，保留逐 primitive 索引范围、材质槽和包围盒，跳过不支持的非三角形模式；Mesh 保留 CPU 顶点位置/索引用于拾取。
 - `XJJsonIO` 提供共享 JSON 读取与原子写入；场景序列化器和实例化器负责 `.xjscene` 资产与 ECS 层级之间的转换。
 - `Src/main.cpp` 创建 `XJEditorApplication`；`XJEditorRuntime` 管理工作区、Play Controller、视口系统、帧渲染、输入绑定与 UI Host。
-- View 读取 ViewModel 并提交请求，Controller/Service 应用修改；`XJEditorTransformToolsController` 发布空间设置与 `XJEditorTransformGizmoViewModel`，Gizmo 渲染系统只消费显示快照。
+- View 读取 ViewModel 并提交请求/输入快照，Controller/Service 应用修改；`XJEditorTransformToolsController` 发布空间设置与 `XJEditorTransformGizmoViewModel`，Gizmo 渲染系统消费显示快照，并发布实际绘制的 `XJGizmoRenderedFrame` 供交互使用。
+- `XJGizmoInteractionController` 在使用绘制帧前验证 epoch、实体、空间和设置修订号；CPU 拾取按绘制倒序检测双面三角形，精确命中优先，并以邻近像素采样辅助细手柄命中。单轴目标经 Scene Controller/Service 的带校验 World Position 预览事务应用，每次拖动统一提交或回滚。
 - `XJViewportRenderSurface` 管理离屏渲染目标与 resize 时的延迟描述符释放；`XJEditorLog` 将 spdlog 桥接为按修订号更新的 Console 快照，并裁剪单行日志绘制范围。
 
 ### 内置脚本
@@ -224,7 +234,7 @@ XJEngine/
 ├── Editor/                  # ImGui 编辑器与 MVVM 应用服务
 │   ├── Public/Controllers/  # 场景、资产、相机、变换与显示控制器
 │   ├── Public/Services/     # 场景/资产/显示服务
-│   ├── Public/Tools/        # 变换类型、网格布局与 Gizmo 几何
+│   ├── Public/Tools/        # 变换类型、网格布局、Gizmo 几何与交互数学
 │   ├── Public/UI/           # ViewModel、请求、面板与视口
 │   └── Private/             # Controller、Service、UI 与编辑器渲染系统
 ├── Platform/                # Vulkan、GLFW、事件与平台封装
@@ -320,9 +330,10 @@ ctest --test-dir build -C Release --output-on-failure
 - 四元数/TRS 数学、父级继承、失败写入原子性、相机控制/只读查询、世界空间灯光/拾取/包围盒与场景 v2/v3 → v4 迁移。
 - Local/World 验收行为、字段隔离、反射/有损缩放、拒绝反馈与 Undo/Redo 保留。
 - 材质上传状态和视口请求、能力与统计。
-- 无需 GPU 的世界网格布局、Transform Gizmo 几何与帧计算。`XJTransformGizmoGeometryTests` 验证九个唯一手柄、有限且非退化的三角形列表、几何边界、透视尺寸调整与无效视口高度。
+- 无需 GPU 的世界网格布局、Transform Gizmo 几何与帧计算：九个唯一手柄、有限且非退化的三角形列表、几何边界、透视尺寸调整与无效视口高度。
+- `XJTransformGizmoGeometryTests` 还验证 X 轴手柄拾取、无效帧拒绝与单轴移动数学：沿 X 轴移动、重复计算不累积、正对视线轴拒绝，以及旋转后的 Local X 跟随其世界方向。
 
-这些测试不能替代手动 Vulkan 验证或视口视觉检查。
+这些测试不能替代手动 Vulkan 验证或视口视觉检查。Gizmo 预览事务、输入占用和取消/生命周期流程仍需手动集成检查；新增交互测试覆盖拾取与移动数学，并非上述端到端行为。
 
 ## 性能与诊断
 
@@ -333,7 +344,7 @@ ctest --test-dir build -C Release --output-on-failure
 
 ## 当前限制
 
-- Transform Gizmo 尚不支持拾取、拖动、吸附或操作切换。
+- Transform Gizmo 拖动仅支持单轴移动；旋转/缩放手柄仅支持拾取与高亮，旋转/缩放拖动、平面/自由移动、吸附和操作切换尚未实现。移动轴接近正对视线时需要调整视角。
 - 仅实现 Final 视口渲染，诊断渲染模式尚不可用。
 - Windows SDK/DLL 构建流程仍需针对 Linux/macOS 适配。
 - Lit 为基础前向光照；完整 PBR、阴影、后处理和骨骼动画尚未实现。
@@ -348,7 +359,8 @@ ctest --test-dir build -C Release --output-on-failure
 - [x] 带验证的脚本管线、宿主服务与运行时槽同步
 - [x] 统一四元数变换、场景 v4 迁移与 Local/World 数值编辑
 - [x] 自适应世界网格与 Transform Gizmo 可视化
-- [ ] Gizmo 手柄拾取、拖拽操作与编辑约束
+- [x] Gizmo 手柄拾取/高亮与可提交/取消的 Local/World 单轴移动拖拽
+- [ ] Gizmo 旋转/缩放拖拽、平面/自由移动、吸附与操作切换
 - [ ] 更多视口渲染模式
 - [ ] PBR、阴影与后处理
 - [ ] 动画与更广泛的核心/渲染集成测试

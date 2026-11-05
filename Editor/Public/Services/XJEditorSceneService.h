@@ -78,6 +78,9 @@ namespace XJ
             static bool SetMeshRendererMaterial(XJScene& scene, XJEditorEntityId entityId, uint32_t slotIndex, XJAssetHandle materialAsset, XJAssetRegistry& assetRegistry, XJSceneInstantiateContext& instantiateContext, const std::shared_ptr<XJTexture>& defaultTexture, const std::shared_ptr<XJSampler>& defaultSampler);//设置材质
             static bool ResetMeshRendererMaterialToDefault(XJScene& scene, XJEditorEntityId entityId, uint32_t slotIndex, XJAssetRegistry& assetRegistry, XJSceneInstantiateContext& instantiateContext, const std::shared_ptr<XJTexture>& defaultTexture, const std::shared_ptr<XJSampler>& defaultSampler);//重载材质
 
+            static bool ReadMovePosition(XJScene& scene, XJEditorEntityId entityId, glm::vec3& localPosition, glm::dvec3& worldPosition);//读取移动位置
+            static bool RestoreMovePosition(XJScene& scene, XJEditorEntityId entityId, const glm::vec3& localPosition);//恢复移动位置
+
             static XJEditorTransformGizmoViewModel BuildTransformGizmoView(XJScene& scene, XJEditorEntityId entityId, XJEditorTransformSpace space);//构建变换控件视图模型
 
             static bool SetMaterialParameter(//设置材质参数

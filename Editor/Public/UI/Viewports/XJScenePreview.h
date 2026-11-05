@@ -69,13 +69,15 @@ namespace XJ
 
             bool ShouldControlCamera() const
             {
-                return mHovered || mFocused;
+               return !IsGizmoCapturingInput() && (mHovered || mFocused);
             }
 
             void BindUIState(XJEditorUIState* state)
             {
                 mUIState = state;
             }
+
+            bool IsGizmoCapturingInput() const;
 
         private:
             friend class XJEditorViewportSystem;
@@ -88,6 +90,11 @@ namespace XJ
             EntityPickCallback mEntityPickCallback;
             // 非拥有指针；生命周期由 Workspace/ViewportSystem 协调。
             XJEditorUIState* mUIState = nullptr;
+
+            void SubmitGizmoPointer(const ImVec2& imageMin, const ImVec2& imageSize);
+
+            bool mGizmoMouseCaptured = false;
+            bool mBlockSceneSelection = false;
 
         protected:
             ImTextureID GetViewportTextureID() const override;

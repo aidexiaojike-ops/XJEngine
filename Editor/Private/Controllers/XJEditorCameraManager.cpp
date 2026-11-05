@@ -125,6 +125,9 @@ namespace XJ
     {
         if (!mScenePreview || !mScenePreview->IsHovered())
             return;
+        
+        if (mScenePreview->IsGizmoCapturingInput())
+            return;
 
         if (!mCameraController)
             return;

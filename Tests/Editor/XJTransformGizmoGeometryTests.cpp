@@ -1,4 +1,5 @@
 #include "Tools/XJTransformGizmoGeometry.h"
+#include "Tools/XJTransformGizmoInteractionMath.h"
 
 #include <glm/ext/matrix_clip_space.hpp>
 #include <glm/ext/matrix_transform.hpp>
@@ -19,6 +20,191 @@ namespace
             spdlog::error("FAILED: {}", message);
             std::exit(EXIT_FAILURE);
         }
+    }
+
+    glm::mat4 MakeProjection()
+    {
+        glm::mat4 projection =
+            glm::perspectiveRH_ZO(
+                glm::radians(60.0f),
+                1280.0f / 720.0f,
+                0.1f,
+                1000.0f);
+
+        projection[1][1] *= -1.0f;
+
+        return projection;
+    }
+
+    void TestMoveConstraint()
+    {
+        using namespace XJ;
+
+        XJGizmoRenderedFrame rendered;
+        rendered.Valid = true;
+
+        rendered.Width = 1280;
+        rendered.Height = 720;
+
+        rendered.View =
+            glm::lookAtRH(
+                glm::vec3(0.0f, 0.0f, 5.0f),
+                glm::vec3(0.0f),
+                glm::vec3(0.0f, 1.0f, 0.0f));
+
+        rendered.Projection = MakeProjection();
+
+        rendered.WorldPosition = glm::dvec3(0.0);
+        rendered.Orientation =
+            glm::dquat(1.0, 0.0, 0.0, 0.0);
+
+        const auto frame =
+            BuildTransformGizmoFrame(
+                rendered.WorldPosition,
+                rendered.Orientation,
+                rendered.View,
+                rendered.Projection,
+                rendered.Width,
+                rendered.Height);
+
+        Check(frame.Valid, "Move test frame is valid");
+
+        rendered.Model = frame.Model;
+
+        XJGizmoMoveConstraint constraint;
+
+        Check(
+            BeginGizmoMoveConstraint(
+                rendered,
+                XJTransformGizmoHandle::MoveX,
+                glm::dvec2(0.5, 0.5),
+                constraint),
+            "Begin X move constraint");
+
+        glm::dvec3 target;
+
+        Check(
+            CalculateGizmoMoveTarget(
+                constraint,
+                glm::dvec2(0.6, 0.5),
+                target),
+            "Calculate X move target");
+
+        Check(target.x > 0.0, "Dragging right moves positive X");
+
+        Check(
+            std::abs(target.y) < 1.0e-8 &&
+            std::abs(target.z) < 1.0e-8,
+            "Move stays on X axis");
+
+        const glm::dvec3 firstTarget = target;
+
+        Check(
+            CalculateGizmoMoveTarget(
+                constraint,
+                glm::dvec2(0.6, 0.5),
+                target),
+            "Repeat target calculation");
+
+        Check(
+            glm::length(target - firstTarget) < 1.0e-10,
+            "Repeated calculation does not accumulate movement");
+
+        Check(
+            !BeginGizmoMoveConstraint(
+                rendered,
+                XJTransformGizmoHandle::MoveZ,
+                glm::dvec2(0.5, 0.5),
+                constraint),
+            "Reject axis facing directly at camera");
+
+        // 将 Gizmo 局部 X 旋转到世界 Y。
+        rendered.Orientation =
+            glm::angleAxis(
+                glm::radians(90.0),
+                glm::dvec3(0.0, 0.0, 1.0));
+
+        Check(
+            BeginGizmoMoveConstraint(
+                rendered,
+                XJTransformGizmoHandle::MoveX,
+                glm::dvec2(0.5, 0.5),
+                constraint),
+            "Begin rotated local X constraint");
+
+        Check(
+            CalculateGizmoMoveTarget(
+                constraint,
+                glm::dvec2(0.5, 0.4),
+                target),
+            "Calculate rotated local X move");
+
+        Check(
+            std::abs(target.x) < 1.0e-8 &&
+            target.y > 0.0 &&
+            std::abs(target.z) < 1.0e-8,
+            "Local X follows world orientation");
+    }
+
+    void TestGizmoPicking()
+    {
+        using namespace XJ;
+
+        XJGizmoRenderedFrame rendered;
+        rendered.Valid = true;
+
+        rendered.Width = 1280;
+        rendered.Height = 720;
+
+        rendered.View =
+            glm::lookAtRH(
+                glm::vec3(0.0f, 0.0f, 5.0f),
+                glm::vec3(0.0f),
+                glm::vec3(0.0f, 1.0f, 0.0f));
+
+        rendered.Projection = MakeProjection();
+
+        const auto frame =
+            BuildTransformGizmoFrame(
+                glm::dvec3(0.0),
+                glm::dquat(1.0, 0.0, 0.0, 0.0),
+                rendered.View,
+                rendered.Projection,
+                1280,
+                720);
+
+        Check(frame.Valid, "Pick test frame is valid");
+
+        rendered.Model = frame.Model;
+
+        // 位于 X 移动轴杆内部，避开圆环和缩放方块。
+        const glm::vec4 clip =
+            rendered.Projection *
+            rendered.View *
+            rendered.Model *
+            glm::vec4(0.5f, 0.0f, 0.0f, 1.0f);
+
+        const glm::dvec2 uv =
+            glm::dvec2(clip) / double(clip.w) * 0.5 +
+            glm::dvec2(0.5);
+
+        Check(
+            PickTransformGizmo(
+                rendered,
+                uv,
+                glm::dvec2(1280.0, 720.0)) ==
+                XJTransformGizmoHandle::MoveX,
+            "Pick X movement shaft");
+
+        rendered.Valid = false;
+
+        Check(
+            PickTransformGizmo(
+                rendered,
+                uv,
+                glm::dvec2(1280.0, 720.0)) ==
+                XJTransformGizmoHandle::None,
+            "Invalid frame cannot be picked");
     }
 
     void TestGeometry()
@@ -98,20 +284,6 @@ namespace
             "Scale handle axis");
     }
 
-    glm::mat4 MakeProjection()
-    {
-        glm::mat4 projection =
-            glm::perspectiveRH_ZO(
-                glm::radians(60.0f),
-                1280.0f / 720.0f,
-                0.1f,
-                1000.0f);
-
-        projection[1][1] *= -1.0f;
-
-        return projection;
-    }
-
     void TestScreenSize()
     {
         using namespace XJ;
@@ -171,6 +343,9 @@ int main()
 {
     TestGeometry();
     TestScreenSize();
+    TestMoveConstraint();
+    TestGizmoPicking();
+
 
     spdlog::info(
         "XJTransformGizmoGeometryTests passed.");

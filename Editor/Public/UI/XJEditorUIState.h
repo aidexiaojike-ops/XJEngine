@@ -13,6 +13,8 @@
 #include "UI/XJEditorTransformToolRequests.h"
 #include "UI/XJEditorTransformGizmoViewModel.h"
 
+#include "Tools/XJTransformGizmoInteractionTypes.h"
+
 #include <filesystem>
 #include <vector>
 #include <string>
@@ -92,6 +94,12 @@ namespace XJ
         std::vector<XJEditorTransformToolRequest> TransformToolRequests;
         XJEditorTransformEditFeedback TransformEditFeedback;// 变换编辑反馈
         XJEditorTransformGizmoViewModel TransformGizmo;// 变换控件视图模型
+        //移动UI控制器
+        uint64_t GizmoEpoch = 1;
+        XJGizmoRenderedFrame GizmoRendered;
+        XJGizmoPointerInput GizmoPointer;
+        XJGizmoInteractionViewModel GizmoInteraction;
+
         // ---------- 面板可见性控制 ----------
         bool ShowContentBrowser = true;
         bool ShowHierarchy = true;

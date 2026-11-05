@@ -79,6 +79,7 @@ namespace XJ
             void SetRuntimeScene(XJScene* scene);// 设置运行时场景指针
             XJScene* GetRuntimeScene() const;// 获取运行时场景指针
 
+            void CancelTransformInteraction();//取消交变化
         private:
             class Impl;
             std::unique_ptr<Impl> mImpl;

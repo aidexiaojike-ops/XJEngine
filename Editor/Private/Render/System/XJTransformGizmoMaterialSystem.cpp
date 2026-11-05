@@ -26,7 +26,7 @@ namespace XJ
         static_assert(offsetof(GizmoPushConstants, Color) == 64);
     }
 
-    XJTransformGizmoMaterialSystem::XJTransformGizmoMaterialSystem(const XJEditorUIState* state) : mState(state)
+    XJTransformGizmoMaterialSystem::XJTransformGizmoMaterialSystem(XJEditorUIState* state) : mState(state)
     {
     }
 
@@ -140,6 +140,9 @@ namespace XJ
         XJVulkanCommandBuffer cmdBuffer,
         XJRenderTarget* renderTarget)
     {
+        if (mState)
+            mState->GizmoRendered = {};
+
         if (!mState ||
             !renderTarget ||
             !mPipeline ||
@@ -206,6 +209,28 @@ namespace XJ
 
         if (!frame.Valid)
             return;
+        //渲染transform UI
+        auto& rendered = mState->GizmoRendered;
+
+        rendered.Valid = true;
+
+        rendered.Epoch = mState->GizmoEpoch;
+        rendered.EntityId = gizmo.EntityId;
+
+        rendered.SettingsRevision =
+            mState->TransformTools.SettingsRevision;
+
+        rendered.Space = gizmo.Space;
+
+        rendered.Width = width;
+        rendered.Height = height;
+
+        rendered.View = view;
+        rendered.Projection = projection;
+        rendered.Model = frame.Model;
+
+        rendered.WorldPosition = gizmo.WorldPosition;
+        rendered.Orientation = gizmo.Orientation;
 
         mPipeline->BindPipeline(cmdBuffer);
 
@@ -233,9 +258,26 @@ namespace XJ
             if (!part.Mesh || !part.Mesh->IsValid())
                 continue;
 
-            push.Color =
-                GetGizmoAxisColor(
-                    GetGizmoAxis(part.Handle));
+            const auto& interaction = mState->GizmoInteraction;
+
+            if (part.Handle == interaction.Active)
+            {
+                push.Color = {
+                    1.0f, 0.60f, 0.08f, 1.0f
+                };
+            }
+            else if (part.Handle == interaction.Hovered)
+            {
+                push.Color = {
+                    1.0f, 0.92f, 0.20f, 1.0f
+                };
+            }
+            else
+            {
+                push.Color =
+                    GetGizmoAxisColor(
+                        GetGizmoAxis(part.Handle));
+            }
 
             vkCmdPushConstants(
                 cmdBuffer,

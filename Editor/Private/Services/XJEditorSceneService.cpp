@@ -559,6 +559,37 @@ namespace XJ
     
     }
 
+
+    bool XJEditorSceneService::ReadMovePosition(XJScene& scene, XJEditorEntityId entityId, glm::vec3& localPosition, glm::dvec3& worldPosition)
+    {
+        auto* entity = FindEntityById(scene, entityId);
+        if(!entity || !entity->HasComponent<XJTransformComponent>())
+            return false;
+
+        const auto& transform = entity->GetComponent<XJTransformComponent>();
+
+        glm::dvec3 position;
+
+        if (transform.ReadWorldPosition(position) != XJTransformStatus::Success)
+            return false;
+        
+
+        localPosition = transform.GetLocalPosition();
+        worldPosition = position;
+
+        return true;
+    }
+
+    bool XJEditorSceneService::RestoreMovePosition(XJScene& scene, XJEditorEntityId entityId, const glm::vec3& localPosition)
+    {
+        auto* entity = FindEntityById(scene, entityId);
+
+        if (!entity || !entity->HasComponent<XJTransformComponent>())
+            return false;
+        
+        return entity->GetComponent<XJTransformComponent>().SetLocalPosition(glm::dvec3(localPosition)) == XJTransformStatus::Success;
+    }
+
     void XJEditorSceneService::InvalidateMaterialInspectorCache(XJAssetHandle materialHandle)
     {
         InvalidateMaterialInspectorCacheEntry(materialHandle);

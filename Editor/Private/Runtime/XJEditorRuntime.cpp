@@ -221,6 +221,7 @@ namespace XJ
                     return true;
                 }
 
+                Workspace->CancelTransformInteraction();
                 XJAssetRegistry* registry = Workspace->GetUIState().AssetRegistry;
                 if (!registry || !PlayController->Start(
                         *Scene,

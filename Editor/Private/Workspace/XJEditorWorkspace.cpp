@@ -6,6 +6,7 @@
 #include "Controllers/XJEditorSceneController.h"
 #include "Controllers/XJEditorSceneAssetDropController.h"
 #include "Controllers/XJEditorTransformToolsController.h"
+#include "Controllers/XJGizmoInteractionController.h"
 #include "UI/XJEditorDragPayload.h"
 #include "UI/XJEditorUIState.h"
 #include "ECS/XJScene.h"
@@ -56,6 +57,8 @@ namespace XJ
             XJAssetHandle DefaultSceneHandle = 0;
             XJAssetHandle InitialSceneMeshHandle = 0;
             XJAssetHandle DefaultComponentMeshHandle = 0;
+
+            XJGizmoInteractionController GizmoInteractionController;
     };
 
     XJEditorWorkspace::XJEditorWorkspace()
@@ -66,6 +69,16 @@ namespace XJ
     XJEditorWorkspace::~XJEditorWorkspace()
     {
         Shutdown();
+    }
+
+    void XJEditorWorkspace::CancelTransformInteraction()
+    {
+        if (!mImpl)
+            return;
+    
+        mImpl->GizmoInteractionController.Cancel(
+            mImpl->UIState,
+            mImpl->SceneController);
     }
 
     void XJEditorWorkspace::SetRuntimeScene(XJScene* scene)
@@ -211,7 +224,8 @@ namespace XJ
         if (scene && scene != mImpl->Scene)
             return;
 
-        SetRuntimeScene(nullptr);
+        SetRuntimeScene(nullptr); 
+        CancelTransformInteraction();
 
         mImpl->AssetController.SetScene(nullptr);
         mImpl->SceneController.SetScene(nullptr);
@@ -232,16 +246,25 @@ namespace XJ
 
     void XJEditorWorkspace::Update()
     {
+        if (mImpl->UIState.GizmoInteraction.Dragging)
+        {
+           mImpl->UIState.TransformToolRequests.clear();
+        }
+
         mImpl->UIState.TransformGizmo = {};
         //是否处于编辑模式下
         const bool canChangeTransformSpace = mImpl->Initialized && mImpl->Scene != nullptr && mImpl->Mode == XJEditorWorkspaceMode::Edit;
         mImpl->TransformToolsController.ProcessRequests(mImpl->UIState, canChangeTransformSpace);
 
-        if (!mImpl->Initialized || !mImpl->Scene)
+        if (!mImpl->Initialized || !mImpl->Scene)//拖动期间不处理 Local/World 切换
+        {
+            CancelTransformInteraction();
             return;
+        }
 
         if (mImpl->Mode != XJEditorWorkspaceMode::Edit)
         {
+            CancelTransformInteraction();
             auto& state = mImpl->UIState;
             // EditorScene 请求在 Play 中不能执行。
             // 只读期间丢弃请求，防止 Stop 后一次性执行 Play 期间积压的编辑操作。
@@ -319,17 +342,30 @@ namespace XJ
            mImpl->UIState.TransformEditFeedback = {};
            mImpl->UIState.TransformGizmo = {};
 
+           CancelTransformInteraction();
+
            mImpl->SceneController.OpenSceneAsset(
                mImpl->UIState,
                scenePath,
                sceneHandle);
         }
 
-        mImpl->AssetController.ProcessRequests(
-            mImpl->UIState);
+        const bool gizmoOwnedFrame =
+            mImpl->GizmoInteractionController.Process(
+                mImpl->UIState,
+                mImpl->SceneController);        
 
-        mImpl->SceneController.ProcessRequests(
-            mImpl->UIState);
+        if (gizmoOwnedFrame)
+        {
+            // 丢弃拖动期间产生的普通修改请求。
+            // 不积压到松开之后执行。
+            mImpl->UIState.SceneRequests = {};
+            mImpl->UIState.AssetRequests = {};
+            mImpl->UIState.TransformToolRequests.clear();
+        }
+
+        mImpl->AssetController.ProcessRequests(mImpl->UIState);
+        mImpl->SceneController.ProcessRequests(mImpl->UIState);
 
         // 所有请求完成后统一创建一次 UI 快照。
         mImpl->SceneController.RefreshViewModels(
@@ -467,6 +503,10 @@ namespace XJ
     }
     bool XJEditorWorkspace::HandleSceneAssetDrop(const XJAssetDragPayload& payload)
     {
+
+        if (mImpl->UIState.GizmoInteraction.Dragging)
+            return false;
+
         if (!mImpl->Initialized || !mImpl->Scene || !mImpl->DefaultTexture || !mImpl->DefaultSampler || !CanMutateScene())
         {
             return false;
@@ -496,6 +536,9 @@ namespace XJ
         const glm::vec3& rayDirection,
         float maxDistance)
     {
+        if (mImpl->UIState.GizmoInteraction.Dragging)
+            return;
+
         if (!mImpl->Initialized || !mImpl->Scene)
             return;
 

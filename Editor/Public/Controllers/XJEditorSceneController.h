@@ -105,6 +105,17 @@ namespace XJ
             {
                 mPublishedRevision = 0;
             }
+            //==========================================================
+            //移动坐标UI
+            //==========================================================
+            bool BeginMovePreview(XJEditorUIState& state, XJEditorEntityId entityId, const glm::dvec3& expectedWorldPosition);
+            bool PreviewMovePosition(XJEditorUIState& state, const glm::dvec3& worldPosition);//预览移动位置
+            bool EndMovePreview(XJEditorUIState& state, bool commit);
+            void CancelMovePreview();
+            bool IsMovePreviewActive() const
+            {
+                return mMovePreviewActive;
+            }
         
         private:
             struct MaterialHistorySnapshot
@@ -124,6 +135,12 @@ namespace XJ
             SceneHistorySnapshot CaptureHistorySnapshot(
                 const XJEditorUIState& uiState,
                 const std::vector<XJAssetHandle>& materialHandles = {}) const;
+
+            bool mMovePreviewActive = false;
+            XJEditorEntityId mMovePreviewEntity = XJ_INVALID_EDITOR_ENTITY_ID;
+            glm::vec3 mMoveOriginalLocalPosition{0.0f};
+            SceneHistorySnapshot mMoveBefore;
+
             bool RestoreHistorySnapshot(const SceneHistorySnapshot& snapshot, XJEditorUIState& uiState);
             void PushUndoSnapshot(SceneHistorySnapshot snapshot);
 

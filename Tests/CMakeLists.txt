@@ -416,6 +416,7 @@ add_test(
 add_executable(XJTransformGizmoGeometryTests
     ${CMAKE_CURRENT_SOURCE_DIR}/Editor/XJTransformGizmoGeometryTests.cpp
     ${PROJECT_SOURCE_DIR}/Editor/Private/Tools/XJTransformGizmoGeometry.cpp
+    ${PROJECT_SOURCE_DIR}/Editor/Private/Tools/XJTransformGizmoInteractionMath.cpp
 )
 
 target_include_directories(XJTransformGizmoGeometryTests

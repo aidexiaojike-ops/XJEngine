@@ -494,7 +494,7 @@ namespace XJ
             return XJTransformStatus::Success;
         }
 
-        XJTransformStatus XJTransformComponent::ReadWorldPosition(
+        XJTransformStatus XJTransformComponent::ReadWorldPosition(//读取世界位置
             glm::dvec3& outPosition) const
         {
             XJTransformWorldState state;
