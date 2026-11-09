@@ -1726,4 +1726,194 @@ namespace XJ
         return true;
 
     }
+
+
+    bool XJEditorSceneService::ReadGizmoTransform(XJScene& scene, XJEditorEntityId entityId, XJGizmoTransformSnapshot& snapshot)
+    {
+        auto* entity = FindEntityById(scene, entityId);
+
+        if (!entity || !entity->IsValid() || !entity->HasComponent<XJTransformComponent>())
+            return false;
+        
+
+        const auto& transform = entity->GetComponent<XJTransformComponent>();
+
+        XJGizmoTransformSnapshot candidate;
+
+        candidate.EntityId = entityId;
+        candidate.StructureRevision = scene.GetStructureRevision();
+
+        candidate.LocalPosition = transform.GetLocalPosition();
+        candidate.LocalRotation = transform.GetLocalRotation();
+        candidate.LocalScale = transform.GetLocalScale();
+
+        if (transform.ReadWorldPosition(
+                candidate.WorldPosition) !=
+                XJTransformStatus::Success ||
+            transform.ReadWorldRotation(
+                candidate.WorldRotation) !=
+                XJTransformStatus::Success ||
+            transform.ReadLossyWorldScale(
+                candidate.WorldScale) !=
+                XJTransformStatus::Success)
+        {
+            return false;
+        }
+
+        auto* parent = entity->XJGetParent();
+
+        candidate.ParentId = parent ? static_cast<uint64_t>(parent->XJGetUUID()) : 0;
+
+        // 最近一个带 Transform 的祖先，
+        // 其 WorldState 已包含更上层的全部变换。
+        for (auto* node = parent;
+             node;
+             node = node->XJGetParent())
+        {
+            auto* ancestor =
+                dynamic_cast<XJEntity*>(node);
+
+            if (!ancestor)
+                continue;
+
+            if (!ancestor->IsValid())
+                return false;
+
+            if (!ancestor->HasComponent<XJTransformComponent>())
+                continue;
+
+            XJTransformWorldState parentState;
+
+            if (ancestor->GetComponent<XJTransformComponent>()
+                    .EvaluateWorld(parentState) !=
+                XJTransformStatus::Success)
+            {
+                return false;
+            }
+
+            candidate.ParentMatrix = parentState.Matrix;
+            candidate.ParentRotation = parentState.Rotation;
+
+            break;
+        }
+
+        snapshot = candidate;
+        return true;
+    }
+
+    bool XJEditorSceneService::RestoreGizmoTransform(XJScene& scene, const XJGizmoTransformSnapshot& snapshot)
+    {
+        auto* entity = FindEntityById(scene, snapshot.EntityId);
+
+        if (!entity || !entity->IsValid() || !entity->HasComponent<XJTransformComponent>())
+            return false;
+    
+        return
+            entity->GetComponent<XJTransformComponent>()
+                .SetLocalTRS(
+                    glm::dvec3(snapshot.LocalPosition),
+                    glm::dquat(snapshot.LocalRotation),
+                    glm::dvec3(snapshot.LocalScale)) ==
+            XJTransformStatus::Success;
+    }
+
+    XJEditorTransformEditResult XJEditorSceneService::ApplyGizmoPreview(XJScene& scene, XJEditorEntityId entityId, const XJGizmoPreviewValue& value)
+    {
+        using Outcome = XJEditorTransformEditOutcome;
+        using Operation = XJTransformGizmoOperation;
+        using Space = XJEditorTransformSpace;
+
+        if (!IsValidTransformSpace(value.Space))
+        {
+            return {
+                Outcome::Rejected,
+                "Invalid Gizmo coordinate space."
+            };
+        }
+
+        auto* entity = FindEntityById(scene, entityId);
+
+        if (!entity || !entity->IsValid() || !entity->HasComponent<XJTransformComponent>())
+        {
+            return {
+                Outcome::Rejected,
+                "The Gizmo target has no valid Transform."
+            };
+        }
+
+        auto& transform = entity->GetComponent<XJTransformComponent>();
+        auto candidate = transform;
+
+        XJTransformStatus status =  XJTransformStatus::InvalidArgument;
+
+        switch (value.Operation)
+        {
+            case Operation::Move:
+            {
+                status =
+                    value.Space == Space::World
+                        ? candidate.TrySetWorldPosition(value.Position)
+                        : candidate.SetLocalPosition(value.Position);
+
+                break;
+            }
+
+            case Operation::Rotate:
+            {
+                // 不经过 Euler。
+                status =
+                    value.Space == Space::World
+                        ? candidate.TrySetWorldRotation(value.Rotation)
+                        : candidate.SetLocalRotation(value.Rotation);
+
+                break;
+            }
+
+            case Operation::Scale:
+            {
+                status =
+                    value.Space == Space::World
+                        ? candidate.TrySetWorldScale(value.Scale)
+                        : candidate.SetLocalScale(value.Scale);
+
+                break;
+            }
+
+            default:
+                break;
+        }
+
+        if (status != XJTransformStatus::Success)
+        {
+            return {
+                Outcome::Rejected,
+                DescribeTransformFailure(status)
+            };
+        }
+
+        if (candidate.GetLocalPosition() ==
+                transform.GetLocalPosition() &&
+            candidate.GetLocalRotation() ==
+                transform.GetLocalRotation() &&
+            candidate.GetLocalScale() ==
+                transform.GetLocalScale())
+        {
+            return {Outcome::Unchanged, {}};
+        }
+
+        status = transform.SetLocalTRS(
+            glm::dvec3(candidate.GetLocalPosition()),
+            glm::dquat(candidate.GetLocalRotation()),
+            glm::dvec3(candidate.GetLocalScale()));
+
+        if (status != XJTransformStatus::Success)
+        {
+            return {
+                Outcome::Rejected,
+                DescribeTransformFailure(status)
+            };
+        }
+
+        return {Outcome::Applied, {}};
+    }
 }

@@ -5,6 +5,7 @@
 #include "Asset/XJMaterialAsset.h"
 #include "Asset/XJSceneAsset.h"
 #include "Asset/Instantiation/XJSceneInstantiator.h"
+#include "Tools/XJTransformGizmoInteractionTypes.h"
 #include "UI/XJEditorSelection.h"
 #include "UI/XJEditorComponentTypes.h"
 
@@ -105,16 +106,19 @@ namespace XJ
             {
                 mPublishedRevision = 0;
             }
+
             //==========================================================
-            //移动坐标UI
+            //变化坐标UI  弃用
             //==========================================================
-            bool BeginMovePreview(XJEditorUIState& state, XJEditorEntityId entityId, const glm::dvec3& expectedWorldPosition);
-            bool PreviewMovePosition(XJEditorUIState& state, const glm::dvec3& worldPosition);//预览移动位置
-            bool EndMovePreview(XJEditorUIState& state, bool commit);
-            void CancelMovePreview();
-            bool IsMovePreviewActive() const
+            bool BeginTransformPreview(XJEditorUIState& state, const XJGizmoRenderedFrame& source, XJTransformGizmoHandle handle, XJGizmoTransformSnapshot& snapshot);  //开始变化的请求函数          
+            bool PreviewTransform(XJEditorUIState& state, const XJGizmoPreviewValue& value); //拖动中每帧更新         
+            bool EndTransformPreview(XJEditorUIState& state, bool commit);           
+
+            bool CancelTransformPreview();          
+
+            bool IsTransformPreviewActive() const
             {
-                return mMovePreviewActive;
+                return mTransformPreviewActive;
             }
         
         private:
@@ -136,10 +140,12 @@ namespace XJ
                 const XJEditorUIState& uiState,
                 const std::vector<XJAssetHandle>& materialHandles = {}) const;
 
-            bool mMovePreviewActive = false;
-            XJEditorEntityId mMovePreviewEntity = XJ_INVALID_EDITOR_ENTITY_ID;
-            glm::vec3 mMoveOriginalLocalPosition{0.0f};
-            SceneHistorySnapshot mMoveBefore;
+
+            bool mTransformPreviewActive = false;//开始变化
+            XJTransformGizmoOperation mTransformPreviewOperation = XJTransformGizmoOperation::None;
+            XJEditorTransformSpace mTransformPreviewSpace = XJEditorTransformSpace::Local;
+            XJGizmoTransformSnapshot mTransformOriginal;
+            SceneHistorySnapshot mTransformBefore;
 
             bool RestoreHistorySnapshot(const SceneHistorySnapshot& snapshot, XJEditorUIState& uiState);
             void PushUndoSnapshot(SceneHistorySnapshot snapshot);

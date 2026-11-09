@@ -2,6 +2,7 @@
 
 #include <array>
 #include <cmath>
+#include <algorithm>
 
 namespace XJ
 {
@@ -107,7 +108,56 @@ namespace XJ
 
             return std::isfinite(parameter);
         }
+
+        bool RotationDirection(////旋转方向
+            const XJGizmoRotateConstraint& constraint,
+            const glm::dvec2& uv,
+            glm::dvec3& direction)
+        {
+            XJGizmoRay ray;
+
+            if(!BuildGizmoRay(constraint.InverseViewProjection, uv, ray))
+                return false;
+            
+            const double denominator  = glm::dot(ray.Direction, constraint.Axis);
+                // 旋转环接近侧视时，射线与旋转平面条件很差。
+            if(std::abs(denominator) < 0.03)
+                return false;
+
+            const double distance = glm::dot(constraint.Center - ray.Origin, constraint.Axis) / denominator;
+            if(!std::isfinite(distance)|| distance<0.0)
+                return false;
+
+            const glm::dvec3 hit = ray.Origin + ray.Direction * distance;
+            glm::dvec3 radial = hit - constraint.Center;
+            // 去除数值误差引入的轴向分量。
+            radial -= constraint.Axis * glm::dot(radial, constraint.Axis);
+            const double length = glm::length(radial);
+            if(!std::isfinite(length)||length<constraint.MinimumRadius)
+                return false;
+
+            direction = radial / length;
+            return true;
+        }
     }
+
+    glm::dvec3 GetGizmoUnitAxis(XJTransformGizmoHandle handle)
+    {
+        switch (GetGizmoAxis(handle))
+        {
+            case XJTransformGizmoAxis::X:
+                return {1.0, 0.0, 0.0};
+
+            case XJTransformGizmoAxis::Y:
+                return {0.0, 1.0, 0.0};
+
+            case XJTransformGizmoAxis::Z:
+                return {0.0, 0.0, 1.0};
+        }
+
+        return {1.0, 0.0, 0.0};
+    }
+
     bool BuildGizmoRay(
         const glm::dmat4& inverseViewProjection,
         const glm::dvec2& uv,
@@ -345,4 +395,119 @@ namespace XJ
         target = candidate;
         return true;
     }
+
+    bool BeginGizmoRotateConstraint(const XJGizmoRenderedFrame& frame, XJTransformGizmoHandle handle, const glm::dvec2& uv, XJGizmoRotateConstraint& constraint)
+    {
+        if (!frame.Valid || GetGizmoOperation(handle) != XJTransformGizmoOperation::Rotate)//帧有效 + 手柄类型是旋转
+            return false;
+        
+
+        XJGizmoRotateConstraint candidate;
+
+        if (!Invert(glm::dmat4(frame.Projection) * glm::dmat4(frame.View), candidate.InverseViewProjection))//计算逆视图投影矩阵（屏幕 → 世界）
+            return false;
+        
+        //校验 Orientation 的长度（防止非法缩放/退化）
+        const double rotationLength = glm::length(frame.Orientation);
+        if (!std::isfinite(rotationLength) ||  rotationLength < 1.0e-12)
+            return false;
+        
+        // 计算旋转中心与旋转轴
+        candidate.Center = frame.WorldPosition;
+        candidate.Axis = (frame.Orientation / rotationLength) * GetGizmoUnitAxis(handle);
+        //计算最小半径（用于点击/拖拽容差）
+        const double worldScale = glm::length(glm::dvec3(frame.Model[0]));
+        if (!std::isfinite(worldScale) || worldScale <= 0.0)
+            return false;
+
+        candidate.MinimumRadius = worldScale * 0.10;
+        //求初始旋转方向
+        if (!RotationDirection(candidate, uv, candidate.PreviousDirection))
+            return false;
+        
+        //初始化总角度并输出结果
+        candidate.TotalAngle = 0.0;
+
+        constraint = candidate;
+        return true;
+    }
+
+    bool SampleGizmoRotateConstraint(XJGizmoRotateConstraint& constraint, const glm::dvec2& uv)
+    {
+        glm::dvec3 direction;
+
+        if (!RotationDirection(constraint, uv, direction))
+            return false;
+        
+        const double sine =
+            glm::dot(
+                constraint.Axis,
+                glm::cross(
+                    constraint.PreviousDirection,
+                    direction));
+
+        const double cosine =
+            std::clamp(
+                glm::dot(
+                    constraint.PreviousDirection,
+                    direction),
+                -1.0,
+                1.0);
+
+        // 每次取得相邻两次有效采样间的有符号角度。
+        // 再累加，而不是用当前 atan2 值减初始值。
+        const double delta = std::atan2(sine, cosine);
+
+        const double total = constraint.TotalAngle + delta;
+
+        if (!std::isfinite(total))
+            return false;
+
+        constraint.TotalAngle = total;
+        constraint.PreviousDirection = direction;
+
+        return true;
+    }
+
+    bool CalculateGizmoScaleFactor(
+        const XJGizmoMoveConstraint& constraint,
+        const glm::dvec2& uv,
+        double referenceLength,
+        double& factor)
+    {
+        if (!std::isfinite(referenceLength) || referenceLength <= 1.0e-12)
+            return false;
+           
+
+        glm::dvec3 target;  
+
+        if (!CalculateGizmoMoveTarget(constraint, uv, target))
+            return false;
+        
+
+        const double distance =//计算沿轴的有符号拖拽距离
+            glm::dot(
+                target - constraint.StartPosition,
+                constraint.Axis);   
+
+        const double logarithm =//归一化成对数
+            distance / referenceLength; 
+
+        if (!std::isfinite(logarithm))
+            return false;   
+
+        // 正倍率，不穿零。
+        // 使用指数曲线，拉大和缩小在对数尺度上对称。
+        constexpr double minimumFactor = 1.0e-4;
+        constexpr double maximumFactor = 1.0e4; 
+
+        factor = std::exp(
+            std::clamp(
+                logarithm,
+                std::log(minimumFactor),
+                std::log(maximumFactor)));  
+
+        return std::isfinite(factor);
+    }
+
 }

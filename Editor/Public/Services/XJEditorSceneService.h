@@ -9,6 +9,7 @@
 #include "UI/XJEditorTransformGizmoViewModel.h"
 
 #include "Tools/XJEditorTransformEditTypes.h"
+#include "Tools/XJTransformGizmoInteractionTypes.h"
 
 #include <functional>
 #include <string>
@@ -80,8 +81,14 @@ namespace XJ
 
             static bool ReadMovePosition(XJScene& scene, XJEditorEntityId entityId, glm::vec3& localPosition, glm::dvec3& worldPosition);//读取移动位置
             static bool RestoreMovePosition(XJScene& scene, XJEditorEntityId entityId, const glm::vec3& localPosition);//恢复移动位置
+            
+            static bool ReadGizmoTransform(XJScene& scene, XJEditorEntityId entityId, XJGizmoTransformSnapshot& snapshot);//读取工具变化
+            static bool RestoreGizmoTransform(XJScene& scene, const XJGizmoTransformSnapshot& snapshot);//恢复坐标变化
 
             static XJEditorTransformGizmoViewModel BuildTransformGizmoView(XJScene& scene, XJEditorEntityId entityId, XJEditorTransformSpace space);//构建变换控件视图模型
+            static XJEditorTransformEditResult ApplyGizmoPreview(XJScene& scene, XJEditorEntityId entityId, const XJGizmoPreviewValue& value);//引用变化控件
+
+
 
             static bool SetMaterialParameter(//设置材质参数
                         XJScene& scene,

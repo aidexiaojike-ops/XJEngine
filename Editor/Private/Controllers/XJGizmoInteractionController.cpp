@@ -4,6 +4,10 @@
 #include "Tools/XJTransformGizmoInteractionMath.h"
 #include "UI/XJEditorUIState.h"
 
+#include <glm/gtc/constants.hpp>
+
+#include <cmath>
+
 namespace XJ
 {
     namespace
@@ -12,41 +16,178 @@ namespace XJ
         {
             for (int column = 0; column < 4; ++column)
             {
-                if (!glm::all(
-                        glm::equal(a[column], b[column])))
-                {
+                if (!glm::all(glm::equal(a[column], b[column])))
                     return false;
-                }
+                
             }
 
             return true;
+        }
+
+        int AxisIndex(XJTransformGizmoHandle handle)
+        {
+            switch (GetGizmoAxis(handle))
+            {
+                case XJTransformGizmoAxis::X: return 0;
+                case XJTransformGizmoAxis::Y: return 1;
+                case XJTransformGizmoAxis::Z: return 2;
+            }
+
+            return 0;
+        }
+
+        XJTransformGizmoHandle MoveHandleForAxis(XJTransformGizmoHandle handle)
+        {
+            switch (GetGizmoAxis(handle))
+            {
+                case XJTransformGizmoAxis::X:
+                    return XJTransformGizmoHandle::MoveX;
+
+                case XJTransformGizmoAxis::Y:
+                    return XJTransformGizmoHandle::MoveY;
+
+                case XJTransformGizmoAxis::Z:
+                    return XJTransformGizmoHandle::MoveZ;
+            }
+
+            return XJTransformGizmoHandle::None;
         }
     }
 
     void XJGizmoInteractionController::Cancel(XJEditorUIState& state, XJEditorSceneController& sceneController)
     {
-        sceneController.CancelMovePreview();
+        const bool restored =
+            sceneController.CancelTransformPreview();
 
         mDragging = false;
+        mHandle = XJTransformGizmoHandle::None;
+
         mStartFrame = {};
-        mConstraint = {};
+        mOriginal = {};
+        mLinearConstraint = {};
+        mRotateConstraint = {};
 
         state.GizmoInteraction = {};
         state.GizmoPointer = {};
         state.GizmoRendered = {};
+        state.TransformGizmo = {};
 
         ++state.GizmoEpoch;
+
+        if (!restored)
+        {
+            state.GizmoInteraction.Error =
+                "The Gizmo preview could not be fully restored.";
+        }
+    }
+
+    bool XJGizmoInteractionController::BuildTarget(const XJGizmoPointerInput& input, XJGizmoPreviewValue& value)
+    {
+        using Operation = XJTransformGizmoOperation;
+        using Space = XJEditorTransformSpace;
+
+        value = {};
+        value.Operation = GetGizmoOperation(mHandle);
+        value.Space = mStartFrame.Space;
+
+        switch (value.Operation)
+        {
+            case Operation::Move:
+            {
+                value.Space = Space::World;
+
+                return CalculateGizmoMoveTarget(
+                    mLinearConstraint,
+                    input.UV,
+                    value.Position);
+            }
+
+            case Operation::Rotate:
+            {
+                if (!SampleGizmoRotateConstraint(
+                        mRotateConstraint,
+                        input.UV))
+                {
+                    return false;
+                }
+
+                // 避免转很多圈之后把巨大角度传给 sin/cos。
+                // 累计角度仍保留，只有生成四元数时取余。
+                const double angle =
+                    std::remainder(
+                        mRotateConstraint.TotalAngle,
+                        glm::two_pi<double>());
+
+                if (value.Space == Space::Local)
+                {
+                    const glm::dquat delta =
+                        glm::angleAxis(
+                            angle,
+                            GetGizmoUnitAxis(mHandle));
+
+                    value.Rotation =
+                        glm::dquat(mOriginal.LocalRotation) *
+                        delta;
+                }
+                else
+                {
+                    const glm::dquat delta =
+                        glm::angleAxis(
+                            angle,
+                            mRotateConstraint.Axis);
+
+                    value.Rotation =
+                        delta * mOriginal.WorldRotation;
+                }
+
+                value.Rotation =
+                    glm::normalize(value.Rotation);
+
+                return true;
+            }
+
+            case Operation::Scale:
+            {
+                double factor = 1.0;
+
+                if (!CalculateGizmoScaleFactor(
+                        mLinearConstraint,
+                        input.UV,
+                        mScaleReferenceLength,
+                        factor))
+                {
+                    return false;
+                }
+
+                value.Scale =
+                    value.Space == Space::Local
+                        ? glm::dvec3(mOriginal.LocalScale)
+                        : mOriginal.WorldScale;
+
+                const int axis = AxisIndex(mHandle);
+
+                value.Scale[axis] *= factor;
+
+                return
+                    std::isfinite(value.Scale.x) &&
+                    std::isfinite(value.Scale.y) &&
+                    std::isfinite(value.Scale.z);
+            }
+
+            default:
+                return false;
+        }
     }
 
     bool XJGizmoInteractionController::Process(XJEditorUIState& state, XJEditorSceneController& sceneController)
     {
         using Handle = XJTransformGizmoHandle;
+        using Operation = XJTransformGizmoOperation;
 
         const auto input = state.GizmoPointer;
         state.GizmoPointer = {};
 
         auto& interaction = state.GizmoInteraction;
-
         interaction.Hovered = Handle::None;
 
         const bool ownedAtStart = mDragging;
@@ -54,12 +195,27 @@ namespace XJ
         const auto finish =
             [&](bool commit)
         {
-            sceneController.EndMovePreview(state, commit);
+            bool succeeded = true;
+
+            if (sceneController.IsTransformPreviewActive())
+            {
+                succeeded =
+                    sceneController.EndTransformPreview(
+                        state,
+                        commit);
+            }
 
             mDragging = false;
+            mHandle = Handle::None;
 
             interaction.Dragging = false;
             interaction.Active = Handle::None;
+
+            if (!succeeded && interaction.Error.empty())
+            {
+                interaction.Error =
+                    "The Gizmo transaction could not be completed.";
+            }
         };
 
         const bool valid =
@@ -86,8 +242,8 @@ namespace XJ
 
         if (mDragging)
         {
-            // 改变图像区域或相机后，不继续使用旧约束。
             const bool unchanged =
+                sceneController.IsTransformPreviewActive() &&
                 input.Frame.EntityId == mStartFrame.EntityId &&
                 input.Frame.Epoch == mStartFrame.Epoch &&
                 input.Frame.Width == mStartFrame.Width &&
@@ -111,29 +267,25 @@ namespace XJ
 
             if (!input.Down && !input.Released)
             {
-                // 失去鼠标按钮状态，但没有正常收到释放。
                 finish(false);
                 return true;
             }
 
-            glm::dvec3 target;
+            XJGizmoPreviewValue value;
 
-            if (CalculateGizmoMoveTarget(
-                    mConstraint,
-                    input.UV,
-                    target))
+            if (BuildTarget(input, value))
             {
-                if (!sceneController.PreviewMovePosition(
+                if (!sceneController.PreviewTransform(
                         state,
-                        target))
+                        value))
                 {
                     finish(false);
                     return true;
                 }
             }
 
-            // 射线与平面条件不好时暂时保持最后有效位置；
-            // 恢复后仍从按下快照计算，不累计误差。
+            // 临时遇到几何退化时冻结最后有效结果。
+            // 松开仍可提交最后有效结果。
             if (input.Released)
                 finish(true);
 
@@ -156,42 +308,83 @@ namespace XJ
 
         interaction.Error.clear();
 
-        if (GetGizmoOperation(hovered) !=
-            XJTransformGizmoOperation::Move)
+        const Operation operation =
+            GetGizmoOperation(hovered);
+
+        XJGizmoMoveConstraint linearConstraint;
+        XJGizmoRotateConstraint rotateConstraint;
+
+        bool prepared = false;
+
+        if (operation == Operation::Rotate)
         {
-            // 本步仅移动。
-            // 旋转和缩放点击仍被消费，不能穿透选择模型。
+            prepared =
+                BeginGizmoRotateConstraint(
+                    input.Frame,
+                    hovered,
+                    input.UV,
+                    rotateConstraint);
+        }
+        else if (operation == Operation::Move ||
+                 operation == Operation::Scale)
+        {
+            // 缩放与移动复用同轴的线性约束。
+            prepared =
+                BeginGizmoMoveConstraint(
+                    input.Frame,
+                    MoveHandleForAxis(hovered),
+                    input.UV,
+                    linearConstraint);
+        }
+
+        if (!prepared)
+        {
+            interaction.Error =
+                "The handle is poorly aligned with the "
+                "view. Change the viewing angle.";
+
             return true;
         }
 
-        XJGizmoMoveConstraint constraint;
+        const double worldScale =
+            glm::length(
+                glm::dvec3(input.Frame.Model[0]));
 
-        if (!BeginGizmoMoveConstraint(
+        const double scaleReference =
+            worldScale *
+            double(XJTransformGizmoMetrics::ScaleBoxCenter);
+
+        if (!std::isfinite(scaleReference) ||
+            scaleReference <= 1.0e-12)
+        {
+            interaction.Error =
+                "The Gizmo scale is invalid.";
+
+            return true;
+        }
+
+        XJGizmoTransformSnapshot original;
+
+        if (!sceneController.BeginTransformPreview(
+                state,
                 input.Frame,
                 hovered,
-                input.UV,
-                constraint))
+                original))
         {
             interaction.Error =
-                "The move axis is too close to the view "
-                "direction. Change the viewing angle.";
+                "The Transform preview could not be started.";
 
             return true;
         }
 
-        if (!sceneController.BeginMovePreview(
-                state,
-                input.Frame.EntityId,
-                input.Frame.WorldPosition))
-        {
-            interaction.Error =
-                "The move preview could not be started.";
-
-            return true;
-        }
-
-        mConstraint = constraint;
+        mHandle = hovered;
         mStartFrame = input.Frame;
+        mOriginal = original;
+
+        mLinearConstraint = linearConstraint;
+        mRotateConstraint = rotateConstraint;
+
+        mScaleReferenceLength = scaleReference;
 
         mImageMin = input.ImageMin;
         mImageSize = input.ImageSize;
@@ -202,7 +395,6 @@ namespace XJ
         interaction.Active = hovered;
         interaction.Hovered = hovered;
 
-        // 兼容极短的“同一 UI 帧按下并释放”。
         if (input.Released)
             finish(true);
 

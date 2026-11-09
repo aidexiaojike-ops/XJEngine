@@ -18,10 +18,19 @@ namespace XJ
             void Cancel(XJEditorUIState& state, XJEditorSceneController& sceneController);
 
         private:
+            bool BuildTarget(const XJGizmoPointerInput& input, XJGizmoPreviewValue& value);
+
             bool mDragging = false;
 
+            XJTransformGizmoHandle mHandle = XJTransformGizmoHandle::None;
+
             XJGizmoRenderedFrame mStartFrame;
-            XJGizmoMoveConstraint mConstraint;
+            XJGizmoTransformSnapshot mOriginal;
+
+            XJGizmoMoveConstraint mLinearConstraint;
+            XJGizmoRotateConstraint mRotateConstraint;
+
+            double mScaleReferenceLength = 1.0;
 
             glm::dvec2 mImageMin{0.0};
             glm::dvec2 mImageSize{0.0};

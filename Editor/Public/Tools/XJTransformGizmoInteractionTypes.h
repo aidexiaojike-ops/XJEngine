@@ -3,6 +3,7 @@
 
 #include "Tools/XJTransformGizmoGeometry.h"
 #include "Tools/XJEditorTransformToolTypes.h"
+#include "Tools/XJEditorTransformEditTypes.h"
 
 #include <glm/glm.hpp>
 #include <glm/gtc/quaternion.hpp>
@@ -83,6 +84,48 @@ namespace XJ
         glm::dvec3 PlaneNormal{0.0, 0.0, 1.0};
 
         double StartParameter = 0.0;
+    };
+
+    struct XJGizmoTransformSnapshot//坐标轴快照
+    {
+        uint64_t EntityId = 0;
+        uint64_t StructureRevision = 0;
+        uint64_t ParentId = 0;
+
+        glm::vec3 LocalPosition{0.0f};
+        glm::quat LocalRotation{1.0f, 0.0f, 0.0f, 0.0f};
+        glm::vec3 LocalScale{1.0f};
+
+        glm::dvec3 WorldPosition{0.0};
+        glm::dquat WorldRotation{1.0, 0.0, 0.0, 0.0};
+        glm::dvec3 WorldScale{1.0};
+
+        // 用于检测拖动期间父级姿态是否发生变化。
+        glm::dmat4 ParentMatrix{1.0};
+        glm::dquat ParentRotation{1.0, 0.0, 0.0, 0.0};
+    };
+
+    // Controller 计算出的绝对目标，不是逐帧增量。
+    struct XJGizmoPreviewValue
+    {
+        XJTransformGizmoOperation Operation = XJTransformGizmoOperation::None;
+        XJEditorTransformSpace Space = XJEditorTransformSpace::Local;
+
+        glm::dvec3 Position{0.0};
+        glm::dquat Rotation{1.0,0.0,0.0,0.0};
+        glm::dvec3 Scale{1.0};
+    };
+
+    struct XJGizmoRotateConstraint
+    {
+        glm::dmat4 InverseViewProjection{1.0};
+        glm::dvec3 Center{0.0};
+        glm::dvec3 Axis{1.0,0.0,0.0};
+
+        glm::dvec3 PreviousDirection{0.0, 1.0, 0.0};
+
+        double MinimumRadius = 0.0;
+        double TotalAngle = 0.0;
     };
 }
 

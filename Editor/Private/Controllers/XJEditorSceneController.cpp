@@ -15,73 +15,170 @@
 #include <utility>
 #include <cmath>
 
+
 namespace XJ
 {
 
-    bool XJEditorSceneController::BeginMovePreview(XJEditorUIState& state, XJEditorEntityId entityId, const glm::dvec3& expectedWorldPosition)
+    namespace
     {
+        void InvalidateGizmoHistoryInput(XJEditorUIState& state)//无效化工具输入
+        {
+            state.GizmoPointer = {};
+            state.GizmoRendered = {};
+            state.GizmoInteraction = {};
+            state.TransformGizmo = {};
+        
+            ++state.GizmoEpoch;
+        }
+
+        bool SameGizmoRotation(const glm::dquat& a, const glm::dquat& b)//判断两个四元数是否"表示同一个旋转"的函数
+        {
+            //长度校验
+            const double aLength = glm::length(a);
+            const double bLength = glm::length(b);
+
+            if (!std::isfinite(aLength) ||
+                !std::isfinite(bLength) ||
+                aLength < 1.0e-12 ||
+                bLength < 1.0e-12)
+            {
+                return false;
+            }
+            //归一化后取点积的绝对值
+            const double dot =
+                std::abs(
+                    glm::dot(
+                        a / aLength,
+                        b / bLength));
+
+            // q 和 -q 代表同一个旋转。
+            return dot >= 1.0 - 1.0e-12;
+        }
+
+        bool SameGizmoLocalPose(const XJGizmoTransformSnapshot& a,const XJGizmoTransformSnapshot& b)//判断两个轴同一个位置
+        {
+            return
+                a.LocalPosition == b.LocalPosition &&
+                a.LocalScale == b.LocalScale &&
+                SameGizmoRotation(
+                    glm::dquat(a.LocalRotation),
+                    glm::dquat(b.LocalRotation));
+        }
+
+        bool SameGizmoContext(const XJGizmoTransformSnapshot& a, const XJGizmoTransformSnapshot& b)//两个轴的上下？
+        {
+            return
+                a.EntityId == b.EntityId &&
+                a.StructureRevision == b.StructureRevision &&
+                a.ParentId == b.ParentId &&
+                a.ParentMatrix == b.ParentMatrix &&
+                SameGizmoRotation(
+                    a.ParentRotation,
+                    b.ParentRotation);
+        }
+    }
+
+
+    bool XJEditorSceneController::BeginTransformPreview(XJEditorUIState& state, const XJGizmoRenderedFrame& source, XJTransformGizmoHandle handle, XJGizmoTransformSnapshot& snapshot)
+    {
+        const auto operation = GetGizmoOperation(handle);
+
         if (!mScene ||
-            mMovePreviewActive ||
+            mTransformPreviewActive ||
+            operation == XJTransformGizmoOperation::None ||
+            !source.Valid ||
+            source.Epoch != state.GizmoEpoch ||
+            source.EntityId != state.Selection.SelectedEntity ||
+            source.Space != state.TransformTools.Space ||
+            source.SettingsRevision !=
+                state.TransformTools.SettingsRevision ||
             state.WorkspaceReadOnly ||
             state.RuntimeInspection ||
-            state.Selection.SelectedEntity != entityId ||
             (mShouldExposeEntityCallback &&
-             !mShouldExposeEntityCallback(entityId)))
+             !mShouldExposeEntityCallback(source.EntityId)))
         {
             return false;
         }
+        //从场景读取原始 transform
+        XJGizmoTransformSnapshot original;
 
-        glm::vec3 localPosition;
-        glm::dvec3 worldPosition;
-
-        if (!XJEditorSceneService::ReadMovePosition(
-                *mScene,
-                entityId,
-                localPosition,
-                worldPosition))
-        {
+        if (!XJEditorSceneService::ReadGizmoTransform(*mScene, source.EntityId, original))
             return false;
-        }
 
-        // 防止使用与当前场景不一致的旧绘制快照开始拖动。
-        const double difference = glm::length(worldPosition - expectedWorldPosition);
+        //渲染帧 vs 场景真实数据
+        const double positionDifference = glm::length(original.WorldPosition - source.WorldPosition);
 
-        if (!std::isfinite(difference) ||
-            difference > 1.0e-4)
-        {
+        if (!std::isfinite(positionDifference) ||  positionDifference > 1.0e-4)
             return false;
-        }
 
+        // 旋转一致性校验（区分 Local/World）
+        const glm::dquat expectedOrientation =
+            source.Space == XJEditorTransformSpace::Local
+                ? original.WorldRotation
+                : glm::dquat(1.0, 0.0, 0.0, 0.0);
+
+        if (!SameGizmoRotation(expectedOrientation, source.Orientation))
+            return false;
+
+         //捕获历史快照（撤销用）
         auto before = CaptureHistorySnapshot(state);
 
         if (!before.Scene)
             return false;
+        //记录预览元信息 + 置位激活标志
+        mTransformOriginal = original;
+        mTransformBefore = std::move(before);
 
-        mMovePreviewEntity = entityId;
-        mMoveOriginalLocalPosition = localPosition;
-        mMoveBefore = std::move(before);
-        mMovePreviewActive = true;
+        mTransformPreviewOperation = operation;
+        mTransformPreviewSpace = source.Space;
 
+        mTransformPreviewActive = true;
+        //输出原始快照并返回成功
+        snapshot = original;
         return true;
     }
 
-    bool XJEditorSceneController::PreviewMovePosition(XJEditorUIState& state, const glm::dvec3& worldPosition)
+    bool XJEditorSceneController::PreviewTransform(XJEditorUIState& state, const XJGizmoPreviewValue& value)
     {
-        if (!mScene || !mMovePreviewActive)
+        if (!mScene ||
+            !mTransformPreviewActive ||
+            state.WorkspaceReadOnly ||
+            state.RuntimeInspection ||
+            state.Selection.SelectedEntity !=
+                mTransformOriginal.EntityId)
+        {
             return false;
+        }
+        //计算"期望空间"
+        const auto expectedSpace =
+            mTransformPreviewOperation ==
+                XJTransformGizmoOperation::Move
+                ? XJEditorTransformSpace::World
+                : mTransformPreviewSpace;
 
-        XJEditorUpdateTransformRequest request;
-        request.EntityId = mMovePreviewEntity;
+        if (value.Operation != mTransformPreviewOperation || value.Space != expectedSpace)
+        {
+            state.GizmoInteraction.Error =
+                "The Gizmo operation changed during a drag.";
 
-        request.Space = XJEditorTransformSpace::World;
-        request.Fields = XJEditorTransformFields::Position;
+            return false;
+        }
+        //一致性校验
+        XJGizmoTransformSnapshot current;
 
-        request.Position = worldPosition;
-
-        const auto result =
-            XJEditorSceneService::UpdateTransform(
+        if (!XJEditorSceneService::ReadGizmoTransform(
                 *mScene,
-                request);
+                mTransformOriginal.EntityId,
+                current) ||
+            !SameGizmoContext(mTransformOriginal, current))
+        {
+            state.GizmoInteraction.Error =
+                "The scene hierarchy changed during a Gizmo drag.";
+
+            return false;
+        }
+        //应用预览
+        const auto result = XJEditorSceneService::ApplyGizmoPreview(*mScene, mTransformOriginal.EntityId, value);
 
         if (result.Rejected())
         {
@@ -90,56 +187,47 @@ namespace XJ
         }
 
         if (result.Changed())
-        {
-            // 实时刷新 UI，但暂不提交 Dirty、Undo 和完整修改通知。
             InvalidateViewModels();
-        }
 
         return true;
     }
 
-    bool XJEditorSceneController::EndMovePreview( XJEditorUIState& state, bool commit)
+    bool XJEditorSceneController::EndTransformPreview(XJEditorUIState& state, bool commit)
     {
-        if (!mMovePreviewActive)
+        if (!mTransformPreviewActive)
             return false;
 
         if (!commit)
-        {
-            CancelMovePreview();
-            return true;
-        }
+            return CancelTransformPreview();
 
-        glm::vec3 currentLocal;
-        glm::dvec3 currentWorld;
+        XJGizmoTransformSnapshot current;
 
         if (!mScene ||
-            !XJEditorSceneService::ReadMovePosition(
+            !XJEditorSceneService::ReadGizmoTransform(
                 *mScene,
-                mMovePreviewEntity,
-                currentLocal,
-                currentWorld))
+                mTransformOriginal.EntityId,
+                current) ||
+            !SameGizmoContext(mTransformOriginal, current))
         {
-            CancelMovePreview();
+            CancelTransformPreview();
             return false;
         }
 
-        const bool changed =
-            !glm::all(
-                glm::equal(
-                    currentLocal,
-                    mMoveOriginalLocalPosition));
-
-        auto before = std::move(mMoveBefore);
-
-        mMovePreviewActive = false;
-        mMovePreviewEntity = XJ_INVALID_EDITOR_ENTITY_ID;
-        mMoveBefore = {};
-
-        if (!changed)
+        if (SameGizmoLocalPose(mTransformOriginal, current))
         {
-            InvalidateViewModels();
-            return true;
+            // 包含四元数末位误差的情况。
+            // 恢复初始快照，避免留下未标脏的微小漂移。
+            return CancelTransformPreview();
         }
+
+        //移出快照 + 清状态
+        auto before = std::move(mTransformBefore);
+        
+        mTransformPreviewActive = false;
+        mTransformPreviewOperation = XJTransformGizmoOperation::None;
+
+        mTransformOriginal = {};
+        mTransformBefore = {};
 
         PushUndoSnapshot(std::move(before));
         NotifyAfterMutation();
@@ -147,35 +235,51 @@ namespace XJ
         return true;
     }
 
-    void XJEditorSceneController::CancelMovePreview()//取消移动预览
+    bool XJEditorSceneController::CancelTransformPreview()
     {
-        if (!mMovePreviewActive)
-            return;
-
-        if (mScene &&
-            !XJEditorSceneService::RestoreMovePosition(
+        if (!mTransformPreviewActive)
+            return true;
+    
+        const auto original = mTransformOriginal;
+    
+        mTransformPreviewActive = false;
+        mTransformPreviewOperation =
+            XJTransformGizmoOperation::None;
+    
+        mTransformOriginal = {};
+        mTransformBefore = {};
+    
+        const bool restored =
+            mScene &&
+            XJEditorSceneService::RestoreGizmoTransform(
                 *mScene,
-                mMovePreviewEntity,
-                mMoveOriginalLocalPosition))
-        {
-            spdlog::warn(
-                "Could not restore Gizmo move preview "
-                "for entity={}.",
-                mMovePreviewEntity);
-        }
-
-        mMovePreviewActive = false;
-        mMovePreviewEntity = XJ_INVALID_EDITOR_ENTITY_ID;
-        mMoveBefore = {};
-
+                original);
+            
         InvalidateViewModels();
+            
+        if (!restored)
+        {
+            // 正常入口会在销毁实体/场景前取消。
+            // 到这里说明有其他路径提前破坏了目标。
+            spdlog::warn(
+                "Could not restore Gizmo preview "
+                "for entity={}.",
+                original.EntityId);
+            
+            // 不能把可能残留的预览状态假装成干净场景。
+            if (mScene)
+                MarkSceneDirty();
+        }
+    
+        return restored;
     }
+
     void XJEditorSceneController::SetScene(XJScene* scene)
     {
         if (mScene != scene)
         {
             ++mSceneRevision;
-            CancelMovePreview();
+            CancelTransformPreview();
         }
         
         mScene = scene;
@@ -285,7 +389,7 @@ namespace XJ
     }
     bool XJEditorSceneController::OpenSceneAsset(XJEditorUIState& uiState, const std::filesystem::path& scenePath, XJAssetHandle sceneHandle)
     {
-        CancelMovePreview();
+        CancelTransformPreview();
 
         if (!mScene || !mAssetRegistry)
             return false;
@@ -362,7 +466,7 @@ namespace XJ
 
     bool XJEditorSceneController::SaveCurrentScene()
     {
-        if (mMovePreviewActive)
+        if (mTransformPreviewActive)
             return false;
 
         if (!mScene)
@@ -410,7 +514,7 @@ namespace XJ
             return;
         }
 
-        if (mMovePreviewActive)
+        if (mTransformPreviewActive)
         {
             ResetSceneRequestState(uiState);
             return;
@@ -516,10 +620,23 @@ namespace XJ
             XJMaterialFactory::GetInstance()->InvalidateMaterialAsset(materialSnapshot.Handle);
             XJEditorSceneService::InvalidateMaterialInspectorCache(materialSnapshot.Handle);
         }
-
+        // / 重建场景前解除视口引用
         const XJAssetHandle sceneHandle = mInstantiateContext.SourceScene.Handle;
+
+        if (mBeforeOpenSceneCallback)
+            mBeforeOpenSceneCallback();
+
         if (!InstantiateSceneAsset(snapshot.Scene, sceneHandle))
+        {
+            // 现有实例化失败路径也要重新验证和绑定当前场景引用。
+            if (mAfterOpenSceneCallback)
+                mAfterOpenSceneCallback(*mScene);
+        
+            uiState.SelectedEntityDetails = {};
+            InvalidateViewModels();
+        
             return false;
+        }
 
         uiState.Selection = snapshot.Selection;
         uiState.SelectedEntityDetails = {};
@@ -559,7 +676,8 @@ namespace XJ
 
     bool XJEditorSceneController::Undo(XJEditorUIState& uiState)
     {
-        CancelMovePreview();
+        CancelTransformPreview();
+        InvalidateGizmoHistoryInput(uiState);
 
         if (!CanUndo())
             return false;
@@ -589,7 +707,7 @@ namespace XJ
 
     bool XJEditorSceneController::Redo(XJEditorUIState& uiState)
     {
-        CancelMovePreview();
+        CancelTransformPreview();
 
         if (!CanRedo())
             return false;
@@ -618,7 +736,7 @@ namespace XJ
 
     void XJEditorSceneController::ClearHistory()
     {
-        CancelMovePreview();
+        CancelTransformPreview();
         mUndoStack.clear();
         mRedoStack.clear();
     }
@@ -627,7 +745,7 @@ namespace XJ
         XJEditorUIState& uiState,
         const std::function<bool()>& action)
     {
-        if (mMovePreviewActive)
+        if (mTransformPreviewActive)
             return false;
 
         if (!mScene || !action)

@@ -3,6 +3,7 @@
 
 #include <glm/ext/matrix_clip_space.hpp>
 #include <glm/ext/matrix_transform.hpp>
+#include <glm/gtc/constants.hpp>
 
 #include <spdlog/spdlog.h>
 
@@ -35,6 +36,111 @@ namespace
 
         return projection;
     }
+
+    void TestRotationUnwrap()
+    {
+        using namespace XJ;
+
+        XJGizmoRenderedFrame rendered;
+        rendered.Valid = true;
+
+        rendered.Width = 1280;
+        rendered.Height = 720;
+
+        rendered.View =
+            glm::lookAtRH(
+                glm::vec3(0.0f, 0.0f, 5.0f),
+                glm::vec3(0.0f),
+                glm::vec3(0.0f, 1.0f, 0.0f));
+
+        rendered.Projection = MakeProjection();
+
+        rendered.WorldPosition = glm::dvec3(0.0);
+        rendered.Orientation =
+            glm::dquat(1.0, 0.0, 0.0, 0.0);
+
+        const auto frame =
+            BuildTransformGizmoFrame(
+                rendered.WorldPosition,
+                rendered.Orientation,
+                rendered.View,
+                rendered.Projection,
+                1280,
+                720);
+
+        Check(frame.Valid, "Rotation test frame");
+
+        rendered.Model = frame.Model;
+
+        const auto uvAtAngle =
+            [&](double degrees)
+        {
+            const double angle = glm::radians(degrees);
+
+            const glm::dvec4 point(
+                std::cos(angle),
+                std::sin(angle),
+                0.0,
+                1.0);
+
+            const glm::dvec4 clip =
+                glm::dmat4(rendered.Projection) *
+                glm::dmat4(rendered.View) *
+                glm::dmat4(rendered.Model) *
+                point;
+
+            return
+                glm::dvec2(clip) / clip.w * 0.5 +
+                glm::dvec2(0.5);
+        };
+
+        XJGizmoRotateConstraint constraint;
+
+        Check(
+            BeginGizmoRotateConstraint(
+                rendered,
+                XJTransformGizmoHandle::RotateZ,
+                uvAtAngle(170.0),
+                constraint),
+            "Begin rotation near wrap boundary");
+
+        Check(
+            SampleGizmoRotateConstraint(
+                constraint,
+                uvAtAngle(179.0)),
+            "Sample before positive pi");
+
+        Check(
+            SampleGizmoRotateConstraint(
+                constraint,
+                uvAtAngle(-179.0)),
+            "Sample after negative pi");
+
+        Check(
+            SampleGizmoRotateConstraint(
+                constraint,
+                uvAtAngle(-170.0)),
+            "Sample after wrap boundary");
+
+        Check(
+            std::abs(
+                constraint.TotalAngle -
+                glm::radians(20.0)) < 1.0e-5,
+            "Rotation unwrap remains continuous");
+
+        const double previous = constraint.TotalAngle;
+
+        Check(
+            SampleGizmoRotateConstraint(
+                constraint,
+                uvAtAngle(-170.0)),
+            "Repeated rotation sample");
+
+        Check(
+            std::abs(constraint.TotalAngle - previous) < 1.0e-10,
+            "Repeated sample does not add rotation");
+    }
+
 
     void TestMoveConstraint()
     {
@@ -345,6 +451,7 @@ int main()
     TestScreenSize();
     TestMoveConstraint();
     TestGizmoPicking();
+    TestRotationUnwrap();
 
 
     spdlog::info(

@@ -122,8 +122,8 @@ namespace XJ
             hit != XJTransformGizmoHandle::None;
 
         if (hitOnPress &&
-            GetGizmoOperation(hit) ==
-                XJTransformGizmoOperation::Move)
+            GetGizmoOperation(hit) !=
+                XJTransformGizmoOperation::None)
         {
             // 立即占用本帧输入。
             // 不等待稍后 Workspace 处理请求。

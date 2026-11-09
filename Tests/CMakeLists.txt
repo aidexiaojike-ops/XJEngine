@@ -438,3 +438,30 @@ add_test(
     NAME XJTransformGizmoGeometryTests
     COMMAND $<TARGET_FILE:XJTransformGizmoGeometryTests>
 )
+
+add_executable(XJGizmoTransactionTests
+    ${CMAKE_CURRENT_SOURCE_DIR}/Editor/XJGizmoTransactionTests.cpp
+)
+
+target_link_libraries(XJGizmoTransactionTests
+    PRIVATE
+        Editor
+        Core
+)
+
+target_compile_features(XJGizmoTransactionTests
+    PRIVATE
+        cxx_std_20
+)
+
+if(MINGW AND CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+    target_compile_options(XJGizmoTransactionTests
+        PRIVATE
+            -Wa,-mbig-obj
+    )
+endif()
+
+add_test(
+    NAME XJGizmoTransactionTests
+    COMMAND $<TARGET_FILE:XJGizmoTransactionTests>
+)

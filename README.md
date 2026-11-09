@@ -14,7 +14,7 @@
 
 XJEngine is an experimental C++20 game engine and editor built on Vulkan and EnTT. It includes a schema-driven material pipeline, asset and scene persistence, a built-in scripting language, and an ImGui editor.
 
-**Current build path: Windows.** The SDK setup and runtime DLL handling expect a Windows Vulkan SDK layout; Linux and macOS are not ready-to-build targets. Transform Gizmos support **handle picking, hover highlighting and single-axis move dragging**; rotation and scale dragging are not implemented yet.
+**Current build path: Windows.** The SDK setup and runtime DLL handling expect a Windows Vulkan SDK layout; Linux and macOS are not ready-to-build targets. Transform Gizmos support **handle picking, hover highlighting and transactional single-axis move, rotate and scale dragging**; plane/free movement, snapping and operation switching are not implemented yet.
 
 ## Contents
 
@@ -43,7 +43,7 @@ XJEngine is an experimental C++20 game engine and editor built on Vulkan and EnT
 | **Built-in scripting** | `.xjs` lexer/parser/compiler, bytecode verification, execution limits, typed values, host services, ECS lifecycle and live slot synchronization |
 | **Editor panels** | Hierarchy, Inspector, Content Browser, Console, Scene/Game Preview, docking and detached ImGui windows |
 | **Local/World editing** | Scene toolbar space switch, Inspector numeric editing, rejection feedback, snapshot-based Undo/Redo |
-| **Transform Gizmo interaction** | Nine-part Local/World Gizmo with approximately constant screen size, handle picking, hover/active highlights and single-axis move dragging with commit/cancel; rotation and scale handles are not editable yet |
+| **Transform Gizmo interaction** | Nine-part Local/World Gizmo with approximately constant screen size, handle picking, hover/active highlights and single-axis move, rotate and scale dragging with one-shot commit/cancel and Undo |
 | **Scene helpers** | Adaptive world grid, light wireframes, AABB + triangle picking, picked-surface orbit pivot |
 | **Play mode** | Runtime scene cloning, Play/Pause/Resume/Stop, runtime inspection and script-slot mutations without editing the source scene |
 | **Diagnostics** | spdlog-backed Console, viewport performance snapshots, frame history and material upload statistics |
@@ -148,16 +148,20 @@ Selecting an entity with a valid Transform in an editable scene displays a unifi
 - Solid, unlit, double-sided triangles render without depth testing or depth writes, so scene geometry does not occlude the Gizmo.
 - It is hidden during Play/Pause, read-only/runtime inspection, invalid selection or missing Transform. Invalid frame/projection inputs skip drawing. It is not added to Game Preview.
 
-To move the selected entity:
+To edit the selected entity:
 
 1. Choose **Local** or **World**, then hover a handle: the hovered part turns **yellow**.
-2. Hold the **left mouse button** on a move arrow and drag along its axis. The active handle turns **orange**. Start without Alt or the right/middle mouse buttons held, which are reserved for camera gestures.
-3. Release to commit. The whole drag creates **one Undo entry** and marks the scene dirty only if the final local position actually changed. Intermediate previews refresh the UI without adding history or dirtying the scene; a no-op creates no history entry.
-4. Press **Escape** to cancel and restore the original local position without adding history or changing the dirty flag. Application focus loss, popups, invalid pointer/image/button state, selection/settings mismatches, or camera/image-region changes also cancel. Scene switching/detachment and entering Play cancel the interaction before proceeding.
+2. Hold the **left mouse button** on a handle and drag; the active handle turns **orange**. Start without Alt or the right/middle mouse buttons held, which are reserved for camera gestures.
+3. Release to commit. One drag produces at most **one Undo entry** and marks the scene dirty only if the final local pose actually changed. Intermediate previews refresh the UI without adding history or dirtying the scene; a no-op restores the original snapshot and creates no history entry.
+4. Press **Escape** to cancel and restore the original local TRS without adding history or changing the dirty flag. Application focus loss, popups, invalid pointer/image/button state, selection/settings mismatches, a parent or hierarchy change, or camera/image-region changes also cancel. **Undo/Redo shortcuts during a drag cancel that drag** and are consumed instead of applying history. Scene switching/detachment and entering Play cancel the interaction before proceeding.
 
-- Dragging freezes the starting camera/projection, axis and drag plane, and calculates each target from the starting position rather than accumulating deltas. An axis nearly facing the camera cannot start a drag; change the viewing angle as prompted. A temporarily invalid ray-plane intersection keeps the last valid position.
-- Gizmo input capture blocks scene selection, camera controls and viewport asset drops. Ordinary scene/asset/space-change requests during a captured gesture are discarded, not queued for release; saving cannot persist an in-progress preview.
-- Rotation rings and scale boxes can be picked and highlighted, and consume clicks instead of selecting geometry behind them, but **do not edit rotation or scale**. Use Inspector values for these edits. Snapping, plane/free movement and a Move/Rotate/Scale operation switch are not implemented.
+Operation behavior:
+
+- **Move** follows a single arrow and computes a world-space position target. **Rotate** follows a single ring; each target is a normalized quaternion built from the initial orientation around the Local or World ring axis. Sampling accumulates the **unwrapped** delta angle, so passing ±180° stays continuous. **Scale** follows a single axis box with a positive exponential factor derived from drag distance, clamped to `1e-4`–`1e4`, so scaling never crosses zero; Local edits the local axis and World edits the non-negative lossy world scale, preserving local reflection signs.
+- A ring nearly edge-on to the view, or a move/scale axis nearly facing the camera, cannot start a drag; change the viewing angle as prompted. A temporarily invalid ray intersection keeps the last valid result, and release still commits it.
+- Dragging freezes the starting camera/projection, the chosen handle and its constraint, and always recomputes from the start snapshot rather than accumulating deltas. The drag records the complete local TRS plus world pose and the nearest transformed ancestor's matrix/rotation and structure revision; a mismatch cancels the drag instead of applying a stale preview.
+- Gizmo input capture blocks scene selection, camera controls and viewport asset drops. Ordinary scene/asset/space-change requests during a captured gesture are discarded, not queued for release; saving is blocked while a preview is active. If the original pose cannot be restored on cancellation, the editor logs a warning and marks the scene dirty rather than reporting a clean scene.
+- Editing is single-handle and single-entity. Plane/free movement, multi-axis handles, snapping, numeric entry during a drag, a Move/Rotate/Scale operation switch and multi-selection editing are not implemented.
 
 ### World grid and viewport display
 
@@ -210,7 +214,7 @@ File -> Scanner / Importer -> Asset (CPU) -> Factory -> Render Resource (GPU)
 - `XJJsonIO` provides shared JSON readers and atomic writes. Scene serializers and instantiators convert between `.xjscene` assets and live ECS hierarchies.
 - `Src/main.cpp` creates `XJEditorApplication`; `XJEditorRuntime` owns workspace, play controller, viewport system, frame renderer, input bindings and UI host.
 - Views read ViewModels and submit requests/input snapshots. Controllers/Services apply mutations. `XJEditorTransformToolsController` publishes space settings and `XJEditorTransformGizmoViewModel`; the Gizmo render system consumes this display snapshot and publishes the actual `XJGizmoRenderedFrame` for interaction.
-- `XJGizmoInteractionController` validates the rendered frame's epoch, entity, space and settings revision before using it. CPU picking tests double-sided triangles in reverse draw order, preferring exact hits with nearby pixel samples for thin handles. Single-axis targets go through the scene controller/service's checked World Position preview transaction, with one commit or rollback per drag.
+- `XJGizmoInteractionController` validates the rendered frame's epoch, entity, space and settings revision before using it, then picks the operation-specific constraint. CPU picking tests double-sided triangles in reverse draw order, preferring exact hits with nearby pixel samples for thin handles. Move uses a frozen axis/drag plane, rotate accumulates unwrapped ring angles around the selected axis, and scale maps axis distance to a positive exponential factor. Every target goes through the scene controller/service's checked `XJGizmoTransformSnapshot` preview, which verifies entity, structure revision and parent pose before applying local or world TRS values, with one commit or rollback per drag.
 - `XJViewportRenderSurface` owns off-screen render targets and defers descriptor release on resize. `XJEditorLog` bridges spdlog into revision-based Console snapshots with clipped single-line rendering.
 
 ### Built-in scripting
@@ -331,9 +335,10 @@ Coverage includes:
 - Local/World acceptance behavior, field isolation, reflected/lossy scale, rejection feedback and Undo/Redo preservation.
 - Material upload state and viewport requests, capabilities and statistics.
 - CPU-only world-grid layout and Transform Gizmo geometry/frame calculations: nine unique handles, finite/non-degenerate triangle lists, geometry bounds, perspective scaling and invalid viewport height.
-- `XJTransformGizmoGeometryTests` also checks X-axis handle picking, invalid-frame rejection and single-axis move math: X-axis motion, non-accumulating repeated calculations, view-aligned axis rejection and rotated Local X following its world direction.
+- `XJTransformGizmoGeometryTests` also checks X-axis handle picking, invalid-frame rejection and drag math: X-axis motion, non-accumulating repeated calculations, view-aligned axis rejection, rotated Local X following its world direction, and continuous rotation unwrap across ±180°.
+- `XJGizmoTransactionTests` exercises the controller/service preview without a GPU: cancel restores the full pose with no history or dirty state, a committed scale drag creates exactly one Undo and Redo restores the final scale, a no-op commit preserves the existing Redo chain, World lossy scale preserves local reflection signs, and a negative World scale is rejected without history.
 
-These tests do not replace manual Vulkan validation or visual viewport checks. Gizmo preview transactions, input capture and cancellation/lifecycle flows still need manual integration checks; the new interaction tests cover picking and movement math, not those end-to-end behaviors.
+These tests do not replace manual Vulkan validation or visual viewport checks. Preview transactions are covered at controller/service level; viewport input capture, cancellation triggers and lifecycle paths still need manual integration checks.
 
 ## Performance and Diagnostics
 
@@ -344,7 +349,7 @@ These tests do not replace manual Vulkan validation or visual viewport checks. G
 
 ## Current Limitations
 
-- Transform Gizmo dragging is limited to single-axis movement. Rotation/scale handles support picking and highlighting only; rotation/scale dragging, plane/free movement, snapping and operation switching are not implemented. Nearly view-aligned move axes require a different viewing angle.
+- Gizmo editing is limited to one handle and one entity per drag. Plane/free movement, multi-axis handles, snapping, numeric entry during a drag, a Move/Rotate/Scale operation switch and multi-selection editing are not implemented. Rotation requires a sufficiently visible ring, and nearly view-aligned move/scale axes require a different viewing angle. Scale factors stay positive, so drag-scaling cannot cross zero or flip local reflection signs.
 - Only Final viewport rendering is implemented; diagnostic render modes remain unavailable.
 - The Windows SDK/DLL build setup still needs platform-specific adaptation for Linux/macOS.
 - Lit is basic forward lighting; full PBR, shadows, post-processing and skeletal animation are not implemented.
@@ -359,8 +364,8 @@ Status, not a release schedule:
 - [x] Verified scripting pipeline, host services and runtime slot synchronization
 - [x] Unified quaternion transforms, scene v4 migration and Local/World numeric editing
 - [x] Adaptive world grid and Transform Gizmo visualization
-- [x] Gizmo handle picking/highlights and Local/World single-axis move dragging with commit/cancel
-- [ ] Gizmo rotation/scale dragging, plane/free movement, snapping and operation switching
+- [x] Gizmo handle picking/highlights and Local/World single-axis move, rotate and scale dragging with commit/cancel
+- [ ] Gizmo plane/free movement, snapping, operation switching and multi-selection editing
 - [ ] Additional viewport render modes
 - [ ] PBR, shadows and post-processing
 - [ ] Animation and broader core/render integration tests

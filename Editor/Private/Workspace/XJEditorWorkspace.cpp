@@ -350,6 +350,22 @@ namespace XJ
                sceneHandle);
         }
 
+        auto& interactionState = mImpl->UIState;
+
+        if (interactionState.GizmoInteraction.Dragging &&
+            (interactionState.SceneRequests.RequestUndo ||
+             interactionState.SceneRequests.RequestRedo))
+        {
+            CancelTransformInteraction();
+        
+            // 本次快捷键只取消当前拖动。
+            // 不额外执行上一条历史操作。
+            interactionState.SceneRequests = {};
+            interactionState.AssetRequests = {};
+            interactionState.TransformToolRequests.clear();
+        }
+
+
         const bool gizmoOwnedFrame =
             mImpl->GizmoInteractionController.Process(
                 mImpl->UIState,
