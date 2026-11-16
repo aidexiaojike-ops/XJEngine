@@ -20,11 +20,12 @@ namespace XJ
     using XJEditorEntityId = uint64_t;// 编辑器实体唯一标识符类型
     constexpr XJEditorEntityId XJ_INVALID_EDITOR_ENTITY_ID = 0;// 无效的实体 ID 常量
 
-    struct XJEditorCreateEmptyEntityRequest//创建一个空实体
+    struct XJEditorCreateEntityRequest
     {
         bool AsChild = false;
         XJEditorEntityId ParentEntity = XJ_INVALID_EDITOR_ENTITY_ID;
         std::string Name = "Empty Entity";
+        bool AddCamera = false;
     };
 
     struct XJEditorAddComponentRequest//添加组件功能
@@ -171,8 +172,8 @@ namespace XJ
         bool RequestUpdateLight = false;// 是否请求更新灯光参数
         XJEditorUpdateLightRequest UpdateLight;//参数
 
-        bool RequestCreateEmptyEntity = false;//是否请求创建一个空实体
-        XJEditorCreateEmptyEntityRequest CreateEmptyEntity;
+        bool RequestCreateEntity = false;
+        XJEditorCreateEntityRequest CreateEntity;
 
         bool RequestAddComponent = false;//是否请求添加组件
         XJEditorAddComponentRequest AddComponent;

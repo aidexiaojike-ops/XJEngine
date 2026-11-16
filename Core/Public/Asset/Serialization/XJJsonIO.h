@@ -11,6 +11,12 @@
 #include <limits>
 #include <nlohmann/json.hpp>
 #include <string>
+#ifdef _WIN32
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#include <windows.h>
+#endif
 
 namespace XJ
 {
@@ -200,6 +206,24 @@ namespace XJ
         return { x, y, z, w };
     }
 
+    inline bool ReplaceWrittenFile(const std::filesystem::path& tempPath, const std::filesystem::path& path)
+    {
+#ifdef _WIN32
+        const bool replaced = MoveFileExW(tempPath.c_str(), path.c_str(),
+            MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH) != 0;
+#else
+        std::error_code renameError;
+        std::filesystem::rename(tempPath, path, renameError);
+        const bool replaced = !renameError;
+#endif
+        if (!replaced)
+        {
+            std::error_code cleanupError;
+            std::filesystem::remove(tempPath, cleanupError);
+        }
+        return replaced;
+    }
+
     inline bool WriteJsonFileAtomic(const std::filesystem::path& path, const nlohmann::json& root)
     {
         if (path.has_parent_path())
@@ -217,22 +241,7 @@ namespace XJ
                 return false;
         }
 
-        std::error_code ec;
-        std::filesystem::rename(tempPath, path, ec);
-        if (!ec)
-            return true;
-
-        // On Windows, rename can fail when the destination exists. Remove+rename is
-        // not a perfect atomic replace, but it avoids writing a half JSON file in place.
-        std::filesystem::remove(path, ec);
-        ec.clear();
-
-        std::filesystem::rename(tempPath, path, ec);
-        if (!ec)
-            return true;
-
-        std::filesystem::remove(tempPath);
-        return false;
+        return ReplaceWrittenFile(tempPath, path);
     }
 
     inline bool WriteTextFileAtomic(const std::filesystem::path& path, const std::string& text)
@@ -250,19 +259,7 @@ namespace XJ
                 return false;
         }
 
-        std::error_code ec;
-        std::filesystem::rename(tempPath, path, ec);
-        if (!ec)
-            return true;
-
-        std::filesystem::remove(path, ec);
-        ec.clear();
-        std::filesystem::rename(tempPath, path, ec);
-        if (!ec)
-            return true;
-
-        std::filesystem::remove(tempPath, ec);
-        return false;
+        return ReplaceWrittenFile(tempPath, path);
     }
 }
 

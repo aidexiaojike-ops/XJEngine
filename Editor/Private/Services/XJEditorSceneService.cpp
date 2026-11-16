@@ -25,6 +25,7 @@
 #include "Render/Shader/XJShaderParameter.h"
 #include "Render/Material/XJSurfaceMaterialBindingUtils.h"
 #include "Render/XJLightSceneUtils.h"
+#include "Tools/XJCameraGizmoGeometry.h"
 
 #include <algorithm>
 #include <cmath>
@@ -38,6 +39,33 @@ namespace XJ
     {
         constexpr uint32_t kMaxMaterialSlotCount = 64;
         constexpr size_t kMaterialInspectorCacheMaxEntries = 256;
+
+        bool IntersectRayGizmoSegment(const glm::vec3& origin, const glm::vec3& direction,
+            float maxDistance, const glm::vec3& start, const glm::vec3& end,
+            float radius, float& distance)
+        {
+            const glm::vec3 edge = end - start;
+            const float edgeLengthSquared = glm::dot(edge, edge);
+            if (edgeLengthSquared <= 1.0e-12f)
+                return false;
+
+            const glm::vec3 offset = origin - start;
+            const float projection = glm::dot(direction, edge);
+            const float denominator = edgeLengthSquared - projection * projection;
+            float segmentT = denominator > 1.0e-8f
+                ? glm::clamp((projection * glm::dot(direction, offset) - glm::dot(edge, offset)) / denominator,
+                    0.0f, 1.0f)
+                : glm::clamp(glm::dot(edge, offset) / edgeLengthSquared, 0.0f, 1.0f);
+            float rayT = glm::clamp(glm::dot(start + segmentT * edge - origin, direction), 0.0f, maxDistance);
+            segmentT = glm::clamp(glm::dot(origin + rayT * direction - start, edge) / edgeLengthSquared,
+                0.0f, 1.0f);
+            rayT = glm::clamp(glm::dot(start + segmentT * edge - origin, direction), 0.0f, maxDistance);
+            const glm::vec3 separation = origin + rayT * direction - start - segmentT * edge;
+            if (glm::dot(separation, separation) > radius * radius)
+                return false;
+            distance = rayT;
+            return true;
+        }
 
         const char* DescribeTransformFailure(XJTransformStatus status)//描述变换失败
         {
@@ -875,6 +903,40 @@ namespace XJ
             outHit.Distance = hit.Distance;
             outHit.Position = hit.Position;
             outHit.Normal = hit.Normal;
+        });
+
+        registry.view<XJCameraComponent>().each([&](const XJCameraComponent& camera)
+        {
+            glm::mat4 model;
+            if (!CameraGizmoGeometry::TryBuildModel(camera, model))
+                return;
+
+            constexpr float pickRadius = 0.05f;
+            const glm::vec3 direction = glm::normalize(rayDirection);
+            float nearestSegment = closestDistance;
+            bool found = false;
+            for (size_t i = 0; i < CameraGizmoGeometry::Indices.size(); i += 2)
+            {
+                const glm::vec3 start = glm::vec3(model * glm::vec4(
+                    CameraGizmoGeometry::Vertices[CameraGizmoGeometry::Indices[i]], 1.0f));
+                const glm::vec3 end = glm::vec3(model * glm::vec4(
+                    CameraGizmoGeometry::Vertices[CameraGizmoGeometry::Indices[i + 1]], 1.0f));
+                float distance = 0.0f;
+                if (IntersectRayGizmoSegment(rayOrigin, direction, nearestSegment, start, end,
+                        pickRadius, distance) && distance < nearestSegment)
+                {
+                    nearestSegment = distance;
+                    found = true;
+                }
+            }
+            if (!found)
+                return;
+
+            closestDistance = nearestSegment;
+            outHit.Entity = static_cast<XJEditorEntityId>(camera.XJGetOwner()->XJGetUUID());
+            outHit.Distance = nearestSegment;
+            outHit.Position = rayOrigin + direction * nearestSegment;
+            outHit.Normal = glm::vec3(0.0f);
         });
 
         return outHit.IsValid();

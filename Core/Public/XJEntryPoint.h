@@ -3,7 +3,6 @@
 // 入口点头文件
 // #include "XJEngine.h"
 #include "XJApplication.h"
-#include <iostream>  
 #include <memory>
 
 #include <exception>
@@ -23,12 +22,12 @@ int main(int argc, char* argv[])
 
     try
     {
-        std::cout <<"--------开始执行-------"<< std::endl;
+        spdlog::info("--------开始执行-------");
         app.reset(CreateApplicationEntryPoint());
 
         if (!app)
         {
-            std::cerr << "CreateApplicationEntryPoint failed" << std::endl;
+            spdlog::error("CreateApplicationEntryPoint failed");
             return EXIT_FAILURE;
         }
 
@@ -47,13 +46,10 @@ int main(int argc, char* argv[])
     }
     catch (const std::exception& e)
     {
-        // spdlog 可能还没初始化，stderr 是最后兜底输出。
-        std::cerr << "Unhandled exception: " << e.what() << std::endl;
         spdlog::error("Unhandled exception: {}", e.what());
     }
     catch (...)
     {
-        std::cerr << "Unhandled unknown exception" << std::endl;
         spdlog::error("Unhandled unknown exception");
     }
 
@@ -67,12 +63,10 @@ int main(int argc, char* argv[])
         }
         catch (const std::exception& e)
         {
-            std::cerr << "Exception during shutdown: " << e.what() << std::endl;
             spdlog::error("Exception during shutdown: {}", e.what());
         }
         catch (...)
         {
-            std::cerr << "Unknown exception during shutdown" << std::endl;
             spdlog::error("Unknown exception during shutdown");
         }
         

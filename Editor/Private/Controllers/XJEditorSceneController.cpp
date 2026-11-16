@@ -784,7 +784,7 @@ namespace XJ
         }
 
         const bool hasMutationRequest =
-            uiState.SceneRequests.RequestCreateEmptyEntity ||
+            uiState.SceneRequests.RequestCreateEntity ||
             uiState.SceneRequests.RequestAddComponent ||
             uiState.SceneRequests.RequestDeleteComponent ||
             uiState.SceneRequests.RequestSetMeshRendererMesh ||
@@ -832,11 +832,11 @@ namespace XJ
             uiState.Selection.SelectedEntity = XJ::XJ_INVALID_EDITOR_ENTITY_ID;
         }
 
-        if(uiState.SceneRequests.RequestCreateEmptyEntity)
+        if(uiState.SceneRequests.RequestCreateEntity)
         {
-            auto request = uiState.SceneRequests.CreateEmptyEntity;
-            uiState.SceneRequests.RequestCreateEmptyEntity = false;
-            uiState.SceneRequests.CreateEmptyEntity = {}; 
+            auto request = uiState.SceneRequests.CreateEntity;
+            uiState.SceneRequests.RequestCreateEntity = false;
+            uiState.SceneRequests.CreateEntity = {};
             
             XJEditorEntityId parentId = request.AsChild ? request.ParentEntity : XJ_INVALID_EDITOR_ENTITY_ID;
 
@@ -844,6 +844,9 @@ namespace XJ
 
             if (createdId != XJ_INVALID_EDITOR_ENTITY_ID)
             {
+                if (request.AddCamera)
+                    XJEditorSceneService::AddComponent(*mScene, createdId, XJEditorComponentType::Camera, mInstantiateContext.SourceScene);
+
                 uiState.Selection.SelectedEntity = createdId;
                 uiState.Selection.SelectedAsset = 0;
                 uiState.Selection.HighlightedEntities.clear();
@@ -1217,8 +1220,8 @@ namespace XJ
         uiState.SceneRequests.RequestUpdateLight = false;
         uiState.SceneRequests.UpdateLight = {};
 
-        uiState.SceneRequests.RequestCreateEmptyEntity = false;
-        uiState.SceneRequests.CreateEmptyEntity = {};
+        uiState.SceneRequests.RequestCreateEntity = false;
+        uiState.SceneRequests.CreateEntity = {};
         //添加组件
         uiState.SceneRequests.RequestAddComponent = false;
         uiState.SceneRequests.AddComponent = {};

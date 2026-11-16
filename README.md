@@ -44,7 +44,7 @@ XJEngine is an experimental C++20 game engine and editor built on Vulkan and EnT
 | **Editor panels** | Hierarchy, Inspector, Content Browser, Console, Scene/Game Preview, docking and detached ImGui windows |
 | **Local/World editing** | Scene toolbar space switch, Inspector numeric editing, rejection feedback, snapshot-based Undo/Redo |
 | **Transform Gizmo interaction** | Nine-part Local/World Gizmo with approximately constant screen size, handle picking, hover/active highlights and single-axis move, rotate and scale dragging with one-shot commit/cancel and Undo |
-| **Scene helpers** | Adaptive world grid, light wireframes, AABB + triangle picking, picked-surface orbit pivot |
+| **Scene helpers** | Adaptive world grid, light and camera wireframes, selected-mesh outline, AABB + triangle and camera-wireframe picking, picked-surface orbit pivot |
 | **Play mode** | Runtime scene cloning, Play/Pause/Resume/Stop, runtime inspection and script-slot mutations without editing the source scene |
 | **Diagnostics** | spdlog-backed Console, viewport performance snapshots, frame history and material upload statistics |
 
@@ -125,7 +125,7 @@ On Windows, user UI state follows the executable directory rather than the launc
 
 ### Scene and asset editing
 
-1. Select entities in **Hierarchy** or click scene geometry in **Scene Preview**. Picking uses world-space AABB filtering followed by CPU ray-triangle tests.
+1. Select entities in **Hierarchy** or click scene geometry or a camera wireframe in **Scene Preview**. Geometry picking uses world-space AABB filtering followed by CPU ray-triangle tests.
 2. Use **Inspector** for component values, material parameters, cameras, lights and script slots. Hierarchy supports entity creation, deletion and renaming.
 3. Use **Content Browser** for asset operations and drag Mesh assets into Scene Preview to create entities. External file drops are handled separately by the editor's import controller.
 4. Save scenes as `.xjscene`. Scene and material edits participate in snapshot-based Undo/Redo, with up to 100 history entries.
@@ -167,7 +167,7 @@ Operation behavior:
 
 - Scene Preview draws a world grid with adaptive **1/2/5-series spacing**, at least **1 meter**, X/Z coordinate labels, ticks, spacing text and edge fading.
 - The grid uses depth testing but does not write depth. Layout follows the camera and viewport; invalid camera poses skip the grid rather than reuse a cached view.
-- Grid, light wireframes and Transform Gizmos are Scene-only helpers; Game Preview renders without these editor passes.
+- Grid, light and camera wireframes, the selected-mesh outline and Transform Gizmos are Scene-only helpers; Game Preview renders without these editor passes. Hierarchy can create an empty entity or a Camera entity.
 - Only the **Final** render-view mode is implemented. BaseColor, LinearDepth, WorldNormal and Lighting controls remain capability-disabled.
 
 ### Play mode and scripts
@@ -337,6 +337,7 @@ Coverage includes:
 - CPU-only world-grid layout and Transform Gizmo geometry/frame calculations: nine unique handles, finite/non-degenerate triangle lists, geometry bounds, perspective scaling and invalid viewport height.
 - `XJTransformGizmoGeometryTests` also checks X-axis handle picking, invalid-frame rejection and drag math: X-axis motion, non-accumulating repeated calculations, view-aligned axis rejection, rotated Local X following its world direction, and continuous rotation unwrap across ±180°.
 - `XJGizmoTransactionTests` exercises the controller/service preview without a GPU: cancel restores the full pose with no history or dirty state, a committed scale drag creates exactly one Undo and Redo restores the final scale, a no-op commit preserves the existing Redo chain, World lossy scale preserves local reflection signs, and a negative World scale is rejected without history.
+- `XJOutlineNormalsTests` checks the CPU-generated smooth normals used by selected-mesh outlines, including vertices shared by position.
 
 These tests do not replace manual Vulkan validation or visual viewport checks. Preview transactions are covered at controller/service level; viewport input capture, cancellation triggers and lifecycle paths still need manual integration checks.
 

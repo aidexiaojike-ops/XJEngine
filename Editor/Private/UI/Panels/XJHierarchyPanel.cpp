@@ -50,10 +50,14 @@ namespace XJ
         {
            if (ImGui::MenuItem("Create Empty Entity"))
            {
-               mState.SceneRequests.RequestCreateEmptyEntity = true;
-               mState.SceneRequests.CreateEmptyEntity = {};
-               mState.SceneRequests.CreateEmptyEntity.AsChild = false;
-               mState.SceneRequests.CreateEmptyEntity.Name = "Empty Entity";
+               mState.SceneRequests.RequestCreateEntity = true;
+               mState.SceneRequests.CreateEntity = {};
+           }
+
+           if (ImGui::MenuItem("Create Camera"))
+           {
+               mState.SceneRequests.RequestCreateEntity = true;
+               mState.SceneRequests.CreateEntity = {.Name = "Camera", .AddCamera = true};
            }
        
            ImGui::EndPopup();
@@ -165,11 +169,8 @@ namespace XJ
             
             if (ImGui::MenuItem("Create Empty Child"))
             {
-                mState.SceneRequests.RequestCreateEmptyEntity = true;
-                mState.SceneRequests.CreateEmptyEntity = {};
-                mState.SceneRequests.CreateEmptyEntity.AsChild = true;
-                mState.SceneRequests.CreateEmptyEntity.ParentEntity = entity.Id;
-                mState.SceneRequests.CreateEmptyEntity.Name = "Empty Entity";
+                mState.SceneRequests.RequestCreateEntity = true;
+                mState.SceneRequests.CreateEntity = {.AsChild = true, .ParentEntity = entity.Id};
             }
 
             ImGui::Separator();

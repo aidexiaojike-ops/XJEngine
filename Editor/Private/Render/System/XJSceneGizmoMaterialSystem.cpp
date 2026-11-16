@@ -1,5 +1,6 @@
-#include "Render/System/XJLightGizmoMaterialSystem.h"
+#include "Render/System/XJSceneGizmoMaterialSystem.h"
 
+#include "ECS/Component/XJCameraComponent.h"
 #include "ECS/Component/XJLightComponent.h"
 #include "ECS/Component/XJTransformComponent.h"
 #include "ECS/XJScene.h"
@@ -9,6 +10,7 @@
 #include "Render/Resource/XJMesh.h"
 #include "Render/XJLightSceneUtils.h"
 #include "Render/XJRenderTarget.h"
+#include "Tools/XJCameraGizmoGeometry.h"
 
 #include <algorithm>
 #include <cmath>
@@ -26,13 +28,13 @@ namespace XJ
         constexpr float kDirectionalLength = 0.8f;
         constexpr float kSpotLength = 0.8f;
 
-        struct LightGizmoPushConstants
+        struct GizmoPushConstants
         {
             glm::mat4 Mvp{1.0f};
             glm::vec4 Color{1.0f};
         };
 
-        static_assert(sizeof(LightGizmoPushConstants) == 80);
+        static_assert(sizeof(GizmoPushConstants) == 80);
 
         uint32_t AddVertex(std::vector<XJVulkanVertex>& vertices, const glm::vec3& position)
         {
@@ -130,6 +132,17 @@ namespace XJ
             return std::make_shared<XJMesh>(vertices, indices);
         }
 
+        std::shared_ptr<XJMesh> CreateCameraMesh()
+        {
+            std::vector<XJVulkanVertex> vertices;
+            vertices.reserve(CameraGizmoGeometry::Vertices.size());
+            for (const glm::vec3& position : CameraGizmoGeometry::Vertices)
+                AddVertex(vertices, position);
+            const std::vector<uint32_t> indices(
+                CameraGizmoGeometry::Indices.begin(), CameraGizmoGeometry::Indices.end());
+            return std::make_shared<XJMesh>(vertices, indices);
+        }
+
         glm::mat4 BuildDirectionRotation(const glm::vec3& direction)
         {
             const glm::vec3 xAxis = glm::normalize(direction);
@@ -147,7 +160,7 @@ namespace XJ
         }
     }
 
-    void XJLightGizmoMaterialSystem::OnInit(XJVulkanRenderPass* renderPass)
+    void XJSceneGizmoMaterialSystem::OnInit(XJVulkanRenderPass* renderPass)
     {
         XJVulkanDevice* device = XJGetDevice();
         if (!device || !renderPass)
@@ -156,11 +169,12 @@ namespace XJ
         mDirectionalMesh = CreateDirectionalMesh();
         mPointMesh = CreatePointMesh();
         mSpotMesh = CreateSpotMesh();
+        mCameraMesh = CreateCameraMesh();
 
         const VkPushConstantRange pushConstantRange{
             .stageFlags = VK_SHADER_STAGE_VERTEX_BIT,
             .offset = 0,
-            .size = sizeof(LightGizmoPushConstants)
+            .size = sizeof(GizmoPushConstants)
         };
         ShaderLayout shaderLayout;
         shaderLayout.pushConstantRanges = {pushConstantRange};
@@ -196,7 +210,7 @@ namespace XJ
         mPipeline->Create();
     }
 
-    void XJLightGizmoMaterialSystem::OnRender(VkCommandBuffer cmdBuffer, XJRenderTarget* renderTarget)
+    void XJSceneGizmoMaterialSystem::OnRender(VkCommandBuffer cmdBuffer, XJRenderTarget* renderTarget)
     {
         XJScene* scene = XJGetScene();
         if (!scene || !renderTarget || !mPipeline || !mPipeline->IsValid() || !mPipelineLayout)
@@ -207,8 +221,9 @@ namespace XJ
             return;
 
         const auto& registry = scene->XJGetEcsRegistry();
-        auto view = registry.view<XJTransformComponent, XJLightComponent>();
-        if (view.begin() == view.end())
+        auto lights = registry.view<XJTransformComponent, XJLightComponent>();
+        auto cameras = registry.view<XJCameraComponent>();
+        if (lights.begin() == lights.end() && cameras.begin() == cameras.end())
             return;
 
         mPipeline->BindPipeline(cmdBuffer);
@@ -224,7 +239,24 @@ namespace XJ
         vkCmdSetScissor(cmdBuffer, 0, 1, &scissor);
 
         const glm::mat4 viewProjection = XJGetProjMat(renderTarget) * XJGetViewMat(renderTarget);
-        view.each([&](auto, const XJTransformComponent& transform, const XJLightComponent& light)
+        const auto draw = [&](XJMesh* mesh, const glm::mat4& model, const glm::vec4& color)
+        {
+            if (!mesh || !mesh->IsValid())
+                return;
+
+            const GizmoPushConstants pushConstants{viewProjection * model, color};
+            vkCmdPushConstants(
+                cmdBuffer,
+                mPipelineLayout->XJGetPipelineLayout(),
+                VK_SHADER_STAGE_VERTEX_BIT,
+                0,
+                sizeof(pushConstants),
+                &pushConstants);
+            if (mesh->Draw(cmdBuffer))
+                renderTarget->RecordDrawCall();
+        };
+
+        lights.each([&](auto, const XJTransformComponent& transform, const XJLightComponent& light)
         {
             XJMesh* mesh = nullptr;
             glm::vec3 scale(1.0f);
@@ -249,9 +281,6 @@ namespace XJ
                 }
             }
 
-            if (!mesh || !mesh->IsValid())
-                return;
-
             glm::vec3 position;
             if (transform.ReadWorldPosition(position) != XJTransformStatus::Success) return;
             glm::mat4 model = glm::translate(glm::mat4(1.0f), position);
@@ -259,28 +288,34 @@ namespace XJ
                 model *= BuildDirectionRotation(XJLightSceneUtils::BuildDirection(transform));
             model = glm::scale(model, scale);
 
-            LightGizmoPushConstants pushConstants;
-            pushConstants.Mvp = viewProjection * model;
-            pushConstants.Color = light.XJGetEnable()
+            const glm::vec4 color = light.XJGetEnable()
                 ? glm::vec4(glm::clamp(light.XJGetColor(), glm::vec3(0.0f), glm::vec3(1.0f)), 1.0f)
                 : glm::vec4(0.35f, 0.35f, 0.35f, 1.0f);
 
-            vkCmdPushConstants(
-                cmdBuffer,
-                mPipelineLayout->XJGetPipelineLayout(),
-                VK_SHADER_STAGE_VERTEX_BIT,
-                0,
-                sizeof(pushConstants),
-                &pushConstants);
-            if (mesh->Draw(cmdBuffer))
-                renderTarget->RecordDrawCall();
+            draw(mesh, model, color);
+        });
+
+        cameras.each([&](const XJCameraComponent& camera)
+        {
+            const auto* entity = camera.XJGetOwner();
+            if (!entity || entity->XJGetUUID() == renderTarget->XJGetCameraId())
+                return;
+
+            glm::mat4 model;
+            if (!CameraGizmoGeometry::TryBuildModel(camera, model))
+                return;
+            const glm::vec4 color = camera.XJGetEnabled()
+                ? glm::vec4(0.35f, 0.75f, 1.0f, 1.0f)
+                : glm::vec4(0.35f, 0.35f, 0.35f, 1.0f);
+            draw(mCameraMesh.get(), model, color);
         });
     }
 
-    void XJLightGizmoMaterialSystem::OnDestroy()
+    void XJSceneGizmoMaterialSystem::OnDestroy()
     {
         mPipeline.reset();
         mPipelineLayout.reset();
+        mCameraMesh.reset();
         mSpotMesh.reset();
         mPointMesh.reset();
         mDirectionalMesh.reset();

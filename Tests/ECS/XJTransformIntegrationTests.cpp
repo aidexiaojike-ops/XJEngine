@@ -5,6 +5,7 @@
 #include "ECS/Component/XJCameraComponent.h"
 #include "ECS/Component/XJTransformComponent.h"
 #include "ECS/XJEntity.h"
+#include "ECS/XJReservedUUID.h"
 #include "Geometry/XJBoundingBox.h"
 #include "Render/XJLightSceneUtils.h"
 #include "Services/XJEditorSceneService.h"
@@ -376,6 +377,31 @@ namespace
               "world bounds and world light data share the same transform");
     }
 
+    void TestCameraGizmoPicking()
+    {
+        XJScene scene;
+        auto* entity = scene.CreateEntityWithTransform("Camera");
+        auto& camera = entity->AddComponent<XJCameraComponent>();
+        camera.XJSetFov(90.0f);
+        camera.XJSetAspectRatio(2.0f);
+        auto& transform = entity->GetComponent<XJTransformComponent>();
+        Success(transform.SetLocalTRSEuler({10, 0, 0}, {0, 90, 0}, {2, 3, 4}), "camera gizmo pose setup");
+
+        auto* preview = scene.CreateEntityWithUUIDAndTransform(XJUUID(XJ_PREVIEW_CAMERA_UUID), "Preview Camera");
+        preview->AddComponent<XJCameraComponent>();
+
+        XJEditorSceneRaycastHit hit;
+        const glm::vec3 origin{9.6f, 0.55f, 5.0f};
+        const glm::vec3 direction{0.0f, 0.0f, -1.0f};
+        Check(XJEditorSceneService::RaycastClosestSceneEntity(scene, origin, direction, 20.0f, hit) &&
+              hit.Entity == static_cast<XJEditorEntityId>(entity->XJGetUUID()),
+              "camera gizmo picks the rotated frustum above its screen edge");
+        Check(!XJEditorSceneService::RaycastClosestSceneEntity(scene, origin, direction, 2.0f, hit),
+              "camera gizmo respects the closest hit distance limit");
+        Check(!XJEditorSceneService::RaycastClosestSceneEntity(scene, {0, 0, 5}, direction, 20.0f, hit),
+              "hidden preview camera is excluded from picking");
+    }
+
     void TestSceneMigration(const std::filesystem::path& root)
     {
         for (const int version : {2, 3})
@@ -445,6 +471,7 @@ int main()
     TestCamera();
     TestCameraViewFailure();
     TestLightPickingAndInspector();
+    TestCameraGizmoPicking();
     TestSceneMigration(root);
     TestInspectorTransformEditing();
     std::filesystem::remove(root);

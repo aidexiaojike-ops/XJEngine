@@ -465,3 +465,29 @@ add_test(
     NAME XJGizmoTransactionTests
     COMMAND $<TARGET_FILE:XJGizmoTransactionTests>
 )
+
+add_executable(XJOutlineNormalsTests
+    ${CMAKE_CURRENT_SOURCE_DIR}/Editor/XJOutlineNormalsTests.cpp
+    ${PROJECT_SOURCE_DIR}/Editor/Private/Tools/XJOutlineNormals.cpp
+)
+
+target_include_directories(XJOutlineNormalsTests
+    PRIVATE
+        ${PROJECT_SOURCE_DIR}/Editor/Public
+)
+
+target_link_libraries(XJOutlineNormalsTests
+    PRIVATE
+        glm::glm-header-only
+        spdlog
+)
+
+target_compile_features(XJOutlineNormalsTests
+    PRIVATE
+        cxx_std_20
+)
+
+add_test(
+    NAME XJOutlineNormalsTests
+    COMMAND $<TARGET_FILE:XJOutlineNormalsTests>
+)

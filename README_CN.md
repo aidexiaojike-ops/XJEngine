@@ -44,7 +44,7 @@ XJEngine 是一个基于 Vulkan 和 EnTT 的实验性 C++20 游戏引擎与编�
 | **编辑器面板** | Hierarchy、Inspector、Content Browser、Console、Scene/Game Preview、Docking 与独立 ImGui 窗口 |
 | **Local/World 编辑** | Scene 工具栏坐标空间切换、Inspector 数值编辑、拒绝反馈、基于快照的 Undo/Redo |
 | **Transform Gizmo 交互** | 九部件 Local/World Gizmo、近似固定屏幕尺寸、手柄拾取、悬停/活动高亮，以及可一次性提交/取消并进入 Undo 的单轴移动、旋转和缩放拖拽 |
-| **Scene 辅助显示** | 自适应世界网格、灯光线框、AABB + 三角形拾取、以命中表面点为轨道旋转中心 |
+| **Scene 辅助显示** | 自适应世界网格、灯光与相机线框、选中 Mesh 轮廓、AABB + 三角形及相机线框拾取、以命中表面点为轨道旋转中心 |
 | **Play 模式** | 运行时场景克隆、Play/Pause/Resume/Stop、运行时检查与脚本槽修改，不直接编辑源场景 |
 | **诊断** | 基于 spdlog 的 Console、视口性能快照、帧历史与材质上传统计 |
 
@@ -125,7 +125,7 @@ Windows 下用户 UI 状态跟随可执行文件目录，不依赖启动工作�
 
 ### 场景与资产编辑
 
-1. 在 **Hierarchy** 中选择实体，或在 **Scene Preview** 中点击场景几何体。拾取先进行世界空间 AABB 粗筛，再执行 CPU 射线-三角形检测。
+1. 在 **Hierarchy** 中选择实体，或在 **Scene Preview** 中点击场景几何体或相机线框。几何体拾取先进行世界空间 AABB 粗筛，再执行 CPU 射线-三角形检测。
 2. 在 **Inspector** 中编辑组件值、材质参数、相机、灯光和脚本槽。Hierarchy 支持实体创建、删除与重命名。
 3. 在 **Content Browser** 中管理资产，将 Mesh 资产拖入 Scene Preview 可创建实体。外部文件拖放由独立的编辑器导入控制器处理。
 4. 场景保存为 `.xjscene`。场景和材质编辑使用基于快照的 Undo/Redo，最多保留 100 条历史。
@@ -167,7 +167,7 @@ Windows 下用户 UI 状态跟随可执行文件目录，不依赖启动工作�
 
 - Scene Preview 绘制自适应 **1/2/5 系列格距**的世界网格，最小 **1 米**，包含 X/Z 坐标标签、刻线、格距说明和边缘淡出。
 - 网格启用深度测试但不写深度。布局随相机和视口变化；相机姿态无效时跳过网格，不复用缓存视图。
-- 世界网格、灯光线框和 Transform Gizmo 均为 Scene 专用辅助显示，Game Preview 不包含这些编辑器通道。
+- 世界网格、灯光与相机线框、选中 Mesh 轮廓和 Transform Gizmo 均为 Scene 专用辅助显示，Game Preview 不包含这些编辑器通道。Hierarchy 可创建空实体或 Camera 实体。
 - 当前仅实现 **Final** 视图模式，BaseColor、LinearDepth、WorldNormal 和 Lighting 仍按能力禁用。
 
 ### Play 模式与脚本
@@ -337,6 +337,7 @@ ctest --test-dir build -C Release --output-on-failure
 - 无需 GPU 的世界网格布局、Transform Gizmo 几何与帧计算：九个唯一手柄、有限且非退化的三角形列表、几何边界、透视尺寸调整与无效视口高度。
 - `XJTransformGizmoGeometryTests` 还验证 X 轴手柄拾取、无效帧拒绝与拖拽数学：沿 X 轴移动、重复计算不累积、正对视线轴拒绝、旋转后的 Local X 跟随其世界方向，以及跨越 ±180° 的连续旋转展开。
 - `XJGizmoTransactionTests` 在无 GPU 环境下直接驱动 Controller/Service 预览事务：取消完整恢复姿态且不产生历史或 dirty；一次缩放拖动提交只创建一条 Undo，Redo 恢复最终缩放；无变化提交保留原有 Redo 链；World 有损缩放保留本地反射符号；负 World 缩放被拒绝且不写历史。
+- `XJOutlineNormalsTests` 验证选中 Mesh 轮廓使用的 CPU 平滑法线生成，包括按位置共享的顶点。
 
 这些测试不能替代手动 Vulkan 验证或视口视觉检查。预览事务已有 Controller/Service 级覆盖；视口输入占用、取消触发条件和生命周期路径仍需手动集成检查。
 

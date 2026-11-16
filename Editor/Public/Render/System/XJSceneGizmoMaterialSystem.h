@@ -1,5 +1,5 @@
-#ifndef XJ_LIGHT_GIZMO_MATERIAL_SYSTEM_H
-#define XJ_LIGHT_GIZMO_MATERIAL_SYSTEM_H
+#ifndef XJ_SCENE_GIZMO_MATERIAL_SYSTEM_H
+#define XJ_SCENE_GIZMO_MATERIAL_SYSTEM_H
 
 #include "Render/System/XJMaterialSystem.h"
 
@@ -11,8 +11,8 @@ namespace XJ
     class XJVulkanPipeline;
     class XJVulkanPipelineLayout;
 
-    // 只挂载到 Scene Preview，显示 LightComponent 的编辑器线框模型。
-    class XJLightGizmoMaterialSystem final : public XJMaterialSystem
+    // 只挂载到 Scene Preview，显示场景灯光和摄像机的线框。
+    class XJSceneGizmoMaterialSystem final : public XJMaterialSystem
     {
         public:
             void OnInit(XJVulkanRenderPass* renderPass) override;
@@ -23,6 +23,7 @@ namespace XJ
             std::shared_ptr<XJMesh> mDirectionalMesh;
             std::shared_ptr<XJMesh> mPointMesh;
             std::shared_ptr<XJMesh> mSpotMesh;
+            std::shared_ptr<XJMesh> mCameraMesh;
             std::shared_ptr<XJVulkanPipelineLayout> mPipelineLayout;
             std::shared_ptr<XJVulkanPipeline> mPipeline;
     };

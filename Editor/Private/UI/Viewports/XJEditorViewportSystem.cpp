@@ -7,10 +7,11 @@
 #include "Edit/XJGlfwWindow.h"
 #include "Render/XJEditorRenderResources.h"
 #include "Render/System/XJBaseMaterialSystem.h"
-#include "Render/System/XJWorldGridMaterialSystem.h"
 #include "Render/System/XJSurfaceMaterialSystem.h"
-#include "Render/System/XJLightGizmoMaterialSystem.h"
+#include "Render/System/XJWorldGridMaterialSystem.h"
+#include "Render/System/XJSceneGizmoMaterialSystem.h"
 #include "Render/System/XJTransformGizmoMaterialSystem.h"
+#include "Render/System/XJSelectionOutlineMaterialSystem.h"
 #include "UI/Viewports/XJGamePreview.h"
 #include "UI/Viewports/XJScenePreview.h"
 
@@ -89,7 +90,8 @@ namespace XJ
         mImpl->ScenePreview->AddMaterialSystem<XJBaseMaterialSystem>();
         mImpl->ScenePreview->AddMaterialSystem<XJSurfaceMaterialSystem>();
         mImpl->ScenePreview->AddMaterialSystem<XJWorldGridMaterialSystem>();
-        mImpl->ScenePreview->AddMaterialSystem<XJLightGizmoMaterialSystem>();
+        mImpl->ScenePreview->AddMaterialSystem<XJSelectionOutlineMaterialSystem>(info.UIState);
+        mImpl->ScenePreview->AddMaterialSystem<XJSceneGizmoMaterialSystem>();
         mImpl->ScenePreview->AddMaterialSystem<XJTransformGizmoMaterialSystem>(info.UIState);
 
         mImpl->GamePreview =
