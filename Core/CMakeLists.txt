@@ -39,10 +39,13 @@ PUBLIC
     glm::glm-header-only
     tinygltf
     nlohmann_json
+    Jolt
 PRIVATE
     tinyobjloader
     spirv-reflect-static
 )
+
+
     
 # 设置C++标准
 target_compile_features(Core PUBLIC cxx_std_20)

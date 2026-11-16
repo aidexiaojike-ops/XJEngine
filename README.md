@@ -55,7 +55,7 @@ XJEngine is an experimental C++20 game engine and editor built on Vulkan and EnT
 - Windows 10/11 x64 and a Vulkan-capable GPU with an installed graphics driver.
 - A C++20 compiler. Visual Studio 2022 with **Desktop development with C++** is the recommended setup for the commands below.
 - **CMake 3.28 or newer**. The top-level file still declares 3.10, but the bundled EnTT dependency requires 3.28.
-- A Windows Vulkan SDK, or network access for CMake's automatic SDK download. Other dependencies are included under `ThirdParty/`.
+- A Windows Vulkan SDK, or network access for CMake's automatic SDK download. Other dependencies, including Jolt Physics 5.7.0, are included under `ThirdParty/`.
 
 Run these commands in PowerShell from the directory where you want to clone the project:
 
@@ -382,7 +382,7 @@ Status, not a release schedule:
 - Follow surrounding naming/include-guard conventions. Log diagnostics with `spdlog::`; when propagation is required, log and then throw a standard exception.
 - Submit focused pull requests with relevant tests and matching English/Chinese documentation. Report reproduction steps, build configuration and logs through [GitHub Issues](https://github.com/aidexiaojike-ops/XJEngine/issues).
 
-Dependencies include GLFW, EnTT, GLM, spdlog, stb_image, tinyobjloader, tinygltf, Dear ImGui, nlohmann/json, SPIRV-Reflect and the Vulkan SDK. Thanks to their authors and maintainers; see `ThirdParty/` for the bundled projects.
+Dependencies include GLFW, EnTT, GLM, spdlog, stb_image, tinyobjloader, tinygltf, Dear ImGui, nlohmann/json, SPIRV-Reflect, Jolt Physics 5.7.0 and the Vulkan SDK. Jolt is built as a static library and linked to Core; engine physics features are not yet exposed. Thanks to their authors and maintainers; see `ThirdParty/` for the bundled projects.
 
 ## License
 

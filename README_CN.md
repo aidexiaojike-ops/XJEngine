@@ -55,7 +55,7 @@ XJEngine 是一个基于 Vulkan 和 EnTT 的实验性 C++20 游戏引擎与编�
 - Windows 10/11 x64，支持 Vulkan 的 GPU 与已安装的显卡驱动。
 - 支持 C++20 的编译器。以下命令推荐使用安装了**“使用 C++ 的桌面开发”**工作负载的 Visual Studio 2022。
 - **CMake 3.28 或更新版本**。顶层文件仍声明 3.10，但仓库内的 EnTT 依赖实际要求 3.28。
-- Windows Vulkan SDK，或允许 CMake 自动下载 SDK 的网络环境。其他依赖已包含在 `ThirdParty/` 中。
+- Windows Vulkan SDK，或允许 CMake 自动下载 SDK 的网络环境。其他依赖（包括 Jolt Physics 5.7.0）已包含在 `ThirdParty/` 中。
 
 在准备克隆项目的目录打开 PowerShell，执行：
 
@@ -382,7 +382,7 @@ ctest --test-dir build -C Release --output-on-failure
 - 遵循周边命名与 include guard 风格。诊断日志统一使用 `spdlog::`；需要异常传播时先记录，再抛出标准异常。
 - 提交聚焦的 Pull Request，补充相关测试并同步中英文文档；通过 [GitHub Issues](https://github.com/aidexiaojike-ops/XJEngine/issues) 提供复现步骤、构建配置与日志。
 
-依赖包括 GLFW、EnTT、GLM、spdlog、stb_image、tinyobjloader、tinygltf、Dear ImGui、nlohmann/json、SPIRV-Reflect 和 Vulkan SDK。感谢这些项目的作者与维护者，内置项目见 `ThirdParty/`。
+依赖包括 GLFW、EnTT、GLM、spdlog、stb_image、tinyobjloader、tinygltf、Dear ImGui、nlohmann/json、SPIRV-Reflect、Jolt Physics 5.7.0 和 Vulkan SDK。Jolt 作为静态库构建并链接到 Core；引擎尚未开放物理功能。感谢这些项目的作者与维护者，内置项目见 `ThirdParty/`。
 
 ## 许可证
 
