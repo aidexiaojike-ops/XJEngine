@@ -8,3 +8,6 @@ ThirdParty/VulkanSDK/
 
 # �������������ļ�
 stdout
+
+# Local agent conventions (not tracked)
+AGENTS.md
