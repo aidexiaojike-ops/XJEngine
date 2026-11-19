@@ -39,8 +39,8 @@ PUBLIC
     glm::glm-header-only
     tinygltf
     nlohmann_json
-    Jolt
 PRIVATE
+    Jolt
     tinyobjloader
     spirv-reflect-static
 )

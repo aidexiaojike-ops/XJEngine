@@ -1,0 +1,88 @@
+Jolt Physics - 版本与来源记录
+================================================================
+
+库名称      : Jolt Physics
+版本        : 5.7.0
+上游仓库    : https://github.com/jrouwe/JoltPhysics
+发布页      : https://github.com/jrouwe/JoltPhysics/releases/tag/v5.7.0
+上游文档    : https://jrouwe.github.io/JoltPhysicsDocs/5.7.0/
+许可证      : MIT（原文见同目录 LICENSE）
+
+提交 SHA
+----------------------------------------------------------------
+未记录（源码来自上游发布的 5.7.0 发布归档，归档内不含 .git 目录）。
+
+如需固定到精确提交，请执行以下步骤并回填此处：
+  1. git clone https://github.com/jrouwe/JoltPhysics
+  2. git checkout v5.7.0
+  3. git rev-parse HEAD
+  4. 将得到的 SHA 写入本行下方
+
+  Commit SHA : （待补充）
+
+在 SHA 补充之前，本目录的实际身份是"上游 5.7.0 发布归档"，
+不跟随上游 master 更新。
+
+引入日期
+----------------------------------------------------------------
+2026-11-16
+
+保留文件清单
+----------------------------------------------------------------
+  LICENSE                上游 MIT 许可原文，必须保留
+  VERSION.txt            本文件，记录版本、来源、裁剪与补丁
+  README.XJEngine.txt    本项目的构建与升级说明
+  Jolt/                  上游核心源码与头文件（560 个文件）
+                         完整的 Jolt/ 目录，未做任何源码裁剪
+
+裁剪说明（相对上游完整发布归档）
+----------------------------------------------------------------
+已删除：
+
+  Build/                 上游构建脚本目录，共 61 个文件，含：
+                           CMakeLists.txt        上游顶层 CMake（作为子目录引入时
+                                                 会全局降级 C++ 标准并添加 /Wall
+                                                 /WX /GR- 等编译选项，本项目不使用）
+                           Config.cmake.in       上游安装用 cmake 配置模板
+                           Android/ iOS/ macOS/ 平台工程
+                           cmake_*.bat / *.sh    各平台配置脚本
+                           README.md             上游构建说明
+
+未引入（上游归档中存在但与本项目无关）：
+
+  .github/                CI 配置
+  Assets/                 示例用资产（模型、地形等）
+  Docs/                   上游文档与 API 变更记录
+  HelloWorld/             最小示例
+  JoltViewer/             调试查看器
+  PerformanceTest/        性能测试程序
+  Samples/                示例场景集合
+  TestFramework/          示例框架
+  UnitTests/              上游单元测试
+  Doxyfile 等             文档生成配置
+
+说明：只裁剪构建脚本、示例、测试与资产，不裁剪 Jolt/ 内的任何源码。
+      若后续发现源文件清单遗漏导致功能不可用，应恢复对应源码文件，
+      不要在 XJEngine 侧写空实现。
+
+本地补丁
+----------------------------------------------------------------
+无。Jolt/ 目录与上游 5.7.0 发布归档保持一致。
+
+保留的版权与许可声明
+----------------------------------------------------------------
+Jolt/ 下所有源文件均保留上游的 SPDX 头：
+
+  // Jolt Physics Library (https://github.com/jrouwe/JoltPhysics)
+  // SPDX-FileCopyrightText: 2021 Jorrit Rouwe
+  // SPDX-License-Identifier: MIT
+
+不要删除或修改这些声明。
+
+注意事项
+----------------------------------------------------------------
+1. 本项目实际引入版本为 5.7.0。PHYSICS_JOLT_PLAN.txt 中提到的
+   v5.6.0 是早期评估版本，以本文件记录的 5.7.0 为准。
+2. 构建定义由 XJEngine 自行维护，见 cmake/JoltPhysics.cmake。
+3. 不要启用上游 Build/ 脚本，也不要让 Jolt 的全局编译选项
+   （C++ 标准、RTTI、异常、警告等级）扩散到整个引擎。

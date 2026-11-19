@@ -232,7 +232,7 @@ File -> Scanner / Importer -> Asset (CPU) -> Factory -> Render Resource (GPU)
 
 ```text
 XJEngine/
-├── Core/                    # ECS, camera, input, geometry, assets, scripting, rendering
+├── Core/                    # ECS, camera, input, geometry, assets, scripting, rendering, physics
 │   ├── Public/              # Public interfaces
 │   └── Private/             # Implementations
 ├── Editor/                  # ImGui editor and MVVM application services
@@ -338,6 +338,7 @@ Coverage includes:
 - `XJTransformGizmoGeometryTests` also checks X-axis handle picking, invalid-frame rejection and drag math: X-axis motion, non-accumulating repeated calculations, view-aligned axis rejection, rotated Local X following its world direction, and continuous rotation unwrap across ±180°.
 - `XJGizmoTransactionTests` exercises the controller/service preview without a GPU: cancel restores the full pose with no history or dirty state, a committed scale drag creates exactly one Undo and Redo restores the final scale, a no-op commit preserves the existing Redo chain, World lossy scale preserves local reflection signs, and a negative World scale is rejected without history.
 - `XJOutlineNormalsTests` checks the CPU-generated smooth normals used by selected-mesh outlines, including vertices shared by position.
+- `XJPhysicsWorldTests` drives `XJPhysicsWorld` without a GPU: a dynamic box falls onto a static plane, settles at the expected height without X/Z drift, comes to rest and sleeps; repeated initialize/shutdown rounds reuse the process-wide Jolt runtime; and invalid input (creation before init, double initialize, zero/negative delta time, zero half extent, negative mass, zero plane normal) is rejected.
 
 These tests do not replace manual Vulkan validation or visual viewport checks. Preview transactions are covered at controller/service level; viewport input capture, cancellation triggers and lifecycle paths still need manual integration checks.
 
@@ -351,6 +352,7 @@ These tests do not replace manual Vulkan validation or visual viewport checks. P
 ## Current Limitations
 
 - Gizmo editing is limited to one handle and one entity per drag. Plane/free movement, multi-axis handles, snapping, numeric entry during a drag, a Move/Rotate/Scale operation switch and multi-selection editing are not implemented. Rotation requires a sufficiently visible ring, and nearly view-aligned move/scale axes require a different viewing angle. Scale factors stay positive, so drag-scaling cannot cross zero or flip local reflection signs.
+- Physics is a standalone Core module only: no ECS physics component, scene serialization, collision-event dispatch or editor/Play integration yet, and bodies are limited to static planes, static/dynamic boxes and dynamic spheres.
 - Only Final viewport rendering is implemented; diagnostic render modes remain unavailable.
 - The Windows SDK/DLL build setup still needs platform-specific adaptation for Linux/macOS.
 - Lit is basic forward lighting; full PBR, shadows, post-processing and skeletal animation are not implemented.
@@ -382,7 +384,7 @@ Status, not a release schedule:
 - Follow surrounding naming/include-guard conventions. Log diagnostics with `spdlog::`; when propagation is required, log and then throw a standard exception.
 - Submit focused pull requests with relevant tests and matching English/Chinese documentation. Report reproduction steps, build configuration and logs through [GitHub Issues](https://github.com/aidexiaojike-ops/XJEngine/issues).
 
-Dependencies include GLFW, EnTT, GLM, spdlog, stb_image, tinyobjloader, tinygltf, Dear ImGui, nlohmann/json, SPIRV-Reflect, Jolt Physics 5.7.0 and the Vulkan SDK. Jolt is built as a static library and linked to Core; engine physics features are not yet exposed. Thanks to their authors and maintainers; see `ThirdParty/` for the bundled projects.
+Dependencies include GLFW, EnTT, GLM, spdlog, stb_image, tinyobjloader, tinygltf, Dear ImGui, nlohmann/json, SPIRV-Reflect, Jolt Physics 5.7.0 and the Vulkan SDK. Jolt is built as a private static library by [`cmake/JoltPhysics.cmake`](cmake/JoltPhysics.cmake) and linked to Core, so no Jolt header appears in public engine headers. `XJPhysicsWorld` exposes static planes, static/dynamic boxes, dynamic spheres, fixed-step simulation and pose/velocity queries; it is not yet connected to ECS, the editor or Play mode. Thanks to their authors and maintainers; see `ThirdParty/` for the bundled projects.
 
 ## License
 

@@ -491,3 +491,16 @@ add_test(
     NAME XJOutlineNormalsTests
     COMMAND $<TARGET_FILE:XJOutlineNormalsTests>
 )
+
+add_executable(XJPhysicsWorldTests
+    ${CMAKE_CURRENT_SOURCE_DIR}/Physics/XJPhysicsWorldTests.cpp
+)
+
+target_link_libraries(XJPhysicsWorldTests PRIVATE Core)
+target_compile_features(XJPhysicsWorldTests PRIVATE cxx_std_20)
+
+if(MINGW AND CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+    target_compile_options(XJPhysicsWorldTests PRIVATE -Wa,-mbig-obj)
+endif()
+
+add_test(NAME XJPhysicsWorldTests COMMAND $<TARGET_FILE:XJPhysicsWorldTests>)

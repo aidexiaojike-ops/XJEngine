@@ -28,4 +28,7 @@ set(SPIRV_REFLECT_STATIC_LIB ON CACHE BOOL "" FORCE)
 set(SPIRV_REFLECT_BUILD_TESTS OFF CACHE BOOL "" FORCE)
 set(SPIRV_REFLECT_INSTALL OFF CACHE BOOL "" FORCE)
 add_subdirectory(${THIRD_PARTY_DIR}/SPIRV-Reflect)
-add_subdirectory(${THIRD_PARTY_DIR}/JoltPhysics)
+
+# Jolt Physics：单个静态库 target，编译选项全部限定在该 target 内。
+# 由 cmake/JoltPhysics.cmake 定义，不使用上游 Build 脚本。
+include(${CMAKE_CURRENT_LIST_DIR}/JoltPhysics.cmake)

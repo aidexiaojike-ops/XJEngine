@@ -8,26 +8,17 @@
 #include "Graphic/XJVulkanPipeline.h"
 #include "Graphic/XJVulkanVertex.h"
 #include "Render/Resource/XJMesh.h"
-#include "Render/XJLightSceneUtils.h"
 #include "Render/XJRenderTarget.h"
 #include "Tools/XJCameraGizmoGeometry.h"
+#include "Tools/XJLightGizmoGeometry.h"
 
-#include <algorithm>
-#include <cmath>
 #include <cstddef>
-#include <glm/gtc/constants.hpp>
-#include <glm/gtc/matrix_transform.hpp>
 #include <vector>
 
 namespace XJ
 {
     namespace
     {
-        constexpr uint32_t kCircleSegments = 20;
-        constexpr float kPointRadius = 0.3f;
-        constexpr float kDirectionalLength = 0.8f;
-        constexpr float kSpotLength = 0.8f;
-
         struct GizmoPushConstants
         {
             glm::mat4 Mvp{1.0f};
@@ -36,127 +27,24 @@ namespace XJ
 
         static_assert(sizeof(GizmoPushConstants) == 80);
 
-        uint32_t AddVertex(std::vector<XJVulkanVertex>& vertices, const glm::vec3& position)
+        template <typename Positions, typename Indices>
+        std::shared_ptr<XJMesh> CreateGizmoMesh(const Positions& positions, const Indices& lineIndices)
         {
-            XJVulkanVertex vertex{};
-            vertex.position = position;
-            vertices.push_back(vertex);
-            return static_cast<uint32_t>(vertices.size() - 1);
-        }
-
-        void AddLine(
-            std::vector<XJVulkanVertex>& vertices,
-            std::vector<uint32_t>& indices,
-            const glm::vec3& start,
-            const glm::vec3& end)
-        {
-            indices.push_back(AddVertex(vertices, start));
-            indices.push_back(AddVertex(vertices, end));
-        }
-
-        void AddCircle(
-            std::vector<XJVulkanVertex>& vertices,
-            std::vector<uint32_t>& indices,
-            int fixedAxis,
-            float fixedValue,
-            float radius)
-        {
-            for (uint32_t segment = 0; segment < kCircleSegments; ++segment)
+            std::vector<XJVulkanVertex> vertices;
+            vertices.reserve(positions.size());
+            for (const glm::vec3& position : positions)
             {
-                const float a0 = glm::two_pi<float>() * static_cast<float>(segment) / static_cast<float>(kCircleSegments);
-                const float a1 = glm::two_pi<float>() * static_cast<float>(segment + 1) / static_cast<float>(kCircleSegments);
-                glm::vec3 p0(0.0f);
-                glm::vec3 p1(0.0f);
-                p0[fixedAxis] = fixedValue;
-                p1[fixedAxis] = fixedValue;
-
-                const int axisA = (fixedAxis + 1) % 3;
-                const int axisB = (fixedAxis + 2) % 3;
-                p0[axisA] = std::cos(a0) * radius;
-                p0[axisB] = std::sin(a0) * radius;
-                p1[axisA] = std::cos(a1) * radius;
-                p1[axisB] = std::sin(a1) * radius;
-                AddLine(vertices, indices, p0, p1);
+                XJVulkanVertex vertex{};
+                vertex.position = position;
+                vertices.push_back(vertex);
             }
-        }
-
-        std::shared_ptr<XJMesh> CreatePointMesh()
-        {
-            std::vector<XJVulkanVertex> vertices;
-            std::vector<uint32_t> indices;
-            vertices.reserve(kCircleSegments * 6);
-            indices.reserve(kCircleSegments * 6);
-            AddCircle(vertices, indices, 0, 0.0f, kPointRadius);
-            AddCircle(vertices, indices, 1, 0.0f, kPointRadius);
-            AddCircle(vertices, indices, 2, 0.0f, kPointRadius);
+            const std::vector<uint32_t> indices(lineIndices.begin(), lineIndices.end());
             return std::make_shared<XJMesh>(vertices, indices);
         }
 
-        std::shared_ptr<XJMesh> CreateDirectionalMesh()
+        std::shared_ptr<XJMesh> CreateLightGizmoMesh(const LightGizmoGeometry::LineGeometry& geometry)
         {
-            std::vector<XJVulkanVertex> vertices;
-            std::vector<uint32_t> indices;
-            AddLine(vertices, indices, glm::vec3(0.0f), glm::vec3(kDirectionalLength, 0.0f, 0.0f));
-
-            constexpr float headX = 0.55f;
-            constexpr float headRadius = 0.16f;
-            for (uint32_t segment = 0; segment < 8; ++segment)
-            {
-                const float angle = glm::two_pi<float>() * static_cast<float>(segment) / 8.0f;
-                AddLine(
-                    vertices,
-                    indices,
-                    glm::vec3(kDirectionalLength, 0.0f, 0.0f),
-                    glm::vec3(headX, std::cos(angle) * headRadius, std::sin(angle) * headRadius));
-            }
-            AddCircle(vertices, indices, 0, headX, headRadius);
-            return std::make_shared<XJMesh>(vertices, indices);
-        }
-
-        std::shared_ptr<XJMesh> CreateSpotMesh()
-        {
-            std::vector<XJVulkanVertex> vertices;
-            std::vector<uint32_t> indices;
-            AddLine(vertices, indices, glm::vec3(0.0f), glm::vec3(kSpotLength, 0.0f, 0.0f));
-            AddCircle(vertices, indices, 0, kSpotLength, 1.0f);
-
-            for (uint32_t segment = 0; segment < 8; ++segment)
-            {
-                const float angle = glm::two_pi<float>() * static_cast<float>(segment) / 8.0f;
-                AddLine(
-                    vertices,
-                    indices,
-                    glm::vec3(0.0f),
-                    glm::vec3(kSpotLength, std::cos(angle), std::sin(angle)));
-            }
-            return std::make_shared<XJMesh>(vertices, indices);
-        }
-
-        std::shared_ptr<XJMesh> CreateCameraMesh()
-        {
-            std::vector<XJVulkanVertex> vertices;
-            vertices.reserve(CameraGizmoGeometry::Vertices.size());
-            for (const glm::vec3& position : CameraGizmoGeometry::Vertices)
-                AddVertex(vertices, position);
-            const std::vector<uint32_t> indices(
-                CameraGizmoGeometry::Indices.begin(), CameraGizmoGeometry::Indices.end());
-            return std::make_shared<XJMesh>(vertices, indices);
-        }
-
-        glm::mat4 BuildDirectionRotation(const glm::vec3& direction)
-        {
-            const glm::vec3 xAxis = glm::normalize(direction);
-            const glm::vec3 referenceUp = std::abs(glm::dot(xAxis, glm::vec3(0.0f, 1.0f, 0.0f))) > 0.99f
-                ? glm::vec3(0.0f, 0.0f, 1.0f)
-                : glm::vec3(0.0f, 1.0f, 0.0f);
-            const glm::vec3 yAxis = glm::normalize(referenceUp - xAxis * glm::dot(referenceUp, xAxis));
-            const glm::vec3 zAxis = glm::normalize(glm::cross(xAxis, yAxis));
-
-            glm::mat4 result(1.0f);
-            result[0] = glm::vec4(xAxis, 0.0f);
-            result[1] = glm::vec4(yAxis, 0.0f);
-            result[2] = glm::vec4(zAxis, 0.0f);
-            return result;
+            return CreateGizmoMesh(geometry.Vertices, geometry.Indices);
         }
     }
 
@@ -166,10 +54,10 @@ namespace XJ
         if (!device || !renderPass)
             return;
 
-        mDirectionalMesh = CreateDirectionalMesh();
-        mPointMesh = CreatePointMesh();
-        mSpotMesh = CreateSpotMesh();
-        mCameraMesh = CreateCameraMesh();
+        mDirectionalMesh = CreateLightGizmoMesh(LightGizmoGeometry::BuildDirectionalGeometry());
+        mPointMesh = CreateLightGizmoMesh(LightGizmoGeometry::BuildPointGeometry());
+        mSpotMesh = CreateLightGizmoMesh(LightGizmoGeometry::BuildSpotGeometry());
+        mCameraMesh = CreateGizmoMesh(CameraGizmoGeometry::Vertices, CameraGizmoGeometry::Indices);
 
         const VkPushConstantRange pushConstantRange{
             .stageFlags = VK_SHADER_STAGE_VERTEX_BIT,
@@ -259,7 +147,6 @@ namespace XJ
         lights.each([&](auto, const XJTransformComponent& transform, const XJLightComponent& light)
         {
             XJMesh* mesh = nullptr;
-            glm::vec3 scale(1.0f);
 
             switch (light.XJGetLightType())
             {
@@ -270,23 +157,13 @@ namespace XJ
                     mesh = mPointMesh.get();
                     break;
                 case XJLightType::Spot:
-                {
                     mesh = mSpotMesh.get();
-                    const float coneRadius = std::min(
-                        std::tan(glm::radians(light.XJGetOuterAngleDegrees())) * kSpotLength,
-                        1.0f);
-                    scale.y = coneRadius;
-                    scale.z = coneRadius;
                     break;
-                }
             }
 
-            glm::vec3 position;
-            if (transform.ReadWorldPosition(position) != XJTransformStatus::Success) return;
-            glm::mat4 model = glm::translate(glm::mat4(1.0f), position);
-            if (light.XJGetLightType() != XJLightType::Point)
-                model *= BuildDirectionRotation(XJLightSceneUtils::BuildDirection(transform));
-            model = glm::scale(model, scale);
+            glm::mat4 model;
+            if (!LightGizmoGeometry::TryBuildModel(transform, light, model))
+                return;
 
             const glm::vec4 color = light.XJGetEnable()
                 ? glm::vec4(glm::clamp(light.XJGetColor(), glm::vec3(0.0f), glm::vec3(1.0f)), 1.0f)
