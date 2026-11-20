@@ -174,7 +174,8 @@ Windows 下用户 UI 状态跟随可执行文件目录，不依赖启动工作�
 ### Play 模式与脚本
 
 - Play 将编辑场景克隆为运行时场景；Pause/Resume 控制模拟，Stop 恢复编辑器选择。
-- 物理属于 Play 会话：`XJPhysicsSystem` 注册在脚本系统之后，同一个固定步内脚本先提交力/传送，物理随后消费并步进；Stop 时调度器逆序销毁系统，先释放 Jolt 世界，脚本 `OnDestroy` 不会碰到已销毁的物理状态。只有 Collider 没有 RigidBody 的实体自动成为静态刚体；只有 RigidBody 没有 Collider 则跳过并输出警告。
+- `XJPhysicsSystem` 在克隆的运行时场景中于脚本系统之后执行，默认固定步频为 60 Hz。每步同步刚体、处理排队的传送请求、步进 Jolt，并把动态刚体的位姿写回 Transform。Stop 时先释放 Jolt 世界，再销毁脚本系统。
+- 在 C++ 中用 `XJColliderComponent` 配置盒、球和胶囊形状。只有碰撞体时创建静态刚体；添加 `XJRigidBodyComponent` 可配置运动属性。刚体缺少碰撞体时会被跳过并记录警告。运行时修改组件后，调用 `MarkPhysicsDirty` 可在下一固定步重建刚体；调用 `RequestTeleport` 可请求在该步模拟前修改位姿。
 - 运行时 Hierarchy/Inspector 读取运行场景快照。可通过运行时请求增删脚本组件/槽、启停与替换脚本；调度器在安全点同步，暂停期间也可处理。
 - 脚本输入要求处于 **Playing**，Game 与应用窗口聚焦，且无活动 UI 控件、文本输入或弹窗。按下/释放边沿仅在 Update 可见，重新获得焦点首帧抑制边沿。
 - 保存 `.xjs` 后，Content Browser 接收保存结果与编译诊断。磁盘保存成功仍可能存在编译错误，Play 预检会拒绝无效脚本；脚本编辑器仅在收到保存成功响应后清除 dirty 状态。
@@ -355,7 +356,7 @@ ctest --test-dir build -C Release --output-on-failure
 ## 当前限制
 
 - Gizmo 编辑每次拖动仅限一个手柄和一个实体。平面/自由移动、多轴手柄、吸附、拖动中数值输入、Move/Rotate/Scale 操作切换和多选编辑尚未实现。旋转需要旋转环有足够可见度，移动/缩放轴接近正对视线时需要调整视角。缩放倍率始终为正，拖拽缩放不能穿过零或翻转本地反射符号。
-- 物理仅在 Play 中运行：`XJPhysicsSystem` 随克隆的运行时场景创建，在脚本之后的固定步执行并写回 Transform。`XJRigidBodyComponent`/`XJColliderComponent` 尚未参与 `.xjscene` 序列化、也没有 Inspector 界面，运行期修改字段必须调用 `MarkPhysicsDirty`。尚无碰撞/触发器事件、关节、射线检测或角色控制器；形状限于静态平面与盒/球/胶囊。
+- 编辑器仅在 Play 中运行物理模拟。物理组件尚不能在 Inspector 中编辑或保存到 `.xjscene`。静态平面由底层 `XJPhysicsWorld` API 提供，不是 ECS 碰撞体类型。碰撞/触发器事件、关节、射线检测和角色控制器尚未实现。
 - 仅实现 Final 视口渲染，诊断渲染模式尚不可用。
 - Windows SDK/DLL 构建流程仍需针对 Linux/macOS 适配。
 - Lit 为基础前向光照；完整 PBR、阴影、后处理和骨骼动画尚未实现。

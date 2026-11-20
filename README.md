@@ -174,7 +174,8 @@ Operation behavior:
 ### Play mode and scripts
 
 - Play clones the editing scene into a runtime scene; Pause/Resume control simulation and Stop restores the editor selection.
-- Physics is part of the Play session: `XJPhysicsSystem` is registered after the script system, so in one fixed step scripts submit forces/teleports first and physics then consumes them and steps. On Stop the scheduler destroys systems in reverse order, releasing the Jolt world before script `OnDestroy` runs. Entities whose Collider has no RigidBody become static bodies; a RigidBody without a Collider is skipped with a warning.
+- `XJPhysicsSystem` runs after scripts on the cloned runtime scene at a default fixed rate of 60 Hz. It synchronizes bodies, applies queued teleports, steps Jolt and writes dynamic poses back to Transform. Stop releases the Jolt world before script teardown.
+- Configure box, sphere and capsule shapes in C++ with `XJColliderComponent`. A collider alone creates a static body; add `XJRigidBodyComponent` to configure motion. A rigid body without a collider is skipped with a warning. Call `MarkPhysicsDirty` after runtime component edits to rebuild the body on the next fixed step, or `RequestTeleport` to queue a pose change before that step's simulation.
 - Runtime Hierarchy/Inspector read runtime snapshots. Script components/slots can be added or removed, enabled/disabled and replaced through runtime requests; synchronization occurs at scheduler safe points, including while paused.
 - Script input requires **Playing**, focused Game and application windows, and no active UI control, text input or popup. Press/release edges are Update-only and suppressed on focus acquisition.
 - Saving `.xjs` source reports the save result and compiler diagnostics to Content Browser. A successful disk save can still contain compile errors; Play preflight rejects invalid scripts. The script editor clears its dirty state only after a successful save response.
@@ -355,7 +356,7 @@ These tests do not replace manual Vulkan validation or visual viewport checks. P
 ## Current Limitations
 
 - Gizmo editing is limited to one handle and one entity per drag. Plane/free movement, multi-axis handles, snapping, numeric entry during a drag, a Move/Rotate/Scale operation switch and multi-selection editing are not implemented. Rotation requires a sufficiently visible ring, and nearly view-aligned move/scale axes require a different viewing angle. Scale factors stay positive, so drag-scaling cannot cross zero or flip local reflection signs.
-- Physics runs only while Playing: `XJPhysicsSystem` is created with the cloned runtime scene, stepped in fixed updates after scripts, and writes back to Transform. `XJRigidBodyComponent`/`XJColliderComponent` are not yet serialized in `.xjscene`, have no Inspector UI, and runtime field edits require `MarkPhysicsDirty`. There are no collision/trigger events, joints, ray casts or character controllers yet; bodies are limited to static plane analysis plus box/sphere/capsule shapes.
+- The editor runs physics only during Play. Physics components are not yet editable in the Inspector or saved in `.xjscene`. Static planes are available through the lower-level `XJPhysicsWorld` API, not as ECS colliders. Collision/trigger events, joints, ray casts and character controllers are not implemented.
 - Only Final viewport rendering is implemented; diagnostic render modes remain unavailable.
 - The Windows SDK/DLL build setup still needs platform-specific adaptation for Linux/macOS.
 - Lit is basic forward lighting; full PBR, shadows, post-processing and skeletal animation are not implemented.
