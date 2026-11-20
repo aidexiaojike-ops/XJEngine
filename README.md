@@ -46,6 +46,7 @@ XJEngine is an experimental C++20 game engine and editor built on Vulkan and EnT
 | **Transform Gizmo interaction** | Nine-part Local/World Gizmo with approximately constant screen size, handle picking, hover/active highlights and single-axis move, rotate and scale dragging with one-shot commit/cancel and Undo |
 | **Scene helpers** | Adaptive world grid, light and camera wireframes, selected-mesh outline, AABB + triangle and camera-wireframe picking, picked-surface orbit pivot |
 | **Play mode** | Runtime scene cloning, Play/Pause/Resume/Stop, runtime inspection and script-slot mutations without editing the source scene |
+| **Physics** | Jolt-backed `XJPhysicsWorld` inside a `XJPhysicsSystem` Play session, driven by `XJRigidBodyComponent` + `XJColliderComponent` (box/sphere/capsule, multi-shape, sensors, axis locks, damping, CCD); dynamic bodies write back to Transform each fixed step |
 | **Diagnostics** | spdlog-backed Console, viewport performance snapshots, frame history and material upload statistics |
 
 ## Quick Start
@@ -173,6 +174,7 @@ Operation behavior:
 ### Play mode and scripts
 
 - Play clones the editing scene into a runtime scene; Pause/Resume control simulation and Stop restores the editor selection.
+- Physics is part of the Play session: `XJPhysicsSystem` is registered after the script system, so in one fixed step scripts submit forces/teleports first and physics then consumes them and steps. On Stop the scheduler destroys systems in reverse order, releasing the Jolt world before script `OnDestroy` runs. Entities whose Collider has no RigidBody become static bodies; a RigidBody without a Collider is skipped with a warning.
 - Runtime Hierarchy/Inspector read runtime snapshots. Script components/slots can be added or removed, enabled/disabled and replaced through runtime requests; synchronization occurs at scheduler safe points, including while paused.
 - Script input requires **Playing**, focused Game and application windows, and no active UI control, text input or popup. Press/release edges are Update-only and suppressed on focus acquisition.
 - Saving `.xjs` source reports the save result and compiler diagnostics to Content Browser. A successful disk save can still contain compile errors; Play preflight rejects invalid scripts. The script editor clears its dirty state only after a successful save response.
@@ -339,6 +341,7 @@ Coverage includes:
 - `XJGizmoTransactionTests` exercises the controller/service preview without a GPU: cancel restores the full pose with no history or dirty state, a committed scale drag creates exactly one Undo and Redo restores the final scale, a no-op commit preserves the existing Redo chain, World lossy scale preserves local reflection signs, and a negative World scale is rejected without history.
 - `XJOutlineNormalsTests` checks the CPU-generated smooth normals used by selected-mesh outlines, including vertices shared by position.
 - `XJPhysicsWorldTests` drives `XJPhysicsWorld` without a GPU: a dynamic box falls onto a static plane, settles at the expected height without X/Z drift, comes to rest and sleeps; repeated initialize/shutdown rounds reuse the process-wide Jolt runtime; and invalid input (creation before init, double initialize, zero/negative delta time, zero half extent, negative mass, zero plane normal) is rejected.
+- `XJPhysicsSystemTests` covers the ECS bridge: a collider-only entity becomes a static body, a collider + dynamic rigid body falls and settles on it, `Enabled=false` creates no body until re-marked dirty, a rigid body without a collider is ignored, mixed sensor flags and six-axis locks are rejected, teleports apply on the next fixed step, destroying an entity removes its body, and repeated create/destroy rounds leave no bodies behind.
 
 These tests do not replace manual Vulkan validation or visual viewport checks. Preview transactions are covered at controller/service level; viewport input capture, cancellation triggers and lifecycle paths still need manual integration checks.
 
@@ -352,7 +355,7 @@ These tests do not replace manual Vulkan validation or visual viewport checks. P
 ## Current Limitations
 
 - Gizmo editing is limited to one handle and one entity per drag. Plane/free movement, multi-axis handles, snapping, numeric entry during a drag, a Move/Rotate/Scale operation switch and multi-selection editing are not implemented. Rotation requires a sufficiently visible ring, and nearly view-aligned move/scale axes require a different viewing angle. Scale factors stay positive, so drag-scaling cannot cross zero or flip local reflection signs.
-- Physics is a standalone Core module only: no ECS physics component, scene serialization, collision-event dispatch or editor/Play integration yet, and bodies are limited to static planes, static/dynamic boxes and dynamic spheres.
+- Physics runs only while Playing: `XJPhysicsSystem` is created with the cloned runtime scene, stepped in fixed updates after scripts, and writes back to Transform. `XJRigidBodyComponent`/`XJColliderComponent` are not yet serialized in `.xjscene`, have no Inspector UI, and runtime field edits require `MarkPhysicsDirty`. There are no collision/trigger events, joints, ray casts or character controllers yet; bodies are limited to static plane analysis plus box/sphere/capsule shapes.
 - Only Final viewport rendering is implemented; diagnostic render modes remain unavailable.
 - The Windows SDK/DLL build setup still needs platform-specific adaptation for Linux/macOS.
 - Lit is basic forward lighting; full PBR, shadows, post-processing and skeletal animation are not implemented.
@@ -384,7 +387,7 @@ Status, not a release schedule:
 - Follow surrounding naming/include-guard conventions. Log diagnostics with `spdlog::`; when propagation is required, log and then throw a standard exception.
 - Submit focused pull requests with relevant tests and matching English/Chinese documentation. Report reproduction steps, build configuration and logs through [GitHub Issues](https://github.com/aidexiaojike-ops/XJEngine/issues).
 
-Dependencies include GLFW, EnTT, GLM, spdlog, stb_image, tinyobjloader, tinygltf, Dear ImGui, nlohmann/json, SPIRV-Reflect, Jolt Physics 5.7.0 and the Vulkan SDK. Jolt is built as a private static library by [`cmake/JoltPhysics.cmake`](cmake/JoltPhysics.cmake) and linked to Core, so no Jolt header appears in public engine headers. `XJPhysicsWorld` exposes static planes, static/dynamic boxes, dynamic spheres, fixed-step simulation and pose/velocity queries; it is not yet connected to ECS, the editor or Play mode. Thanks to their authors and maintainers; see `ThirdParty/` for the bundled projects.
+Dependencies include GLFW, EnTT, GLM, spdlog, stb_image, tinyobjloader, tinygltf, Dear ImGui, nlohmann/json, SPIRV-Reflect, Jolt Physics 5.7.0 and the Vulkan SDK. Jolt is built as a private static library by [`cmake/JoltPhysics.cmake`](cmake/JoltPhysics.cmake) and linked to Core, so no Jolt header appears in public engine headers. `XJPhysicsWorld` exposes static planes, static/dynamic boxes, dynamic spheres, a generic multi-shape body creation path, teleport/velocity setters, fixed-step simulation and pose/velocity queries. `XJPhysicsSystem` bridges it into the ECS during Play; physics components are not serialized yet. Thanks to their authors and maintainers; see `ThirdParty/` for the bundled projects.
 
 ## License
 

@@ -80,24 +80,31 @@ namespace XJ
             auto BeforeEntityDestroy() { return entt::sink{mBeforeEntityDestroy}; }
             uint64_t GetStructureRevision() const { return mStructureRevision; }
 
+            // 实体已排队等待销毁，但在下一次安全点前仍存在于 registry。
+            // 物理等系统应跳过它，避免在将被删除的对象上继续模拟。
+            bool IsPendingDestroy(entt::entity enttEntity) const
+            {
+                return mPendingDestroySet.contains(enttEntity);
+            }
+
         // VM 和销毁通知期间保持 Owner 有效；实体删除在安全点处理。
         class ScriptExecutionScope
         {
-        public:
-            explicit ScriptExecutionScope(XJScene& scene) : mScene(scene)
-            {
-                ++mScene.mScriptExecutionDepth;
-            }
-            ~ScriptExecutionScope()
-            {
-                --mScene.mScriptExecutionDepth;
-            }
+            public:
+                explicit ScriptExecutionScope(XJScene& scene) : mScene(scene)
+                {
+                    ++mScene.mScriptExecutionDepth;
+                }
+                ~ScriptExecutionScope()
+                {
+                    --mScene.mScriptExecutionDepth;
+                }
 
-            ScriptExecutionScope(const ScriptExecutionScope&) = delete;
-            ScriptExecutionScope& operator=(const ScriptExecutionScope&) = delete;
+                ScriptExecutionScope(const ScriptExecutionScope&) = delete;
+                ScriptExecutionScope& operator=(const ScriptExecutionScope&) = delete;
 
-        private:
-            XJScene& mScene;
+            private:
+                XJScene& mScene;
         };
     };
     

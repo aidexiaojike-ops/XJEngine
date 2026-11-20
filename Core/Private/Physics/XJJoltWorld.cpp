@@ -137,6 +137,31 @@ namespace XJ
             }
         }
 
+        // 六个 bool 轴向锁 -> Jolt 位掩码。
+        // EAllowedDOFs 的位定义见 Jolt/Physics/Body/AllowedDOFs.h：
+        //   0b000001 TranslationX  0b001000 RotationX
+        //   0b000010 TranslationY  0b010000 RotationY
+        //   0b000100 TranslationZ  0b100000 RotationZ
+        // 全锁（mask == 0）是非法值，Jolt 会崩，调用方必须先拒绝。
+        JPH::EAllowedDOFs ToAllowedDOFs(const XJPhysicsBodyDesc& desc)
+        {
+            JPH::uint8 mask = 0b111111;
+            if (desc.LockLinearX)  mask &= ~JPH::uint8(0b000001);
+            if (desc.LockLinearY)  mask &= ~JPH::uint8(0b000010);
+            if (desc.LockLinearZ)  mask &= ~JPH::uint8(0b000100);
+            if (desc.LockAngularX) mask &= ~JPH::uint8(0b001000);
+            if (desc.LockAngularY) mask &= ~JPH::uint8(0b010000);
+            if (desc.LockAngularZ) mask &= ~JPH::uint8(0b100000);
+            return JPH::EAllowedDOFs(mask);
+        }
+
+        bool AreAllAxesLocked(const XJPhysicsBodyDesc& desc)
+        {
+            return desc.LockLinearX && desc.LockLinearY && desc.LockLinearZ &&
+                desc.LockAngularX && desc.LockAngularY && desc.LockAngularZ;
+        }
+
+
     }
 
     class XJPhysicsWorld::Impl
@@ -166,8 +191,91 @@ namespace XJ
             std::unique_ptr<JPH::PhysicsSystem> System;
             std::unique_ptr<JPH::TempAllocatorImpl> TempAllocator;
             std::unique_ptr<JPH::JobSystem> JobSystem;
+            XJPhysicsResult CreateBody(const XJPhysicsBodyDesc& desc, XJPhysicsBodyId& outBodyId);
+
+            
 
     };
+    XJPhysicsResult XJPhysicsWorld::Impl::CreateBody(const XJPhysicsBodyDesc& desc, XJPhysicsBodyId& outBodyId)
+    {
+        if (!IsReady())
+            return XJPhysicsResult::NotInitialized;
+
+        // ---- 参数校验（全部在喂给 Jolt 之前做完）----
+        if (desc.Shapes.empty())
+        {
+            spdlog::error("CreateBody rejected empty shape list.");
+            return XJPhysicsResult::InvalidArgument;
+        }
+
+        if (!std::isfinite(desc.Position.x) || !std::isfinite(desc.Position.y) ||
+            !std::isfinite(desc.Position.z))
+        {
+            spdlog::error("CreateBody rejected non-finite position.");
+            return XJPhysicsResult::InvalidArgument;
+        }
+
+        if (desc.MotionType == XJMotionType::Dynamic &&
+            !(std::isfinite(desc.Mass) && desc.Mass > 0.0))
+        {
+            spdlog::error("CreateBody rejected non-positive dynamic mass: {}", desc.Mass);
+            return XJPhysicsResult::InvalidArgument;
+        }
+
+        if (desc.MotionType != XJMotionType::Static && AreAllAxesLocked(desc))
+        {
+            // Jolt 的 EAllowedDOFs::None 会崩（AllowedDOFs.h 明确写了
+            // "this is not valid and will crash. Use a static body instead."）
+            spdlog::error(
+                "CreateBody rejected body with all six axes locked. "
+                "Use XJMotionType::Static instead.");
+            return XJPhysicsResult::InvalidArgument;
+        }
+
+        // ---- 建形状（缩放在这里烘焙）----
+        const JPH::ShapeRefC shape = XJJoltShapeFactory::BuildShape(desc);
+        if (!shape)
+            return XJPhysicsResult::ShapeCreationFailed;
+
+        // ---- 组装 BodyCreationSettings ----
+        JPH::BodyCreationSettings settings(shape.GetPtr(),
+            ToJoltRVec3(desc.Position), ToJoltQuat(desc.Rotation),
+            ToJoltMotionType(desc.MotionType), ToObjectLayer(desc.MotionType));
+
+        settings.mFriction = desc.Friction;
+        settings.mRestitution = desc.Restitution;
+        settings.mLinearDamping = desc.LinearDamping;
+        settings.mAngularDamping = desc.AngularDamping;
+        settings.mGravityFactor = desc.GravityFactor;
+        settings.mAllowSleeping = desc.AllowSleep;
+        settings.mIsSensor = desc.IsSensor;
+        settings.mMotionQuality = desc.ContinuousCollision
+            ? JPH::EMotionQuality::LinearCast
+            : JPH::EMotionQuality::Discrete;
+
+        if (desc.MotionType != XJMotionType::Static)
+            settings.mAllowedDOFs = ToAllowedDOFs(desc);
+
+        if (desc.MotionType == XJMotionType::Dynamic)
+        {
+            settings.mOverrideMassProperties =
+                JPH::EOverrideMassProperties::CalculateInertia;
+            settings.mMassPropertiesOverride.mMass = float(desc.Mass);
+        }
+
+        JPH::BodyID bodyId = System->GetBodyInterface().CreateAndAddBody(
+            settings, JPH::EActivation::Activate);
+
+        if (bodyId.IsInvalid())
+        {
+            spdlog::error("CreateBody failed: Jolt returned an invalid body id.");
+            return XJPhysicsResult::BodyCreationFailed;
+        }
+
+        outBodyId.Value = bodyId.GetIndexAndSequenceNumber();
+        ++BodyCount;
+        return XJPhysicsResult::Success;
+    }
 
     XJPhysicsResult XJPhysicsWorld::Impl::Initialize(const XJPhysicsWorldConfig& config)
     {
@@ -484,6 +592,48 @@ namespace XJ
     uint32_t XJPhysicsWorld::GetBodyCount() const//刚体计数
     {
         return mImpl ? mImpl->BodyCount : 0u;
+    }
+    XJPhysicsResult XJPhysicsWorld::CreateBody(const XJPhysicsBodyDesc& desc, XJPhysicsBodyId& outBodyId)
+    {
+        if (!mImpl || !mImpl->IsReady())
+            return XJPhysicsResult::NotInitialized;
+
+        return mImpl->CreateBody(desc, outBodyId);
+    }
+
+    bool XJPhysicsWorld::SetBodyPose(XJPhysicsBodyId bodyId, const glm::dvec3& position, const glm::dquat& rotation, bool activate)
+    {
+        if (!mImpl || !mImpl->IsReady() || !bodyId.IsValid())
+            return false;
+
+        if (!std::isfinite(position.x) || !std::isfinite(position.y) ||
+            !std::isfinite(position.z))
+            return false;
+
+        const JPH::BodyID joltId(bodyId.Value);
+        JPH::BodyInterface& bodies = mImpl->System->GetBodyInterface();
+        if (!bodies.IsAdded(joltId))
+            return false;
+
+        bodies.SetPositionAndRotation(joltId, ToJoltRVec3(position),
+            ToJoltQuat(rotation),
+            activate ? JPH::EActivation::Activate : JPH::EActivation::DontActivate);
+        return true;
+    }
+
+    bool XJPhysicsWorld::SetLinearVelocity(XJPhysicsBodyId bodyId,
+        const glm::dvec3& velocity)
+    {
+        if (!mImpl || !mImpl->IsReady() || !bodyId.IsValid())
+            return false;
+
+        const JPH::BodyID joltId(bodyId.Value);
+        JPH::BodyInterface& bodies = mImpl->System->GetBodyInterface();
+        if (!bodies.IsAdded(joltId))
+            return false;
+
+        bodies.SetLinearVelocity(joltId, ToJoltVec3(velocity));
+        return true;
     }
 
 }

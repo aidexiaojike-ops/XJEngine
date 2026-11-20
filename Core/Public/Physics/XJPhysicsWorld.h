@@ -48,6 +48,19 @@ namespace XJ
                 double mass, XJPhysicsBodyId& outBodyId);
 
             bool DestroyBody(XJPhysicsBodyId bodyId);
+            // 通用创建入口：支持多形状、摩擦、传感器、轴向锁、CCD 等。
+            // 现有的 CreateStaticBox / CreateDynamicBox / CreateDynamicSphere
+            // 都可以后续改写成对它的薄封装。
+            XJPhysicsResult CreateBody(const XJPhysicsBodyDesc& desc, XJPhysicsBodyId& outBodyId);
+
+            // 直接设置刚体位姿（Teleport 语义）。
+            // activate=false 时不会唤醒睡眠中的刚体。
+            bool SetBodyPose(XJPhysicsBodyId bodyId,
+                const glm::dvec3& position, const glm::dquat& rotation,
+                bool activate = true);
+
+            bool SetLinearVelocity(XJPhysicsBodyId bodyId, const glm::dvec3& velocity);
+
 
             // ---- 步进 ----
             XJPhysicsResult Step(double deltaTime);

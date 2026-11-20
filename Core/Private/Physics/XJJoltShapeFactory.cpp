@@ -6,6 +6,12 @@
 #include <Jolt/Physics/Collision/Shape/BoxShape.h>
 #include <Jolt/Physics/Collision/Shape/PlaneShape.h>
 #include <Jolt/Physics/Collision/Shape/SphereShape.h>
+#include <Jolt/Physics/Collision/Shape/CapsuleShape.h>
+#include <Jolt/Physics/Collision/Shape/StaticCompoundShape.h>
+
+#include <algorithm>
+#include <vector>
+
 
 #include <spdlog/spdlog.h>
 
@@ -82,5 +88,135 @@ namespace XJ
             JPH::PlaneShapeSettings settings(plane);
             return FinishCreation(settings.Create(), "Plane");
         }
+
+        JPH::ShapeRefC CreateCapsule(double halfHeight, double radius)
+        {
+            // 注意参数顺序：Jolt 是 (halfHeightOfCylinder, radius)。
+            // 第一个参数只算圆柱段，不含半球。
+            if (!IsFinitePositive(radius) || !std::isfinite(halfHeight) || halfHeight < 0.0)
+            {
+                spdlog::error("CreateCapsule rejected invalid half height or radius.");
+                return nullptr;
+            }
+
+            JPH::CapsuleShapeSettings settings{ float(halfHeight), float(radius) };
+            return FinishCreation(settings.Create(), "Capsule");
+        }
+
+                // 局部变换是否为单位（用于决定能否省掉复合形状/装饰形状）
+        bool IsNearZero(const glm::dvec3& v)
+        {
+            constexpr double kEpsilon = 1.0e-6;
+            return std::abs(v.x) < kEpsilon && std::abs(v.y) < kEpsilon &&
+                std::abs(v.z) < kEpsilon;
+        }
+
+        bool IsNearIdentity(const glm::dquat& q)
+        {
+            return std::abs(q.w) > 1.0 - 1.0e-6;
+        }
+
+        // 把世界缩放烘焙进单个形状的尺寸。
+        // Box 支持非均匀；Sphere/Capsule 非均匀时取最大分量并警告，
+        // 因为它们的半径只有一个值，无法表达椭球。
+        JPH::ShapeRefC CreateScaledShape(const XJPhysicsShapeDesc& shape, const glm::dvec3& scale)
+        {
+            const double ax = std::abs(scale.x);
+            const double ay = std::abs(scale.y);
+            const double az = std::abs(scale.z);
+
+            switch (shape.Type)
+            {
+                case XJColliderShapeType::Box:
+                {
+                    // Box 可以精确表达非均匀缩放
+                    const glm::dvec3 halfExtent{ shape.HalfExtent.x * ax,
+                        shape.HalfExtent.y * ay, shape.HalfExtent.z * az };
+                    return CreateBox(halfExtent);
+                }
+
+                case XJColliderShapeType::Sphere:
+                {
+                    const double maxScale = std::max(ax, std::max(ay, az));
+                    const double minScale = std::min(ax, std::min(ay, az));
+                    if (maxScale - minScale > 1.0e-4)
+                    {
+                        spdlog::warn(
+                            "Sphere collider under non-uniform scale; using max scale {}. "
+                            "Result is a sphere, not an ellipsoid.", maxScale);
+                    }
+                    return CreateSphere(shape.Radius * maxScale);
+                }
+
+                case XJColliderShapeType::Capsule:
+                {
+                    const double radialScale = std::max(ax, az);
+                    if (std::abs(ax - az) > 1.0e-4)
+                    {
+                        spdlog::warn(
+                            "Capsule collider under non-uniform X/Z scale; using max {}. "
+                            "Result is a capsule, not an elliptical one.", radialScale);
+                    }
+                    return CreateCapsule(shape.HalfHeight * ay, shape.Radius * radialScale);
+                }
+
+                default:
+                    spdlog::error("CreateScaledShape received unknown shape type.");
+                    return nullptr;
+            }
+        }
+
+        JPH::ShapeRefC BuildShape(const XJPhysicsBodyDesc& desc)
+        {
+            if (desc.Shapes.empty())
+            {
+                spdlog::error("BuildShape rejected empty shape list.");
+                return nullptr;
+            }
+
+            const double ax = std::abs(desc.Scale.x);
+            const double ay = std::abs(desc.Scale.y);
+            const double az = std::abs(desc.Scale.z);
+            if (!std::isfinite(ax) || !std::isfinite(ay) || !std::isfinite(az) ||
+                ax <= 0.0 || ay <= 0.0 || az <= 0.0)
+            {
+                spdlog::error("BuildShape rejected zero or non-finite scale.");
+                return nullptr;
+            }
+
+            // 先为每个子形状单独建 Shape（缩放已经烘焙进尺寸）
+            std::vector<JPH::ShapeRefC> localShapes;
+            localShapes.reserve(desc.Shapes.size());
+            for (const XJPhysicsShapeDesc& shape : desc.Shapes)
+            {
+                JPH::ShapeRefC local = CreateScaledShape(shape, desc.Scale);
+                if (!local)
+                    return nullptr;
+                localShapes.push_back(std::move(local));
+            }
+
+            // 只有一个形状且局部变换是单位 -> 直接返回，省掉一层包装
+            if (localShapes.size() == 1 &&
+                IsNearZero(desc.Shapes.front().LocalPosition) &&
+                IsNearIdentity(desc.Shapes.front().LocalRotation))
+            {
+                return localShapes.front();
+            }
+
+            // 多形状或带局部偏移 -> 合成 StaticCompoundShape。
+            // 阶段 2 没有运行期改子形状的需求，所以用 StaticCompound
+            // （比 MutableCompound 更省内存）。
+            JPH::StaticCompoundShapeSettings compound;
+            for (size_t index = 0; index < desc.Shapes.size(); ++index)
+            {
+                const XJPhysicsShapeDesc& shape = desc.Shapes[index];
+                compound.AddShape(ToJoltVec3(shape.LocalPosition),
+                    ToJoltQuat(shape.LocalRotation),
+                    localShapes[index]);
+            }
+
+            return FinishCreation(compound.Create(), "StaticCompound");
+        }
+
     }
 }

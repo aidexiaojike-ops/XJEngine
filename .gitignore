@@ -11,3 +11,6 @@ stdout
 
 # Local agent conventions (not tracked)
 AGENTS.md
+
+# Local integration notes (not tracked)
+ThirdParty/JoltPhysics/README.XJEngine.txt

@@ -46,6 +46,7 @@ XJEngine 是一个基于 Vulkan 和 EnTT 的实验性 C++20 游戏引擎与编�
 | **Transform Gizmo 交互** | 九部件 Local/World Gizmo、近似固定屏幕尺寸、手柄拾取、悬停/活动高亮，以及可一次性提交/取消并进入 Undo 的单轴移动、旋转和缩放拖拽 |
 | **Scene 辅助显示** | 自适应世界网格、灯光与相机线框、选中 Mesh 轮廓、AABB + 三角形及相机线框拾取、以命中表面点为轨道旋转中心 |
 | **Play 模式** | 运行时场景克隆、Play/Pause/Resume/Stop、运行时检查与脚本槽修改，不直接编辑源场景 |
+| **物理** | Play 会话内的 `XJPhysicsSystem` 驱动 Jolt `XJPhysicsWorld`，由 `XJRigidBodyComponent` + `XJColliderComponent` 配置（盒/球/胶囊、多形状、传感器、轴向锁、阻尼、CCD）；动态刚体每固定步写回 Transform |
 | **诊断** | 基于 spdlog 的 Console、视口性能快照、帧历史与材质上传统计 |
 
 ## 快速开始
@@ -173,6 +174,7 @@ Windows 下用户 UI 状态跟随可执行文件目录，不依赖启动工作�
 ### Play 模式与脚本
 
 - Play 将编辑场景克隆为运行时场景；Pause/Resume 控制模拟，Stop 恢复编辑器选择。
+- 物理属于 Play 会话：`XJPhysicsSystem` 注册在脚本系统之后，同一个固定步内脚本先提交力/传送，物理随后消费并步进；Stop 时调度器逆序销毁系统，先释放 Jolt 世界，脚本 `OnDestroy` 不会碰到已销毁的物理状态。只有 Collider 没有 RigidBody 的实体自动成为静态刚体；只有 RigidBody 没有 Collider 则跳过并输出警告。
 - 运行时 Hierarchy/Inspector 读取运行场景快照。可通过运行时请求增删脚本组件/槽、启停与替换脚本；调度器在安全点同步，暂停期间也可处理。
 - 脚本输入要求处于 **Playing**，Game 与应用窗口聚焦，且无活动 UI 控件、文本输入或弹窗。按下/释放边沿仅在 Update 可见，重新获得焦点首帧抑制边沿。
 - 保存 `.xjs` 后，Content Browser 接收保存结果与编译诊断。磁盘保存成功仍可能存在编译错误，Play 预检会拒绝无效脚本；脚本编辑器仅在收到保存成功响应后清除 dirty 状态。
@@ -339,6 +341,7 @@ ctest --test-dir build -C Release --output-on-failure
 - `XJGizmoTransactionTests` 在无 GPU 环境下直接驱动 Controller/Service 预览事务：取消完整恢复姿态且不产生历史或 dirty；一次缩放拖动提交只创建一条 Undo，Redo 恢复最终缩放；无变化提交保留原有 Redo 链；World 有损缩放保留本地反射符号；负 World 缩放被拒绝且不写历史。
 - `XJOutlineNormalsTests` 验证选中 Mesh 轮廓使用的 CPU 平滑法线生成，包括按位置共享的顶点。
 - `XJPhysicsWorldTests` 无需 GPU 直接驱动 `XJPhysicsWorld`：动态盒体落到静态平面后稳定在预期高度、X/Z 不漂移、最终静止并休眠；反复初始化/关闭可正确复用进程级 Jolt 运行时；非法输入（未初始化即创建、重复初始化、零/负步长、零半长、负质量、零平面法线）会被拒绝。
+- `XJPhysicsSystemTests` 覆盖 ECS 桥接：只有 Collider 的实体自动成为静态刚体；Collider + Dynamic 刚体落到其上并稳定；`Enabled=false` 时不创建刚体，重新标记后创建；只有刚体没有 Collider 会被忽略；混合传感器标志与六轴全锁被拒绝；传送在下一个固定步生效；销毁实体同时移除刚体；反复创建/销毁不残留刚体。
 
 这些测试不能替代手动 Vulkan 验证或视口视觉检查。预览事务已有 Controller/Service 级覆盖；视口输入占用、取消触发条件和生命周期路径仍需手动集成检查。
 
@@ -352,7 +355,7 @@ ctest --test-dir build -C Release --output-on-failure
 ## 当前限制
 
 - Gizmo 编辑每次拖动仅限一个手柄和一个实体。平面/自由移动、多轴手柄、吸附、拖动中数值输入、Move/Rotate/Scale 操作切换和多选编辑尚未实现。旋转需要旋转环有足够可见度，移动/缩放轴接近正对视线时需要调整视角。缩放倍率始终为正，拖拽缩放不能穿过零或翻转本地反射符号。
-- 物理目前只是 Core 的独立模块：尚无 ECS 物理组件、场景序列化、碰撞事件分发或编辑器/Play 集成，刚体也仅限静态平面、静态/动态盒体与动态球体。
+- 物理仅在 Play 中运行：`XJPhysicsSystem` 随克隆的运行时场景创建，在脚本之后的固定步执行并写回 Transform。`XJRigidBodyComponent`/`XJColliderComponent` 尚未参与 `.xjscene` 序列化、也没有 Inspector 界面，运行期修改字段必须调用 `MarkPhysicsDirty`。尚无碰撞/触发器事件、关节、射线检测或角色控制器；形状限于静态平面与盒/球/胶囊。
 - 仅实现 Final 视口渲染，诊断渲染模式尚不可用。
 - Windows SDK/DLL 构建流程仍需针对 Linux/macOS 适配。
 - Lit 为基础前向光照；完整 PBR、阴影、后处理和骨骼动画尚未实现。
@@ -384,7 +387,7 @@ ctest --test-dir build -C Release --output-on-failure
 - 遵循周边命名与 include guard 风格。诊断日志统一使用 `spdlog::`；需要异常传播时先记录，再抛出标准异常。
 - 提交聚焦的 Pull Request，补充相关测试并同步中英文文档；通过 [GitHub Issues](https://github.com/aidexiaojike-ops/XJEngine/issues) 提供复现步骤、构建配置与日志。
 
-依赖包括 GLFW、EnTT、GLM、spdlog、stb_image、tinyobjloader、tinygltf、Dear ImGui、nlohmann/json、SPIRV-Reflect、Jolt Physics 5.7.0 和 Vulkan SDK。Jolt 由 [`cmake/JoltPhysics.cmake`](cmake/JoltPhysics.cmake) 构建为私有静态库并链接到 Core，公开头文件中不出现任何 Jolt 声明。`XJPhysicsWorld` 提供静态平面、静态/动态盒体、动态球体、定步长模拟与位姿/速度查询；尚未接入 ECS、编辑器或 Play 模式。感谢这些项目的作者与维护者，内置项目见 `ThirdParty/`。
+依赖包括 GLFW、EnTT、GLM、spdlog、stb_image、tinyobjloader、tinygltf、Dear ImGui、nlohmann/json、SPIRV-Reflect、Jolt Physics 5.7.0 和 Vulkan SDK。Jolt 由 [`cmake/JoltPhysics.cmake`](cmake/JoltPhysics.cmake) 构建为私有静态库并链接到 Core，公开头文件中不出现任何 Jolt 声明。`XJPhysicsWorld` 提供静态平面、静态/动态盒体、动态球体、通用多形状刚体创建、传送/速度设置、定步长模拟与位姿/速度查询。`XJPhysicsSystem` 在 Play 期间将其接入 ECS；物理组件尚未序列化。感谢这些项目的作者与维护者，内置项目见 `ThirdParty/`。
 
 ## 许可证
 

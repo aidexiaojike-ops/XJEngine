@@ -504,3 +504,16 @@ if(MINGW AND CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
 endif()
 
 add_test(NAME XJPhysicsWorldTests COMMAND $<TARGET_FILE:XJPhysicsWorldTests>)
+
+add_executable(XJPhysicsSystemTests
+    ${CMAKE_CURRENT_SOURCE_DIR}/Physics/XJPhysicsSystemTests.cpp
+)
+
+target_link_libraries(XJPhysicsSystemTests PRIVATE Core)
+target_compile_features(XJPhysicsSystemTests PRIVATE cxx_std_20)
+
+if(MINGW AND CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+    target_compile_options(XJPhysicsSystemTests PRIVATE -Wa,-mbig-obj)
+endif()
+
+add_test(NAME XJPhysicsSystemTests COMMAND $<TARGET_FILE:XJPhysicsSystemTests>)

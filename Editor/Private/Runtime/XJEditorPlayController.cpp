@@ -10,6 +10,7 @@
 #include "ECS/System/XJScriptSystem.h"
 #include "ECS/XJEntity.h"
 #include "ECS/XJScene.h"
+#include "Physics/XJPhysicsSystem.h"
 
 #include <spdlog/spdlog.h>
 
@@ -103,9 +104,17 @@ namespace XJ
             registry,
             std::move(context.ScriptCache));
         scriptSystem->BeginStatisticsFrame(mImpl->StatisticsFrameId);
+
+        // 物理系统必须在脚本之后注册：
+        // 同一个 fixed step 里，脚本先提交力/传送命令，物理再处理并步进。
+        // 销毁时调度器逆序执行 OnDestroy，因此物理会先于脚本销毁，
+        // 保证脚本的销毁回调不会碰到已经释放的物理世界。
+        auto physicsSystem = std::make_shared<XJPhysicsSystem>(*candidateScene);
+
         std::vector<std::shared_ptr<XJSystem>> systems;
-        systems.reserve(mImpl->SystemFactories.size() + 1);
+        systems.reserve(mImpl->SystemFactories.size() + 2);
         systems.push_back(scriptSystem);
+        systems.push_back(physicsSystem);
         for (const SystemFactory& factory : mImpl->SystemFactories)
         {
             if (!factory)

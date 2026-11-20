@@ -4,6 +4,9 @@
 #include <cstdint>
 
 #include <glm/vec3.hpp>
+#include <vector>
+#include <glm/gtc/quaternion.hpp>
+
 //引擎类型、结果码、句柄，
 namespace XJ
 {
@@ -26,6 +29,64 @@ namespace XJ
         ShapeCreationFailed,
         BodyCreationFailed,
         RuntimeUnavailable
+    };
+
+    enum class XJColliderShapeType
+    {
+        Box = 0,
+        Sphere,
+        Capsule
+    };
+    // 单个子形状的物理描述。
+    // 这是"物理层"的描述，不含欧拉角——旋转在这里已经是四元数，
+    // 欧拉角到四元数的转换由 ECS 层（XJPhysicsSystem）负责。
+    struct XJPhysicsShapeDesc
+    {
+        XJColliderShapeType Type = XJColliderShapeType::Box;
+
+        glm::dvec3 LocalPosition{ 0.0 };
+        glm::dquat LocalRotation{ 1.0, 0.0, 0.0, 0.0 };
+
+        glm::dvec3 HalfExtent{ 0.5 };   // Box：半长（沿三个轴）
+        double Radius = 0.5;            // Sphere / Capsule
+        double HalfHeight = 0.5;        // Capsule：圆柱段半高，不含两端半球
+    };
+
+    // 一个刚体的完整创建描述。
+    // 一个实体 = 一个 Body；多个 Shape 会合成一个复合形状。
+    struct XJPhysicsBodyDesc
+    {
+        std::vector<XJPhysicsShapeDesc> Shapes;
+
+        glm::dvec3 Position{ 0.0 };
+        glm::dquat Rotation{ 1.0, 0.0, 0.0, 0.0 };
+
+        // 创建时烘焙进形状尺寸，运行期不再变化。
+        glm::dvec3 Scale{ 1.0 };
+
+        XJMotionType MotionType = XJMotionType::Static;
+
+        double Mass = 1.0;              // 仅 Dynamic 使用
+
+        // Body 级材质（阶段 2 决定：不放 Collider）
+        float Friction = 0.2f;
+        float Restitution = 0.0f;
+
+        float LinearDamping = 0.05f;
+        float AngularDamping = 0.05f;
+        float GravityFactor = 1.0f;
+
+        bool AllowSleep = true;
+        bool ContinuousCollision = false;  // true -> EMotionQuality::LinearCast
+        bool IsSensor = false;
+
+        // 轴向锁。true 表示该轴被锁定。
+        bool LockLinearX = false;
+        bool LockLinearY = false;
+        bool LockLinearZ = false;
+        bool LockAngularX = false;
+        bool LockAngularY = false;
+        bool LockAngularZ = false;
     };
 
     inline const char* XJPhysicsResultToString(XJPhysicsResult result)
